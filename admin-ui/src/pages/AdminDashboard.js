@@ -1,0 +1,364 @@
+import React, { useEffect, useState, useContext, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import axios from 'axios';
+import { motion, AnimatePresence } from 'framer-motion';
+import { io } from 'socket.io-client';
+import { 
+  Plus, Users, GitBranch, History, BarChart3, Trash2, Edit3, 
+  Play, Pause, Eye, Download, Search, Target, TrendingUp, Clock, Activity
+} from 'lucide-react';
+import { UIContext } from '../context/UIContext';
+import { AuthContext } from '../context/AuthContext';
+import LoadingSpinner from '../components/LoadingSpinner';
+
+export default function AdminDashboard() {
+  const { t } = useContext(UIContext);
+  const { user } = useContext(AuthContext);
+  const [surveys, setSurveys] = useState([]);
+  const [agentStats, setAgentStats] = useState([]);
+  const [now, setNow] = useState(Date.now());
+  const [loading, setLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const socketRef = useRef(null);
+
+  const isAdmin = user?.role === 'admin';
+  const isQuality = user?.role === 'quality';
+
+  const fetchData = async () => {
+    try {
+      const [surveysRes, agentsRes] = await Promise.all([
+        axios.get('http://localhost:3000/admin/surveys-stats'),
+        axios.get('http://localhost:3000/stats/agents')
+      ]);
+      setSurveys(surveysRes.data);
+      setAgentStats(agentsRes.data);
+    } catch (err) {
+      console.error("Data fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+
+    // Setup Real-time Sync
+    socketRef.current = io('http://localhost:3000');
+    socketRef.current.on('stats-update', () => {
+      fetchData(); // Refresh data on any system-wide change
+    });
+
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      clearInterval(interval);
+      socketRef.current.disconnect();
+    };
+  }, []);
+
+  const handleExport = async (surveyId, title) => {
+    setIsExporting(surveyId);
+    try {
+      const response = await axios({
+        url: `http://localhost:3000/admin/export-survey/${surveyId}`,
+        method: 'GET',
+        responseType: 'blob',
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `export_${title.replace(/\s+/g, '_')}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      alert("Failed to export data");
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const formatTime = (secs) => {
+    if (!secs) return "0s";
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    let parts = [];
+    if (h > 0) parts.push(`${h}h`);
+    if (m > 0 || h > 0) parts.push(`${m}m`);
+    parts.push(`${s}s`);
+    return parts.join(' ');
+  };
+
+  const formatStatusTimer = (startAt) => {
+    if (!startAt) return "00:00:00";
+    const diff = Math.floor((now - new Date(startAt).getTime()) / 1000);
+    if (diff < 0) return "00:00:00";
+    const h = Math.floor(diff / 3600).toString().padStart(2, '0');
+    const m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
+    const s = (diff % 60).toString().padStart(2, '0');
+    return `${h}:${m}:${s}`;
+  };
+
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'active': return '#10b981';
+      case 'preparing': return '#a855f7';
+      case 'break': return '#f59e0b';
+      default: return '#6b7280';
+    }
+  };
+
+  const toggleSurveyStatus = async (surveyId) => {
+    if (!isAdmin) return;
+    try {
+      await axios.put(`http://localhost:3000/surveys/${surveyId}/toggle`);
+      // Update locally immediately for punchy UI
+      setSurveys(surveys.map(s => s._id === surveyId ? { ...s, isActive: !s.isActive } : s));
+    } catch (err) {
+      alert("Failed to toggle status");
+    }
+  };
+
+  const deleteSurvey = async (surveyId, isActive) => {
+    if (!isAdmin) return;
+    if (isActive !== false) return alert("End campaign to delete");
+    if (!window.confirm(t('confirmDeleteSurvey'))) return;
+    try {
+      await axios.delete(`http://localhost:3000/survey/${surveyId}`);
+      setSurveys(surveys.filter(s => s._id !== surveyId));
+    } catch (err) {
+      alert(err.response?.data?.error || "Failed to delete survey");
+    }
+  };
+
+  // KPI Calculations
+  const activeAgentsCount = agentStats.filter(a => a.currentStatus === 'active').length;
+  const totalAgentsCount = agentStats.length || 1;
+  const totalHandledCount = surveys.reduce((acc, s) => acc + (s.totalHandled || 0), 0);
+  const totalCompletedCount = surveys.reduce((acc, s) => acc + (s.completed || 0), 0);
+  const successRate = totalHandledCount > 0 ? ((totalCompletedCount / totalHandledCount) * 100).toFixed(1) : 0;
+  
+  const totalDuration = agentStats.reduce((acc, a) => acc + (a.totalDurationSecs || 0), 0);
+  const globalCompletions = agentStats.reduce((acc, a) => acc + (a.completed || 0), 0);
+  const ahtValue = globalCompletions > 0 ? Math.floor(totalDuration / globalCompletions) : 0;
+
+  // Filtering & Sorting
+  const filteredSurveys = surveys.filter(s => s.title.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredAgents = agentStats
+    .filter(a => a.agentName.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => {
+      const statusOrder = { active: 0, preparing: 1, break: 2, 'off-duty': 3 };
+      return statusOrder[a.currentStatus] - statusOrder[b.currentStatus];
+    });
+
+  if (loading) return <LoadingSpinner fullPage />;
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { staggerChildren: 0.05 } }
+  };
+
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: { y: 0, opacity: 1 }
+  };
+
+  return (
+    <motion.div variants={containerVariants} initial="hidden" animate="visible" style={{ paddingBottom: '4rem' }}>
+      {/* Header & Global Actions */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '3rem', flexWrap: 'wrap', gap: '1.5rem' }}>
+        <div>
+          <motion.h1 variants={itemVariants} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+            <BarChart3 size={32} color="var(--primary)" />
+            {isQuality ? t('qualityAgent') : t('adminDashboard')}
+          </motion.h1>
+        </div>
+        
+        {isAdmin && (
+          <motion.div variants={itemVariants} style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <Link to="/admin/requests" className="btn-secondary"><History size={16} />{t('changeRequests')}</Link>
+            <Link to="/admin/register" className="btn-secondary"><Users size={16} />{t('addTeamMember')}</Link>
+            <Link to="/admin/builder" className="btn-primary"><Plus size={18} />{t('createSurvey')}</Link>
+          </motion.div>
+        )}
+      </div>
+
+      {/* KPI Section */}
+      <div className="kpi-grid">
+        <motion.div variants={itemVariants} className="kpi-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span className="kpi-label">{t('workforceActive')}</span>
+            <Activity size={16} color="var(--success)" />
+          </div>
+          <span className="kpi-value">{((activeAgentsCount / totalAgentsCount) * 100).toFixed(0)}%</span>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{activeAgentsCount} {t('activeStaffMsg')} {totalAgentsCount} </span>
+        </motion.div>
+        <motion.div variants={itemVariants} className="kpi-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span className="kpi-label">{t('globalSuccess')}</span>
+            <Target size={16} color="var(--primary)" />
+          </div>
+          <span className="kpi-value">{successRate}%</span>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{totalCompletedCount} {t('completedSurveys')}</span>
+        </motion.div>
+        <motion.div variants={itemVariants} className="kpi-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span className="kpi-label">{t('avgHandleTime')}</span>
+            <Clock size={16} color="var(--accent)" />
+          </div>
+          <span className="kpi-value">{formatTime(ahtValue)}</span>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{t('avgHandleTime')}</span>
+        </motion.div>
+        <motion.div variants={itemVariants} className="kpi-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span className="kpi-label">{t('liveCampaigns')}</span>
+            <TrendingUp size={16} color="var(--warning)" />
+          </div>
+          <span className="kpi-value">{surveys.filter(s => s.isActive).length}</span>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{t('harvestingData')}</span>
+        </motion.div>
+      </div>
+
+      {/* Search Bar */}
+      <div className="search-container">
+        <Search className="search-icon" size={20} />
+        <input 
+          type="text" 
+          placeholder={t('searchPlaceholder')} 
+          className="search-input"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </div>
+      
+      {/* Survey Management */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+        <h2 style={{ marginBottom: 0 }}>{t('campaigns')}</h2>
+      </div>
+
+      <div className="choice-grid">
+        <AnimatePresence>
+          {filteredSurveys.map(s => {
+            const progress = s.totalHandled > 0 ? (s.completed / s.totalHandled) * 100 : 0;
+            return (
+              <motion.div 
+                layout
+                key={s._id} 
+                variants={itemVariants}
+                initial="hidden" animate="visible" exit="hidden"
+                className="glass-card" 
+                style={{ marginBottom: 0, position: 'relative' }}
+              >
+                {isAdmin && (
+                  <button 
+                    onClick={() => deleteSurvey(s._id, s.isActive)}
+                    style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'transparent', border: 'none', color: 'var(--danger)', cursor: s.isActive === false ? 'pointer' : 'not-allowed', opacity: s.isActive === false ? 0.6 : 0.2 }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <div className={`status-dot ${s.isActive ? 'active' : 'off-duty'}`}></div>
+                  <h3 style={{ marginBottom: 0 }}>{s.title}</h3>
+                </div>
+                
+                <p style={{ color: "var(--text-secondary)", fontSize: "0.8rem", fontWeight: 700 }}>
+                  {t('fulfillmentProgress')}
+                </p>
+                <div className="fulfillment-container">
+                  <div className="fulfillment-bar" style={{ width: `${progress}%` }}></div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', margin: '1rem 0' }}>
+                  <div>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>{t('totalHandled')}</span>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>{s.totalHandled || 0}</div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--success)' }}>{t('completed')}</span>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>{s.completed || 0}</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem' }}>
+                  {isAdmin ? (
+                    <Link to={`/admin/builder/${s._id}`} className="btn-secondary" style={{ flex: 1, padding: '0.5rem' }}><Edit3 size={14} />{t('edit')}</Link>
+                  ) : (
+                    <div className="btn-secondary" style={{ flex: 1, padding: '0.5rem', opacity: 0.8 }}><Eye size={14} /> {t('audit')}</div>
+                  )}
+                  
+                  <button onClick={() => handleExport(s._id, s.title)} className="btn-secondary" style={{ flex: 1, padding: '0.5rem' }}>
+                    {isExporting === s._id ? <div className="spinner" style={{ width: '12px', height: '12px' }} /> : <><Download size={14} /> {t('exportData')}</>}
+                  </button>
+
+                  {isAdmin && (
+                    <button 
+                      onClick={() => toggleSurveyStatus(s._id)} 
+                      className="btn-primary" 
+                      style={{ padding: '0.5rem 0.75rem', background: s.isActive ? 'var(--danger)' : undefined }}
+                    >
+                      {s.isActive ? <Pause size={16} /> : <Play size={16} />}
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+
+      {/* Team Performance */}
+      <motion.h2 variants={itemVariants} style={{ marginTop: '4rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <GitBranch size={24} color="var(--primary)" />
+        {t('teamPerformance')}
+      </motion.h2>
+
+      <motion.div variants={itemVariants} className="glass-card" style={{ padding: '1rem', overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
+          <thead>
+            <tr>
+              <th>{t('agentName')}</th>
+              <th>{t('status')}</th>
+              <th>{t('totalHandled')}</th>
+              <th style={{ color: 'var(--success)' }}>{t('completed')}</th>
+              <th style={{ color: 'var(--danger)' }}>{t('disqualified')}</th>
+              <th>{t('aht')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <AnimatePresence>
+              {filteredAgents.map(a => {
+                const agentAHT = a.completed > 0 ? Math.floor(a.totalDurationSecs / a.completed) : 0;
+                return (
+                  <motion.tr layout key={a._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    <td style={{ fontWeight: 800 }}>{a.agentName}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <div className={`status-dot ${a.currentStatus}`} style={{ background: getStatusColor(a.currentStatus) }}></div>
+                        <span style={{ fontWeight: 800, fontSize: '0.75rem', color: getStatusColor(a.currentStatus), textTransform: 'uppercase' }}>
+                          {t(a.currentStatus === 'preparing' ? 'preparing' : a.currentStatus === 'break' ? 'onBreak' : a.currentStatus === 'off-duty' ? 'offDuty' : 'active')}
+                        </span>
+                        {a.currentStatus !== 'off-duty' && (
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontFamily: 'monospace', opacity: 0.7 }}>
+                            ({formatStatusTimer(a.statusStartedAt)})
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td>{a.totalSurveys}</td>
+                    <td style={{ fontWeight: 700 }}>{a.completed}</td>
+                    <td style={{ fontWeight: 700 }}>{a.disqualified}</td>
+                    <td style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{formatTime(agentAHT)}</td>
+                  </motion.tr>
+                );
+              })}
+            </AnimatePresence>
+          </tbody>
+        </table>
+      </motion.div>
+    </motion.div>
+  );
+}

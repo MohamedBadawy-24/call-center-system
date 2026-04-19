@@ -368,6 +368,61 @@ app.post("/admin/resolve-profile-request/:id", adminAuth, async (req, res) => {
   }
 });
 
+// ADMIN: LIST USERS (for account management)
+app.get("/admin/users", adminAuth, async (req, res) => {
+  try {
+    const users = await User.find({}, "name email role currentStatus statusStartedAt createdAt").sort({ createdAt: -1 });
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ADMIN: DELETE USER ACCOUNT
+app.delete("/admin/users/:id", adminAuth, async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(targetId)) {
+      return res.status(400).json({ error: "Invalid user id" });
+    }
+
+    if (targetId === req.user.id) {
+      return res.status(400).json({ error: "You cannot delete your own account while logged in." });
+    }
+
+    const target = await User.findById(targetId);
+    if (!target) return res.status(404).json({ error: "User not found" });
+
+    if (target.role === 'admin') {
+      const adminCount = await User.countDocuments({ role: 'admin' });
+      if (adminCount <= 1) {
+        return res.status(400).json({ error: "Cannot delete the last admin account." });
+      }
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      await ProfileRequest.deleteMany({ userId: targetId }, { session });
+      await StatusLog.deleteMany({ userId: targetId }, { session });
+      await Response.deleteMany({ agentId: targetId }, { session });
+      await User.deleteOne({ _id: targetId }, { session });
+      await session.commitTransaction();
+    } catch (txnErr) {
+      await session.abortTransaction();
+      throw txnErr;
+    } finally {
+      session.endSession();
+    }
+
+    io.emit('stats-update');
+    res.json({ message: "User deleted successfully" });
+  } catch (err) {
+    console.error("Delete user error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // AUTH: REQUEST EMAIL CHANGE VERIFICATION CODE (AGENT)
 app.post("/auth/request-email-change-code", auth, async (req, res) => {
   try {
@@ -645,7 +700,9 @@ app.get("/admin/export-survey/:id", staffAuth, async (req, res) => {
       { $match: { surveyId: req.params.id } },
       {
         $addFields: {
-          agentObjectId: { $toObjectId: "$agentId" }
+          agentObjectId: {
+            $convert: { input: '$agentId', to: 'objectId', onError: null, onNull: null }
+          }
         }
       },
       {
@@ -664,7 +721,11 @@ app.get("/admin/export-survey/:id", staffAuth, async (req, res) => {
     const questions = [];
     survey.sections.forEach(section => {
       section.questions.forEach(q => {
-        questions.push({ id: q._id.toString(), text: q.text });
+        // Answers are keyed by the builder's `questionId` (see SurveyBuilder + TakeSurvey),
+        // not the Mongo subdocument `_id`.
+        const id = q.questionId || (q._id ? q._id.toString() : undefined);
+        if (!id) return;
+        questions.push({ id, text: q.text });
       });
     });
 
@@ -710,10 +771,12 @@ app.get("/stats/agents", auth, async (req, res) => {
 
     const stats = await User.aggregate([
       { $match: { ...filter } },
+      // responses.agentId is stored as a string, so join using a stringified user id
+      { $addFields: { _idStr: { $toString: '$_id' } } },
       {
         $lookup: {
           from: 'responses',
-          localField: '_id',
+          localField: '_idStr',
           foreignField: 'agentId',
           as: 'responses'
         }
@@ -779,7 +842,7 @@ app.delete("/survey/:id", adminAuth, async (req, res) => {
 const server = require("http").createServer(app);
 const io = require("socket.io")(server, {
   cors: {
-    origin: "http://localhost:3001",
+    origin: ["http://localhost:3001", "http://127.0.0.1:3001"],
     methods: ["GET", "POST"]
   }
 });

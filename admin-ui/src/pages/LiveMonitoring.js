@@ -17,7 +17,17 @@ export default function LiveMonitoring() {
     if (!user?.role) return;
     if (user.role !== 'admin' && user.role !== 'quality') return;
 
-    socketRef.current = io('http://localhost:3000');
+    socketRef.current = io('http://localhost:3000', {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 5000,
+      timeout: 20000
+    });
+    socketRef.current.on('connect_error', (err) => {
+      console.error('Socket connect_error (live monitoring):', err?.message || err);
+    });
     
     // Join the centralized auditors room for real-time monitoring
     socketRef.current.emit('join-monitoring', { id: user.id, role: user.role });
@@ -49,7 +59,7 @@ export default function LiveMonitoring() {
     }, 5000);
 
     return () => {
-      socketRef.current.disconnect();
+      socketRef.current?.disconnect();
       clearInterval(cleanup);
     };
   }, [user?.id, user?.role]);

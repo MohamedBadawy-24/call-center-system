@@ -13,6 +13,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ProfileSettings from './pages/ProfileSettings';
 import ProfileRequests from './pages/ProfileRequests';
 import LiveMonitoring from './pages/LiveMonitoring';
+import UserManagement from './pages/UserManagement';
 import PrivateRoute from './components/PrivateRoute';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import { UIProvider, UIContext } from './context/UIContext';
@@ -169,6 +170,7 @@ const NavBar = () => {
   const isAdminOrQualityPath = location.pathname.startsWith('/admin');
   const isAgentOrQuality = user?.role === 'agent' || user?.role === 'quality';
   const isStaff = user?.role === 'admin' || user?.role === 'quality';
+  const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
     let interval;
@@ -227,6 +229,18 @@ const NavBar = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {isAgentOrQuality && user && (
             <StatusSelector user={user} updateStatus={updateStatus} t={t} timer={timer} />
+          )}
+
+          {isAdmin && (
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ padding: '0.55rem 0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              onClick={() => logout()}
+            >
+              <LogOut size={16} />
+              {t('signOut')}
+            </button>
           )}
 
           {user && (
@@ -363,6 +377,7 @@ const AnimatedRoutes = () => {
         <Route path="/admin/requests" element={<PrivateRoute reqRole="admin"><PageWrapper><ProfileRequests /></PageWrapper></PrivateRoute>} />
         <Route path="/admin/builder/:id?" element={<PrivateRoute reqRole="admin"><PageWrapper><SurveyBuilder /></PageWrapper></PrivateRoute>} />
         <Route path="/admin/register" element={<PrivateRoute reqRole="admin"><PageWrapper><Register /></PageWrapper></PrivateRoute>} />
+        <Route path="/admin/users" element={<PrivateRoute reqRole="admin"><PageWrapper><UserManagement /></PageWrapper></PrivateRoute>} />
       </Routes>
     </AnimatePresence>
   );

@@ -60,7 +60,17 @@ export default function AgentDashboard() {
       const startStreaming = async () => {
         try {
           // Initialize Socket
-          socketRef.current = io('http://localhost:3000');
+          socketRef.current = io('http://localhost:3000', {
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 500,
+            reconnectionDelayMax: 5000,
+            timeout: 20000
+          });
+          socketRef.current.on('connect_error', (err) => {
+            console.error('Socket connect_error (agent streaming):', err?.message || err);
+          });
           socketRef.current.emit('join-monitoring', { id: user.id, role: 'agent' });
 
           // Capture Screen

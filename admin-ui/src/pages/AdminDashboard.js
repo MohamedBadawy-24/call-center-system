@@ -4,7 +4,7 @@ import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { io } from 'socket.io-client';
 import { 
-  Plus, Users, GitBranch, History, BarChart3, Trash2, Edit3, 
+  Plus, Users, UserPlus, GitBranch, History, BarChart3, Trash2, Edit3, 
   Play, Pause, Eye, Download, Search, Target, TrendingUp, Clock, Activity
 } from 'lucide-react';
 import { UIContext } from '../context/UIContext';
@@ -44,7 +44,17 @@ export default function AdminDashboard() {
     fetchData();
 
     // Setup Real-time Sync
-    socketRef.current = io('http://localhost:3000');
+    socketRef.current = io('http://localhost:3000', {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 5000,
+      timeout: 20000
+    });
+    socketRef.current.on('connect_error', (err) => {
+      console.error('Socket connect_error (admin dashboard):', err?.message || err);
+    });
     socketRef.current.on('stats-update', () => {
       fetchData(); // Refresh data on any system-wide change
     });
@@ -52,7 +62,7 @@ export default function AdminDashboard() {
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => {
       clearInterval(interval);
-      socketRef.current.disconnect();
+      socketRef.current?.disconnect();
     };
   }, []);
 
@@ -179,7 +189,8 @@ export default function AdminDashboard() {
         {isAdmin && (
           <motion.div variants={itemVariants} style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
             <Link to="/admin/requests" className="btn-secondary"><History size={16} />{t('changeRequests')}</Link>
-            <Link to="/admin/register" className="btn-secondary"><Users size={16} />{t('addTeamMember')}</Link>
+            <Link to="/admin/users" className="btn-secondary"><Users size={16} />{t('teamMembers')}</Link>
+            <Link to="/admin/register" className="btn-secondary"><UserPlus size={16} />{t('addTeamMember')}</Link>
             <Link to="/admin/builder" className="btn-primary"><Plus size={18} />{t('createSurvey')}</Link>
           </motion.div>
         )}

@@ -5,7 +5,12 @@ const auth = (req, res, next) => {
   if (!token) return res.status(401).json({ error: "No token, authorization denied" });
 
   try {
-    const decoded = jwt.verify(token.replace("Bearer ", ""), process.env.JWT_SECRET || "baseera_super_secret_key");
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      return res.status(500).json({ error: "System configuration error: JWT_SECRET missing" });
+    }
+
+    const decoded = jwt.verify(token.replace("Bearer ", ""), jwtSecret);
     req.user = decoded;
     next();
   } catch (err) {

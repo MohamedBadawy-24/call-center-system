@@ -170,7 +170,6 @@ const NavBar = () => {
   const isAdminOrQualityPath = location.pathname.startsWith('/admin');
   const isAgentOrQuality = user?.role === 'agent' || user?.role === 'quality';
   const isStaff = user?.role === 'admin' || user?.role === 'quality';
-  const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
     let interval;
@@ -229,18 +228,6 @@ const NavBar = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {isAgentOrQuality && user && (
             <StatusSelector user={user} updateStatus={updateStatus} t={t} timer={timer} />
-          )}
-
-          {isAdmin && (
-            <button
-              type="button"
-              className="btn-secondary"
-              style={{ padding: '0.55rem 0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-              onClick={() => logout()}
-            >
-              <LogOut size={16} />
-              {t('signOut')}
-            </button>
           )}
 
           {user && (

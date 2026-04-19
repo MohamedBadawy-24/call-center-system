@@ -1,39 +1,63 @@
 const jwt = require("jsonwebtoken");
+const User = require("../models/User");
 
-const auth = (req, res, next) => {
+const authenticate = async (req, res) => {
   const token = req.header("Authorization");
-  if (!token) return res.status(401).json({ error: "No token, authorization denied" });
+  if (!token) {
+    res.status(401).json({ error: "No token, authorization denied" });
+    return false;
+  }
 
   try {
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) {
-      return res.status(500).json({ error: "System configuration error: JWT_SECRET missing" });
+      res.status(500).json({ error: "System configuration error: JWT_SECRET missing" });
+      return false;
     }
 
     const decoded = jwt.verify(token.replace("Bearer ", ""), jwtSecret);
-    req.user = decoded;
-    next();
+    const user = await User.findById(decoded.id).select("-password");
+    if (!user) {
+      res.status(401).json({ error: "User no longer exists" });
+      return false;
+    }
+
+    req.user = {
+      id: user._id.toString(),
+      name: user.name,
+      role: user.role,
+      currentStatus: user.currentStatus,
+      statusStartedAt: user.statusStartedAt
+    };
+    return true;
   } catch (err) {
     res.status(401).json({ error: "Token is not valid" });
+    return false;
   }
 };
 
-const adminAuth = (req, res, next) => {
-  auth(req, res, () => {
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ error: "Access denied: Admins only" });
-    }
-    next();
-  });
+const auth = async (req, res, next) => {
+  const ok = await authenticate(req, res);
+  if (!ok) return;
+  next();
 };
 
-const staffAuth = (req, res, next) => {
-  auth(req, res, () => {
-    if (req.user.role !== "admin" && req.user.role !== "quality") {
-      return res.status(403).json({ error: "Access denied: Management/Quality role required" });
-    }
-    next();
-  });
+const adminAuth = async (req, res, next) => {
+  const ok = await authenticate(req, res);
+  if (!ok) return;
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Access denied: Admins only" });
+  }
+  next();
+};
+
+const staffAuth = async (req, res, next) => {
+  const ok = await authenticate(req, res);
+  if (!ok) return;
+  if (req.user.role !== "admin" && req.user.role !== "quality") {
+    return res.status(403).json({ error: "Access denied: Management/Quality role required" });
+  }
+  next();
 };
 
 module.exports = { auth, adminAuth, staffAuth };

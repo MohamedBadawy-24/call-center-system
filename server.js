@@ -142,6 +142,15 @@ app.post("/auth/login", async (req, res) => {
   }
 });
 
+// AUTH: CURRENT USER (validates token + ensures user still exists)
+app.get("/auth/me", auth, async (req, res) => {
+  try {
+    res.json({ user: req.user });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // AUTH: FORGOT PASSWORD
 app.post("/auth/forgot-password", async (req, res) => {
   try {
@@ -255,7 +264,9 @@ app.put("/auth/profile", auth, async (req, res) => {
     const payload = {
       id: user._id,
       name: user.name,
-      role: user.role
+      role: user.role,
+      currentStatus: user.currentStatus,
+      statusStartedAt: user.statusStartedAt
     };
 
     const jwtSecret = process.env.JWT_SECRET;

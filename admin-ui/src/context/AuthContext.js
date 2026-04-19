@@ -1,6 +1,8 @@
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useContext } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+
+import { UIContext } from './UIContext';
 
 export const AuthContext = createContext();
 
@@ -8,41 +10,72 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
+  const { t } = useContext(UIContext);
 
-  const logout = useCallback(() => {
-    if (user?.role === 'agent' && user?.currentStatus !== 'off-duty') {
-      alert("You cannot sign out unless Off-Duty. Please change your status first.");
-      return;
-    }
+  const clearClientSession = useCallback(() => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     delete axios.defaults.headers.common['Authorization'];
     setUser(null);
-    navigate('/login');
-  }, [navigate, user]);
+  }, []);
+
+  const invalidateSession = useCallback(() => {
+    clearClientSession();
+    const p = location.pathname;
+    if (p !== '/login' && p !== '/forgot-password') {
+      navigate('/login', { replace: true });
+    }
+  }, [clearClientSession, location.pathname, navigate]);
+
+  const logout = useCallback(() => {
+    if (user?.role === 'agent' && user?.currentStatus && user.currentStatus !== 'off-duty') {
+      const ok = window.confirm(t('confirmForceSignOut'));
+      if (!ok) return;
+    }
+
+    clearClientSession();
+    navigate('/login', { replace: true });
+  }, [clearClientSession, navigate, t, user?.currentStatus, user?.role]);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-
-    if (token && storedUser) {
-      setUser(JSON.parse(storedUser));
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    }
-    setLoading(false);
-
-    // Setup interceptor for generic 401s
     const interceptor = axios.interceptors.response.use(
       res => res,
       err => {
         if (err.response?.status === 401) {
-          logout();
+          invalidateSession();
         }
         return Promise.reject(err);
       }
     );
+
     return () => axios.interceptors.response.eject(interceptor);
-  }, [logout]);
+  }, [invalidateSession]);
+
+  useEffect(() => {
+    const bootstrap = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+      try {
+        const res = await axios.get('http://localhost:3000/auth/me');
+        const nextUser = res.data.user;
+        setUser(nextUser);
+        localStorage.setItem('user', JSON.stringify(nextUser));
+      } catch {
+        invalidateSession();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    bootstrap();
+  }, [invalidateSession]);
 
   const login = async (email, password) => {
     const res = await axios.post('http://localhost:3000/auth/login', { email, password });

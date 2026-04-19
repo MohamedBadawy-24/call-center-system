@@ -12,7 +12,7 @@ export default function PrivateRoute({ children, reqRole }) {
   if (reqRole) {
     const roles = Array.isArray(reqRole) ? reqRole : [reqRole];
     if (!roles.includes(user.role)) {
-      return <Navigate to="/" replace />;
+      return <Navigate to="/login" replace />;
     }
   }
 

@@ -1,0 +1,41 @@
+version: '3.8'
+services:
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INIT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INIT_PASSWORD}
+      MONGO_INITDB_DATABASE: baseera
+    volumes:
+      - mongo_data:/data/db
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      MONGO_URI: mongodb://admin:${MONGO_INIT_PASSWORD}@mongo:27017/baseera?authSource=admin
+      NODE_ENV: production
+      PORT: 3000
+    depends_on:
+      - mongo
+    volumes:
+      - .:/app
+      - /app/node_modules
+
+  admin-ui:
+    build: ./admin-ui
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    volumes:
+      - ./admin-ui:/app
+      - /app/node_modules
+
+volumes:
+  mongo_data:
+

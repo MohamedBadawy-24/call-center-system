@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useContext } from 'react';
-import axios from 'axios';
+import { api } from '../api/client';
 import { UIContext } from '../context/UIContext';
 
 export default function ProfileRequests() {
@@ -15,7 +15,7 @@ export default function ProfileRequests() {
   const fetchRequests = async () => {
     try {
       setLoading(true);
-      const res = await axios.get('http://localhost:3000/admin/profile-requests');
+      const res = await api.get('/admin/profile-requests');
       setRequests(res.data);
     } catch (err) {
       console.error(err);
@@ -26,7 +26,7 @@ export default function ProfileRequests() {
 
   const handleResolve = async (id, status) => {
     try {
-      await axios.post(`http://localhost:3000/admin/resolve-profile-request/${id}`, {
+      await api.post(`/admin/resolve-profile-request/${id}`, {
         status,
         adminNote: adminNote[id] || ''
       });

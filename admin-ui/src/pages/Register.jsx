@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import axios from 'axios';
+import { api } from '../api/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UserPlus, User, Mail, Lock, Shield, CheckCircle, AlertCircle, Headphones, ClipboardCheck, ShieldCheck } from 'lucide-react';
 import { UIContext } from '../context/UIContext';
@@ -52,7 +52,7 @@ export default function Register() {
     try {
       setError('');
       setMessage('');
-      await axios.post('http://localhost:3000/auth/register', { name, email, password, role });
+      await api.post('/auth/register', { name, email, password, role });
       setMessage(`${name} has been added as a ${selectedRole.label}.`);
       setName(''); setEmail(''); setPassword(''); setRole('agent');
     } catch (err) {

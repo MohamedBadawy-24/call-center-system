@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect } from 'react';
-import axios from 'axios';
+import { api, setApiAuthToken } from '../api/client';
 import { AuthContext } from '../context/AuthContext';
 import { UIContext } from '../context/UIContext';
 
@@ -21,14 +21,14 @@ export default function ProfileSettings() {
 
   useEffect(() => {
     // Fetch stats
-    axios.get('http://localhost:3000/stats/agents').then(res => {
+    api.get('/stats/agents').then(res => {
       const myStats = res.data.find(s => s._id === user.id);
       if (myStats) setStats(myStats);
     }).catch(console.error);
 
     // Fetch own requests
     if (isAgent) {
-      axios.get('http://localhost:3000/auth/my-profile-requests')
+      api.get('/auth/my-profile-requests')
         .then(res => setRequests(res.data))
         .catch(console.error);
     }
@@ -51,7 +51,7 @@ export default function ProfileSettings() {
       setError('');
       setMessage('');
       if (!email || email === user.email) return;
-      const res = await axios.post('http://localhost:3000/auth/request-email-change-code', { newEmail: email });
+      const res = await api.post('/auth/request-email-change-code', { newEmail: email });
       setMessage(res.data.message);
       setIsVerifyingEmail(true);
     } catch (err) {
@@ -63,7 +63,7 @@ export default function ProfileSettings() {
     try {
       setError('');
       setMessage('');
-      const res = await axios.post('http://localhost:3000/auth/verify-email-change-code', { 
+      const res = await api.post('/auth/verify-email-change-code', { 
         code: vCode,
         newEmail: email 
       });
@@ -72,7 +72,7 @@ export default function ProfileSettings() {
       setVCode('');
       setEmail('');
       // Refresh requests
-      const reqs = await axios.get('http://localhost:3000/auth/my-profile-requests');
+      const reqs = await api.get('/auth/my-profile-requests');
       setRequests(reqs.data);
     } catch (err) {
       setError(err.response?.data?.error || "Verification failed");
@@ -83,13 +83,13 @@ export default function ProfileSettings() {
     try {
       setError('');
       setMessage('');
-      const res = await axios.post('http://localhost:3000/auth/request-profile-change', {
+      const res = await api.post('/auth/request-profile-change', {
         type,
         requestedValue: val
       });
       setMessage(res.data.message);
       // Refresh requests
-      const reqs = await axios.get('http://localhost:3000/auth/my-profile-requests');
+      const reqs = await api.get('/auth/my-profile-requests');
       setRequests(reqs.data);
     } catch (err) {
       setError(err.response?.data?.error || "Request failed");
@@ -126,10 +126,10 @@ export default function ProfileSettings() {
       }
 
       if (Object.keys(payload).length > 0) {
-        const res = await axios.put('http://localhost:3000/auth/profile', payload);
+        const res = await api.put('/auth/profile', payload);
         localStorage.setItem('token', res.data.token);
         localStorage.setItem('user', JSON.stringify(res.data.user));
-        axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
+        setApiAuthToken(res.data.token);
         setUser(res.data.user);
         setMessage('Profile updated! ' + (payload.password ? 'Password changed.' : ''));
         if (!targetField || targetField === 'email') setEmail('');

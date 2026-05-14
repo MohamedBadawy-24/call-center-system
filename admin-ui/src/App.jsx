@@ -1,9 +1,10 @@
 import React, { useContext, useState, useEffect, useRef } from 'react';
-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sun, Moon, Globe, LogOut, LayoutDashboard, User as UserIcon, Settings, X, ChevronDown, CheckCircle, PauseCircle, CircleOff, Monitor, AlertCircle, Loader } from 'lucide-react';
+import { Sun, Moon, Globe, LogOut, LayoutDashboard, User as UserIcon, Settings, X, ChevronDown, CheckCircle, PauseCircle, CircleOff, Monitor, AlertCircle, Loader, Activity, BookOpen, MessageSquare, History } from 'lucide-react';
 
 import AgentDashboard from './pages/AgentDashboard';
+import PreCallChecklist from './pages/PreCallChecklist';
 import TakeSurvey from './pages/TakeSurvey';
 import AdminDashboard from './pages/AdminDashboard';
 import SurveyBuilder from './pages/SurveyBuilder';
@@ -14,6 +15,10 @@ import ProfileSettings from './pages/ProfileSettings';
 import ProfileRequests from './pages/ProfileRequests';
 import LiveMonitoring from './pages/LiveMonitoring';
 import UserManagement from './pages/UserManagement';
+import Analytics from './pages/Analytics';
+import Feedbacks from './pages/Feedbacks';
+import SopUpdates from './pages/SopUpdates';
+import ResponseHistory from './pages/ResponseHistory';
 import PrivateRoute from './components/PrivateRoute';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import { UIProvider, UIContext } from './context/UIContext';
@@ -21,6 +26,7 @@ import { UIProvider, UIContext } from './context/UIContext';
 const StatusSelector = ({ user, updateStatus, t, timer }) => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -74,9 +80,24 @@ const StatusSelector = ({ user, updateStatus, t, timer }) => {
               <button
                 key={s.id}
                 className={`status-option ${user.currentStatus === s.id ? 'active' : ''}`}
-                onClick={() => {
-                  updateStatus(s.id);
-                  setIsOpen(false);
+                onClick={async () => {
+                  try {
+                    let reason = null;
+                    if (s.id === 'break') {
+                      reason = window.prompt(t('enterBreakReason') || "Please enter your break reason (Lunch or Meeting):", "Lunch");
+                      if (!reason || !['Lunch', 'Meeting'].includes(reason)) {
+                        alert("Invalid or empty break reason. Must be 'Lunch' or 'Meeting'.");
+                        return;
+                      }
+                    }
+                    await updateStatus(s.id, reason);
+                    setIsOpen(false);
+                    if (user?.role === 'agent' && s.id === 'active') {
+                      navigate('/agent/precall', { replace: true });
+                    }
+                  } catch (e) {
+                    alert(e.response?.data?.error || 'Failed to update status');
+                  }
                 }}
               >
                 <span className="status-option-icon" style={{ color: s.color }}>{s.icon}</span>
@@ -93,7 +114,7 @@ const StatusSelector = ({ user, updateStatus, t, timer }) => {
 
 // Global Guard to block UI unless Active (for Agents/Quality)
 const StatusGuard = ({ children }) => {
-  const { user } = useContext(AuthContext);
+  const { user, updateStatus } = useContext(AuthContext);
   const { t } = useContext(UIContext);
   const location = useLocation();
 
@@ -141,13 +162,21 @@ const StatusGuard = ({ children }) => {
               {t('mustBeActiveDashboard')}
             </p>
             
-            <motion.div 
-              style={{ marginTop: '2rem', display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1.5rem', borderRadius: 'var(--radius-md)', background: 'hsla(var(--p-h), var(--p-s), var(--p-l), 0.1)', color: 'var(--primary)', fontWeight: 800 }}
-              animate={{ opacity: [0.5, 1, 0.5] }}
-              transition={{ repeat: Infinity, duration: 2 }}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => updateStatus('active')}
+              className="btn-primary"
+              style={{ marginTop: '2rem', padding: '0.75rem 2rem', fontSize: '1.1rem', borderRadius: 'var(--radius-md)' }}
             >
-              <ChevronDown size={20} style={{ transform: 'rotate(-90deg)' }} />
-              Use Status Bar in Navbar to Change Status
+              {t('active')}
+            </motion.button>
+
+            <motion.div 
+              style={{ marginTop: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 1rem', borderRadius: 'var(--radius-md)', color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 600 }}
+            >
+              <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
+              {t('useNavbarStatus') || 'Or use status bar in navbar'}
             </motion.div>
           </motion.div>
         </AnimatePresence>
@@ -167,6 +196,8 @@ const NavBar = () => {
   const { theme, toggleTheme, language, setLanguage, t } = useContext(UIContext);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [timer, setTimer] = useState("00:00:00");
+  const [unseenSopCount, setUnseenSopCount] = useState(0);
+  const [unseenFeedbackCount, setUnseenFeedbackCount] = useState(0);
   const isAdminOrQualityPath = location.pathname.startsWith('/admin');
   const isAgentOrQuality = user?.role === 'agent' || user?.role === 'quality';
   const isStaff = user?.role === 'admin' || user?.role === 'quality';
@@ -187,6 +218,18 @@ const NavBar = () => {
     }
     return () => clearInterval(interval);
   }, [isAgentOrQuality, user?.statusStartedAt]);
+
+  useEffect(() => {
+    if (user) {
+      import('./api/client').then(({ api }) => {
+        if (!isStaff) {
+          api.get('/sops/unseen-count').then(res => setUnseenSopCount(res.data.count)).catch(console.error);
+        } else {
+          api.get('/reviews/unseen-count').then(res => setUnseenFeedbackCount(res.data.count)).catch(console.error);
+        }
+      });
+    }
+  }, [user, isStaff, location.pathname]);
 
   if (!user && location.pathname === '/login') return null;
 
@@ -228,6 +271,36 @@ const NavBar = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {isAgentOrQuality && user && (
             <StatusSelector user={user} updateStatus={updateStatus} t={t} timer={timer} />
+          )}
+
+          {user && !isStaff && (
+            <Link to="/sops" style={{ position: 'relative', color: 'inherit' }} onClick={() => setUnseenSopCount(0)}>
+              <Activity size={20} />
+              {unseenSopCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: '-5px', right: '-8px', background: 'var(--danger)', color: '#fff', 
+                  fontSize: '0.6rem', fontWeight: 'bold', width: '16px', height: '16px', 
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%'
+                }}>
+                  {unseenSopCount > 9 ? '9+' : unseenSopCount}
+                </span>
+              )}
+            </Link>
+          )}
+
+          {user && isStaff && (
+            <Link to="/admin/feedbacks" style={{ position: 'relative', color: 'inherit' }} onClick={() => setUnseenFeedbackCount(0)}>
+              <MessageSquare size={20} />
+              {unseenFeedbackCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: '-5px', right: '-8px', background: 'var(--danger)', color: '#fff', 
+                  fontSize: '0.6rem', fontWeight: 'bold', width: '16px', height: '16px', 
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%'
+                }}>
+                  {unseenFeedbackCount > 9 ? '9+' : unseenFeedbackCount}
+                </span>
+              )}
+            </Link>
           )}
 
           {user && (
@@ -279,11 +352,32 @@ const NavBar = () => {
                 <Link to="/profile" className="drawer-item" onClick={() => setDrawerOpen(false)}>
                   <UserIcon size={18} /> {t('myProfile')}
                 </Link>
+                <Link to="/sops" className="drawer-item" onClick={() => { setDrawerOpen(false); setUnseenSopCount(0); }}>
+                  <BookOpen size={18} /> {t('sopUpdates') || 'SOP Updates'}
+                </Link>
 
                 {isStaff && (
-                  <Link to="/admin/live" className="drawer-item" onClick={() => setDrawerOpen(false)}>
-                    <Monitor size={18} /> {t('liveMonitor')}
-                  </Link>
+                  <>
+                    <Link to="/admin/feedbacks" className="drawer-item" onClick={() => { setDrawerOpen(false); setUnseenFeedbackCount(0); }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <MessageSquare size={18} /> {t('feedbacks') || 'Feedbacks'}
+                      </div>
+                      {unseenFeedbackCount > 0 && (
+                        <span style={{ background: 'var(--danger)', color: '#fff', fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: '10px' }}>
+                          {unseenFeedbackCount}
+                        </span>
+                      )}
+                    </Link>
+                    <Link to="/admin/live" className="drawer-item" onClick={() => setDrawerOpen(false)}>
+                      <Monitor size={18} /> {t('liveMonitor')}
+                    </Link>
+                    <Link to="/admin/analytics" className="drawer-item" onClick={() => setDrawerOpen(false)}>
+                      <Activity size={18} /> {t('historicalAnalytics') || 'Analytics'}
+                    </Link>
+                    <Link to="/admin/responses" className="drawer-item" onClick={() => setDrawerOpen(false)}>
+                      <History size={18} /> {t('responseHistory') || 'Response History'}
+                    </Link>
+                  </>
                 )}
 
                 <div style={{ marginTop: '2.5rem' }}>
@@ -354,15 +448,20 @@ const AnimatedRoutes = () => {
         <Route path="/forgot-password" element={<PageWrapper><ForgotPassword /></PageWrapper>} />
         <Route path="/profile" element={<PrivateRoute><PageWrapper><ProfileSettings /></PageWrapper></PrivateRoute>} />
         <Route path="/" element={<PrivateRoute><PageWrapper><AgentDashboard /></PageWrapper></PrivateRoute>} />
+        <Route path="/agent/precall" element={<PrivateRoute><PageWrapper><PreCallChecklist /></PageWrapper></PrivateRoute>} />
         <Route path="/take-survey/:id" element={<PrivateRoute><PageWrapper><TakeSurvey /></PageWrapper></PrivateRoute>} />
+        <Route path="/sops" element={<PrivateRoute><PageWrapper><SopUpdates /></PageWrapper></PrivateRoute>} />
         
         {/* Support both Admin and Quality roles for common stats dashboard and Live Monitor */}
         <Route path="/admin" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><AdminDashboard /></PageWrapper></PrivateRoute>} />
         <Route path="/admin/live" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><LiveMonitoring /></PageWrapper></PrivateRoute>} />
+        <Route path="/admin/analytics" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><Analytics /></PageWrapper></PrivateRoute>} />
+        <Route path="/admin/feedbacks" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><Feedbacks /></PageWrapper></PrivateRoute>} />
+        <Route path="/admin/responses" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><ResponseHistory /></PageWrapper></PrivateRoute>} />
         
         {/* Strictly Admin routes */}
         <Route path="/admin/requests" element={<PrivateRoute reqRole="admin"><PageWrapper><ProfileRequests /></PageWrapper></PrivateRoute>} />
-        <Route path="/admin/builder/:id?" element={<PrivateRoute reqRole="admin"><PageWrapper><SurveyBuilder /></PageWrapper></PrivateRoute>} />
+        <Route path="/admin/builder/:id?" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><SurveyBuilder /></PageWrapper></PrivateRoute>} />
         <Route path="/admin/register" element={<PrivateRoute reqRole="admin"><PageWrapper><Register /></PageWrapper></PrivateRoute>} />
         <Route path="/admin/users" element={<PrivateRoute reqRole="admin"><PageWrapper><UserManagement /></PageWrapper></PrivateRoute>} />
       </Routes>
@@ -372,7 +471,7 @@ const AnimatedRoutes = () => {
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <UIProvider>
         <AuthProvider>
           <div className="app-bg">

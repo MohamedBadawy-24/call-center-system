@@ -1,5 +1,10 @@
 const mongoose = require("mongoose");
 
+/**
+ * The ProfileRequest model stores requests submitted by an Agent to change their
+ * personal information (like name or email). These requests sit in a "pending"
+ * state until an Admin reviews and approves/rejects them.
+ */
 const ProfileRequestSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,

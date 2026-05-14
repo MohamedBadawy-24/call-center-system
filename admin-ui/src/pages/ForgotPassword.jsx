@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import axios from 'axios';
+import { api } from '../api/client';
 import { Link, useNavigate } from 'react-router-dom';
 import { UIContext } from '../context/UIContext';
 
@@ -18,7 +18,7 @@ export default function ForgotPassword() {
     try {
       setError('');
       setMessage('');
-      const res = await axios.post('http://localhost:3000/auth/forgot-password', { email });
+      const res = await api.post('/auth/forgot-password', { email });
       setMessage(res.data.message || 'Code sent. Check your email.');
       setStep(2);
     } catch (err) {
@@ -31,7 +31,7 @@ export default function ForgotPassword() {
     try {
       setError('');
       setMessage('');
-      const res = await axios.post('http://localhost:3000/auth/reset-password', { email, code, newPassword });
+      const res = await api.post('/auth/reset-password', { email, code, newPassword });
       alert(res.data.message);
       navigate('/login');
     } catch (err) {

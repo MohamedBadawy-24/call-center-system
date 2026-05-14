@@ -5,14 +5,33 @@ const AnswerSchema = new mongoose.Schema({
   value: String,
 });
 
+/**
+ * The Response model stores the final submitted answers for a completed (or partially completed) survey questionnaire.
+ * It links back to the agent who conducted the interview and the survey it belongs to.
+ */
 const ResponseSchema = new mongoose.Schema({
-  surveyId: String,
-  agentId: String, // who took the call
-  status: { type: String, default: "completed" }, // completed, disqualified, abandoned
+  surveyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Survey', required: true, index: true },
+  agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  /** completed | partial | postponed | disqualified | abandoned */
+  status: { type: String, default: "completed" },
+  /** completed | partial | postponed → not disqualified; refused | no_qualified | not_contacted → disqualified */
+  interviewOutcome: { type: String, default: "" },
+  outcomeCategory: {
+    type: String,
+    enum: ["qualified", "postponed", "disqualified"],
+    default: "qualified",
+  },
+  outcomeReason: { type: String, default: "" },
+  /** Same clock as User.statusStartedAt when the call was submitted — used with precall gate */
+  sessionStatusStartedAt: { type: Date },
   answers: [AnswerSchema],
   durationSecs: { type: Number, default: 0 },
+  serialNumber: { type: String, unique: true, sparse: true },
   startedAt: { type: Date, default: Date.now },
   completedAt: { type: Date },
 });
+
+ResponseSchema.index({ agentId: 1, startedAt: -1 });
+ResponseSchema.index({ serialNumber: 1, agentId: 1 });
 
 module.exports = mongoose.model("Response", ResponseSchema);

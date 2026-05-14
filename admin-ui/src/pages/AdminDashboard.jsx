@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useContext, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
+import { api, SOCKET_BASE } from '../api/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { io } from 'socket.io-client';
 import { 
   Plus, Users, UserPlus, GitBranch, History, BarChart3, Trash2, Edit3, 
-  Play, Pause, Eye, Download, Search, Target, TrendingUp, Clock, Activity
+  Play, Pause, Eye, Download, Search, Target, TrendingUp, Clock, Activity, FileText, CheckCircle, MessageSquare, BookOpen
 } from 'lucide-react';
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
@@ -20,6 +20,8 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState('overview');
+  const [dailyGoal, setDailyGoal] = useState(50);
   const socketRef = useRef(null);
 
   const isAdmin = user?.role === 'admin';
@@ -27,12 +29,14 @@ export default function AdminDashboard() {
 
   const fetchData = async () => {
     try {
-      const [surveysRes, agentsRes] = await Promise.all([
-        axios.get('http://localhost:3000/admin/surveys-stats'),
-        axios.get('http://localhost:3000/stats/agents')
+      const [surveysRes, agentsRes, goalRes] = await Promise.all([
+        api.get('/admin/surveys-stats'),
+        api.get('/stats/agents'),
+        api.get('/settings/dailyGoal')
       ]);
       setSurveys(surveysRes.data);
       setAgentStats(agentsRes.data);
+      setDailyGoal(goalRes.data.dailyGoal || 50);
     } catch (err) {
       console.error("Data fetch error:", err);
     } finally {
@@ -44,7 +48,7 @@ export default function AdminDashboard() {
     fetchData();
 
     // Setup Real-time Sync
-    socketRef.current = io('http://localhost:3000', {
+    socketRef.current = io(SOCKET_BASE, {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -69,9 +73,7 @@ export default function AdminDashboard() {
   const handleExport = async (surveyId, title) => {
     setIsExporting(surveyId);
     try {
-      const response = await axios({
-        url: `http://localhost:3000/admin/export-survey/${surveyId}`,
-        method: 'GET',
+      const response = await api.get(`/admin/export-survey/${surveyId}`, {
         responseType: 'blob',
       });
       
@@ -123,7 +125,7 @@ export default function AdminDashboard() {
   const toggleSurveyStatus = async (surveyId) => {
     if (!isAdmin) return;
     try {
-      await axios.put(`http://localhost:3000/surveys/${surveyId}/toggle`);
+      await api.put(`/surveys/${surveyId}/toggle`);
       // Update locally immediately for punchy UI
       setSurveys(surveys.map(s => s._id === surveyId ? { ...s, isActive: !s.isActive } : s));
     } catch (err) {
@@ -136,10 +138,18 @@ export default function AdminDashboard() {
     if (isActive !== false) return alert("End campaign to delete");
     if (!window.confirm(t('confirmDeleteSurvey'))) return;
     try {
-      await axios.delete(`http://localhost:3000/survey/${surveyId}`);
+      await api.delete(`/survey/${surveyId}`);
       setSurveys(surveys.filter(s => s._id !== surveyId));
     } catch (err) {
       alert(err.response?.data?.error || "Failed to delete survey");
+    }
+  };
+
+  const updateDailyGoal = async (val) => {
+    try {
+      await api.put('/admin/settings/dailyGoal', { dailyGoal: Number(val) });
+    } catch (err) {
+      alert("Failed to save daily goal");
     }
   };
 
@@ -162,6 +172,9 @@ export default function AdminDashboard() {
       const statusOrder = { active: 0, preparing: 1, break: 2, 'off-duty': 3 };
       return statusOrder[a.currentStatus] - statusOrder[b.currentStatus];
     });
+
+  const agentsList = filteredAgents.filter(a => a.role === 'agent');
+  const qualityList = filteredAgents.filter(a => a.role === 'quality');
 
   if (loading) return <LoadingSpinner fullPage />;
 
@@ -187,7 +200,17 @@ export default function AdminDashboard() {
         </div>
         
         {isAdmin && (
-          <motion.div variants={itemVariants} style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <motion.div variants={itemVariants} style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-secondary)', padding: '0.25rem 0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Daily Goal:</span>
+              <input 
+                type="number" 
+                value={dailyGoal}
+                onChange={e => setDailyGoal(e.target.value)}
+                onBlur={e => updateDailyGoal(e.target.value)}
+                style={{ width: '60px', padding: '0.25rem', border: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)', borderRadius: '4px', textAlign: 'center' }}
+              />
+            </div>
             <Link to="/admin/requests" className="btn-secondary"><History size={16} />{t('changeRequests')}</Link>
             <Link to="/admin/users" className="btn-secondary"><Users size={16} />{t('teamMembers')}</Link>
             <Link to="/admin/register" className="btn-secondary"><UserPlus size={16} />{t('addTeamMember')}</Link>
@@ -196,7 +219,14 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* KPI Section */}
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem', overflowX: 'auto' }}>
+        <button className="btn-secondary" onClick={() => setActiveTab('overview')} style={{ background: activeTab === 'overview' ? 'var(--primary)' : 'transparent', color: activeTab === 'overview' ? '#fff' : 'inherit', borderColor: activeTab === 'overview' ? 'transparent' : 'var(--glass-border)' }}>Overview & Campaigns</button>
+        <button className="btn-secondary" onClick={() => setActiveTab('workforce')} style={{ background: activeTab === 'workforce' ? 'var(--primary)' : 'transparent', color: activeTab === 'workforce' ? '#fff' : 'inherit', borderColor: activeTab === 'workforce' ? 'transparent' : 'var(--glass-border)' }}>Workforce</button>
+      </div>
+
+      {activeTab === 'overview' && (
+      <>
       <div className="kpi-grid">
         <motion.div variants={itemVariants} className="kpi-card">
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -231,9 +261,9 @@ export default function AdminDashboard() {
           <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{t('harvestingData')}</span>
         </motion.div>
       </div>
-
+      
       {/* Search Bar */}
-      <div className="search-container">
+      <div className="search-container" style={{ marginTop: '2rem' }}>
         <Search className="search-icon" size={20} />
         <input 
           type="text" 
@@ -276,11 +306,12 @@ export default function AdminDashboard() {
                   <h3 style={{ marginBottom: 0 }}>{s.title}</h3>
                 </div>
                 
-                <p style={{ color: "var(--text-secondary)", fontSize: "0.8rem", fontWeight: 700 }}>
-                  {t('fulfillmentProgress')}
+                <p style={{ color: "var(--text-secondary)", fontSize: "0.8rem", fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
+                  <span>{t('fulfillmentProgress')}</span>
+                  {s.goal > 0 && <span style={{ color: 'var(--primary)' }}>{s.completed || 0} / {s.goal}</span>}
                 </p>
                 <div className="fulfillment-container">
-                  <div className="fulfillment-bar" style={{ width: `${progress}%` }}></div>
+                  <div className="fulfillment-bar" style={{ width: `${s.goal > 0 ? Math.min((s.completed / s.goal) * 100, 100) : progress}%` }}></div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', margin: '1rem 0' }}>
@@ -298,7 +329,7 @@ export default function AdminDashboard() {
                   {isAdmin ? (
                     <Link to={`/admin/builder/${s._id}`} className="btn-secondary" style={{ flex: 1, padding: '0.5rem' }}><Edit3 size={14} />{t('edit')}</Link>
                   ) : (
-                    <div className="btn-secondary" style={{ flex: 1, padding: '0.5rem', opacity: 0.8 }}><Eye size={14} /> {t('audit')}</div>
+                    <Link to={`/admin/builder/${s._id}`} className="btn-secondary" style={{ flex: 1, padding: '0.5rem', opacity: 0.8 }}><Eye size={14} /> {t('audit')}</Link>
                   )}
                   
                   <button onClick={() => handleExport(s._id, s.title)} className="btn-secondary" style={{ flex: 1, padding: '0.5rem' }}>
@@ -320,7 +351,11 @@ export default function AdminDashboard() {
           })}
         </AnimatePresence>
       </div>
+      </>
+      )}
 
+      {activeTab === 'workforce' && (
+      <>
       {/* Team Performance */}
       <motion.h2 variants={itemVariants} style={{ marginTop: '4rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
         <GitBranch size={24} color="var(--primary)" />
@@ -341,7 +376,7 @@ export default function AdminDashboard() {
           </thead>
           <tbody>
             <AnimatePresence>
-              {filteredAgents.map(a => {
+              {agentsList.map(a => {
                 const agentAHT = a.completed > 0 ? Math.floor(a.totalDurationSecs / a.completed) : 0;
                 return (
                   <motion.tr layout key={a._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -370,6 +405,62 @@ export default function AdminDashboard() {
           </tbody>
         </table>
       </motion.div>
+
+      {/* Quality Performance */}
+      <motion.h2 variants={itemVariants} style={{ marginTop: '4rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <CheckCircle size={24} color="var(--primary)" />
+        {t('qualityTeam') || 'Quality Team'}
+      </motion.h2>
+
+      <motion.div variants={itemVariants} className="glass-card" style={{ padding: '1rem', overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
+          <thead>
+            <tr>
+              <th>{t('agentName')}</th>
+              <th>{t('status')}</th>
+              <th>{t('totalReview') || 'Total Review'}</th>
+              <th>{t('actions') || 'Actions'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <AnimatePresence>
+              {qualityList.map(a => {
+                return (
+                  <motion.tr layout key={a._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    <td style={{ fontWeight: 800 }}>{a.agentName}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <div className={`status-dot ${a.currentStatus}`} style={{ background: getStatusColor(a.currentStatus) }}></div>
+                        <span style={{ fontWeight: 800, fontSize: '0.75rem', color: getStatusColor(a.currentStatus), textTransform: 'uppercase' }}>
+                          {t(a.currentStatus === 'preparing' ? 'preparing' : a.currentStatus === 'break' ? 'onBreak' : a.currentStatus === 'off-duty' ? 'offDuty' : 'active')}
+                        </span>
+                        {a.currentStatus !== 'off-duty' && (
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontFamily: 'monospace', opacity: 0.7 }}>
+                            ({formatStatusTimer(a.statusStartedAt)})
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td style={{ fontWeight: 700 }}>{a.totalReviews || 0}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <Link to="/admin/feedbacks" className="btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}>
+                          <MessageSquare size={14} /> {t('feedbacks') || 'Feedbacks'}
+                        </Link>
+                        <Link to="/sops" className="btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}>
+                          <BookOpen size={14} /> {t('sopUpdates') || 'SOP Updates'}
+                        </Link>
+                      </div>
+                    </td>
+                  </motion.tr>
+                );
+              })}
+            </AnimatePresence>
+          </tbody>
+        </table>
+      </motion.div>
+      </>
+      )}
     </motion.div>
   );
 }

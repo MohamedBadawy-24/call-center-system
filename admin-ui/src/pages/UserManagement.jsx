@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useContext } from 'react';
-import axios from 'axios';
+import { api } from '../api/client';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Users, Trash2, UserPlus, ArrowLeft } from 'lucide-react';
@@ -18,7 +18,7 @@ export default function UserManagement() {
   const loadUsers = async () => {
     setLoading(true);
     try {
-      const res = await axios.get('http://localhost:3000/admin/users');
+      const res = await api.get('/admin/users');
       setUsers(res.data || []);
     } catch (err) {
       console.error(err);
@@ -49,7 +49,7 @@ export default function UserManagement() {
 
     setDeletingId(u._id);
     try {
-      await axios.delete(`http://localhost:3000/admin/users/${u._id}`);
+      await api.delete(`/admin/users/${u._id}`);
       setUsers(prev => prev.filter(x => x._id !== u._id));
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to delete user');

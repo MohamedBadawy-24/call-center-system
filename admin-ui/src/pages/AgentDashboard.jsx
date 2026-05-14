@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { motion } from 'framer-motion';
-import { ClipboardList, Star } from 'lucide-react';
+import { api, SOCKET_BASE } from '../api/client';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ClipboardList, Star, ArrowLeft } from 'lucide-react';
 import { io } from 'socket.io-client';
 
 import { UIContext } from '../context/UIContext';
@@ -15,21 +15,38 @@ export default function AgentDashboard() {
   const [surveys, setSurveys] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [dailyGoal, setDailyGoal] = useState(50);
   const navigate = useNavigate();
+  
+  const [whisperMessage, setWhisperMessage] = useState(null);
   
   // Real-time Screen Sharing Refs
   const socketRef = useRef(null);
   const streamRef = useRef(null);
-  const intervalRef = useRef(null);
-  const videoRef = useRef(document.createElement('video'));
+  const peerConnectionsRef = useRef({});
+
+  useEffect(() => {
+    if (
+      user.role === 'agent' &&
+      user.currentStatus === 'active' &&
+      user.precallCompletedForActiveSession !== true &&
+      !loading && surveys.length > 0
+    ) {
+      const latestSid = surveys[0]?._id;
+      const url = latestSid ? `/agent/precall?surveyId=${latestSid}` : '/agent/precall';
+      navigate(url, { replace: true });
+      return;
+    }
+  }, [navigate, user.currentStatus, user.id, user.role, user.precallCompletedForActiveSession, surveys]);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [surveysRes, statsRes] = await Promise.allSettled([
-          axios.get('http://localhost:3000/surveys'),
-          axios.get('http://localhost:3000/stats/agents')
+        const [surveysRes, statsRes, goalRes] = await Promise.allSettled([
+          api.get('/surveys'),
+          api.get('/stats/agents'),
+          api.get('/settings/dailyGoal')
         ]);
         
         if (surveysRes.status === 'fulfilled') {
@@ -41,6 +58,10 @@ export default function AgentDashboard() {
         if (statsRes.status === 'fulfilled' && statsRes.value.data && statsRes.value.data.length > 0) {
           const myStats = statsRes.value.data.find(a => a._id === user.id);
           if (myStats) setStats(myStats);
+        }
+
+        if (goalRes.status === 'fulfilled') {
+          setDailyGoal(goalRes.value.data.dailyGoal || 50);
         }
       } catch (err) {
         console.error("Agent Dashboard global fetch error:", err);
@@ -60,7 +81,7 @@ export default function AgentDashboard() {
       const startStreaming = async () => {
         try {
           // Initialize Socket
-          socketRef.current = io('http://localhost:3000', {
+          socketRef.current = io(SOCKET_BASE, {
             transports: ['websocket', 'polling'],
             reconnection: true,
             reconnectionAttempts: Infinity,
@@ -84,32 +105,66 @@ export default function AgentDashboard() {
           });
           
           streamRef.current = stream;
-          videoRef.current.srcObject = stream;
-          videoRef.current.play();
 
-          // Canvas for frame capturing
-          const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d');
+          socketRef.current.on('request-stream', async ({ auditorId }) => {
+            try {
+              const pc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }]
+              });
+              peerConnectionsRef.current[auditorId] = pc;
 
-          // High-bandwidth Frame Emission
-          intervalRef.current = setInterval(() => {
-            if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-              // Target HD Resolution while maintaining scale
-              const width = videoRef.current.videoWidth;
-              const height = videoRef.current.videoHeight;
-              canvas.width = width;
-              canvas.height = height;
-              
-              context.drawImage(videoRef.current, 0, 0, width, height);
-              // Send high-quality JPEG chunks
-              const frame = canvas.toDataURL('image/jpeg', 0.7); 
-              socketRef.current.emit('screen-data', {
+              stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+              pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                  socketRef.current.emit('webrtc-ice-candidate', {
+                    target: auditorId,
+                    candidate: event.candidate,
+                    agentId: user.id
+                  });
+                }
+              };
+
+              const offer = await pc.createOffer();
+              await pc.setLocalDescription(offer);
+
+              socketRef.current.emit('webrtc-offer', {
+                target: auditorId,
                 agentId: user.id,
                 agentName: user.name,
-                frame
+                offer
               });
+            } catch (e) {
+              console.error('Error handling request-stream:', e);
             }
-          }, 333); // ~3 FPS - optimized for clear screen monitoring without crashing browser
+          });
+
+          socketRef.current.on('webrtc-answer', async ({ auditorId, answer }) => {
+            const pc = peerConnectionsRef.current[auditorId];
+            if (pc && pc.signalingState !== 'stable') {
+              await pc.setRemoteDescription(new RTCSessionDescription(answer));
+            }
+          });
+
+          socketRef.current.on('webrtc-ice-candidate', async ({ senderId, candidate }) => {
+            const pc = peerConnectionsRef.current[senderId];
+            if (pc) {
+              await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            }
+          });
+
+          socketRef.current.on('whisper', ({ message }) => {
+            setWhisperMessage(message);
+            setTimeout(() => setWhisperMessage(null), 8000);
+          });
+
+          socketRef.current.on('stop-stream', ({ auditorId }) => {
+            const pc = peerConnectionsRef.current[auditorId];
+            if (pc) {
+              pc.close();
+              delete peerConnectionsRef.current[auditorId];
+            }
+          });
 
         } catch (err) {
           console.error("Auto-monitoring failed to start:", err);
@@ -126,11 +181,12 @@ export default function AgentDashboard() {
   }, [user.currentStatus, user.id, user.role, user.name]);
 
   const stopStreaming = () => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
+    Object.values(peerConnectionsRef.current).forEach(pc => pc.close());
+    peerConnectionsRef.current = {};
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
@@ -170,22 +226,72 @@ export default function AgentDashboard() {
       initial="hidden"
       animate="visible"
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
+      <AnimatePresence>
+        {whisperMessage && (
+          <motion.div 
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            style={{
+              position: 'fixed',
+              top: '20px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 9999,
+              background: 'var(--primary)',
+              color: '#fff',
+              padding: '1rem 2rem',
+              borderRadius: 'var(--radius-md)',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem'
+            }}
+          >
+            <span>💬</span> Auditor Whisper: {whisperMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <motion.div variants={itemVariants}>
           <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <ClipboardList size={32} color="var(--primary)" />
             {t('agentPortal')}
           </h1>
         </motion.div>
+
+        {user.role === 'agent' && user.currentStatus === 'active' && (
+          <motion.div variants={itemVariants}>
+            <button type="button" className="btn-secondary" onClick={() => navigate('/agent/precall')} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+              <ArrowLeft size={18} />
+              {t('backToChecklist')}
+            </button>
+          </motion.div>
+        )}
         
         {stats && (
           <motion.div 
             variants={itemVariants}
             className="glass-card" 
-            style={{ padding: '0.5rem 1.5rem', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '0.75rem' }}
+            style={{ padding: '1rem 1.5rem', marginBottom: 0, flex: 1, minWidth: '300px', maxWidth: '400px' }}
           >
-            <Star size={18} fill="var(--warning)" color="var(--warning)" />
-            <span style={{ fontWeight: 800 }}>{t('completed')}: {stats.completed}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Star size={18} fill="var(--warning)" color="var(--warning)" />
+                <span style={{ fontWeight: 800, fontSize: '0.9rem' }}>Daily Goal</span>
+              </div>
+              <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--success)' }}>{stats.completed} / {dailyGoal}</span>
+            </div>
+            <div className="fulfillment-container" style={{ height: '8px' }}>
+              <div className="fulfillment-bar" style={{ width: `${Math.min((stats.completed / dailyGoal) * 100, 100)}%`, background: 'var(--success)' }}></div>
+            </div>
+            {stats.completed >= dailyGoal && (
+              <div style={{ fontSize: '0.75rem', color: 'var(--warning)', marginTop: '0.5rem', fontWeight: 700, textAlign: 'center' }}>
+                🌟 Goal Reached! Amazing Job! 🌟
+              </div>
+            )}
           </motion.div>
         )}
       </div>

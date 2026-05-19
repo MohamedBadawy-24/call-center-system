@@ -393,3 +393,49 @@ exports.handoverCall = async (req, res) => {
     res.status(500).json({ error: 'Failed to perform handover' });
   }
 };
+
+exports.saveDraft = async (req, res) => {
+  try {
+    const { surveyId, serialNumber, answers, currentIdx } = req.body;
+    if (!surveyId || !serialNumber) {
+      return res.status(400).json({ error: 'surveyId and serialNumber are required' });
+    }
+
+    const draft = await Draft.findOneAndUpdate(
+      { agentId: req.user.id, serialNumber },
+      {
+        $set: {
+          surveyId,
+          answers: answers || {},
+          currentIdx: currentIdx || 0,
+          updatedAt: new Date()
+        }
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    res.json({ success: true, draft });
+  } catch (err) {
+    console.error('Save Draft Error:', err);
+    res.status(500).json({ error: 'Failed to save draft' });
+  }
+};
+
+exports.getDraft = async (req, res) => {
+  try {
+    const { serialNumber } = req.params;
+    if (!serialNumber) {
+      return res.status(400).json({ error: 'serialNumber is required' });
+    }
+
+    const draft = await Draft.findOne({ agentId: req.user.id, serialNumber }).lean();
+    if (!draft) {
+      return res.json({ answers: {}, currentIdx: 0 });
+    }
+
+    res.json({ answers: draft.answers, currentIdx: draft.currentIdx });
+  } catch (err) {
+    console.error('Get Draft Error:', err);
+    res.status(500).json({ error: 'Failed to get draft' });
+  }
+};

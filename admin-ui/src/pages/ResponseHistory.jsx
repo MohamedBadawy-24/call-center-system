@@ -16,11 +16,6 @@ export default function ResponseHistory() {
   const [expandedId, setExpandedId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Pagination
-  const [total, setTotal] = useState(0);
-  const [skip, setSkip] = useState(0);
-  const [limit] = useState(50);
-  
   // Export states
   const [showExportModal, setShowExportModal] = useState(false);
   const [surveys, setSurveys] = useState([]);
@@ -45,7 +40,7 @@ export default function ResponseHistory() {
     });
 
     return () => socket.disconnect();
-  }, [skip]); // Refetch when page changes
+  }, []);
 
   const fetchMetadata = async () => {
     try {
@@ -63,13 +58,8 @@ export default function ResponseHistory() {
   const fetchResponses = async (showSpinner = false) => {
     try {
       if (showSpinner) setLoading(true);
-      const res = await api.get(`/admin/responses?limit=${limit}&skip=${skip}`);
-      if (res.data && res.data.data) {
-        setResponses(res.data.data);
-        setTotal(res.data.total || 0);
-      } else {
-        setResponses(res.data || []);
-      }
+      const res = await api.get('/admin/responses');
+      setResponses(res.data);
     } catch (err) {
       console.error("Failed to fetch responses:", err);
     } finally {
@@ -436,43 +426,6 @@ export default function ResponseHistory() {
           </div>
         )}
       </div>
-
-      {/* Pagination Controls */}
-      {total > limit && (
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          gap: '1.5rem', 
-          marginTop: '1.5rem',
-          padding: '1rem' 
-        }}>
-          <button 
-            className="btn-secondary" 
-            disabled={skip === 0}
-            onClick={() => setSkip(Math.max(0, skip - limit))}
-            style={{ minWidth: '120px' }}
-          >
-            {t('previous') || 'Previous'}
-          </button>
-          
-          <div style={{ fontWeight: 800, color: 'var(--text-secondary)' }}>
-            {Math.floor(skip / limit) + 1} / {Math.ceil(total / limit)}
-            <span style={{ fontSize: '0.8rem', opacity: 0.6, marginLeft: '0.5rem' }}>
-              ({total} {t('total') || 'Total'})
-            </span>
-          </div>
-
-          <button 
-            className="btn-secondary" 
-            disabled={skip + limit >= total}
-            onClick={() => setSkip(skip + limit)}
-            style={{ minWidth: '120px' }}
-          >
-            {t('next') || 'Next'}
-          </button>
-        </div>
-      )}
       
       <style>{`
         .hover-row:hover {

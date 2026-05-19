@@ -17,6 +17,10 @@ const PhoneNumberSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  governorate: { 
+    type: String, 
+    index: true 
+  },
   status: { 
     type: String, 
     enum: ['pending', 'called', 'completed', 'disqualified', 'postponed'], 

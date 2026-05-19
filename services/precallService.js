@@ -26,14 +26,16 @@ function toFiniteAge(raw) {
  * Avoids the Number("") === 0 pitfall.
  */
 function parseRespondentAgeYears(payload) {
-  if (!payload || typeof payload !== 'object') return NaN;
+  if (!payload || typeof payload !== 'object') return null;
   const preferred = ['age_years', 'age', 'respondent_age'];
   for (const k of preferred) {
     if (!Object.prototype.hasOwnProperty.call(payload, k)) continue;
     const n = toFiniteAge(payload[k]);
     if (n !== null) return n;
+    // If the field exists but cannot be parsed to a finite number, return NaN
+    return NaN;
   }
-  return NaN;
+  return null;
 }
 
 /**
@@ -127,7 +129,7 @@ async function getSurveyEligibilityState(user, surveyId, serialParam = null) {
   const payload = lastPrecall.payload || {};
   const ageYears = parseRespondentAgeYears(payload);
 
-  if (!isStaff && Number.isFinite(ageYears) && ageYears < 18) {
+  if (!isStaff && (Number.isNaN(ageYears) || (Number.isFinite(ageYears) && ageYears < 18))) {
     return { canStartSurvey: false, reason: 'under_18', precallSerialNumber: serial, payload };
   }
   if (!isStaff && lastPrecall.under18NotQualified) {

@@ -15,6 +15,7 @@ import {
   precallNextValidation,
   precallNewFormValidation,
 } from '../utils/outboundPrecallConfig';
+import { EGYPTIAN_GOVERNORATES } from '../utils/governorates';
 import HandoverModal from '../components/HandoverModal';
 
 function formatLocalDate(d) {
@@ -139,6 +140,7 @@ const [surveyId, setSurveyId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [serialSearchTerm, setSerialSearchTerm] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
+  const [selectedGov, setSelectedGov] = useState('All');
   const [isEditMode, setIsEditMode] = useState(false);
   const editAnswersRef = useRef(null);
   const [isHandoverOpen, setIsHandoverOpen] = useState(false);
@@ -209,10 +211,10 @@ const [surveyId, setSurveyId] = useState(null);
         
         const [precallRes, numberRes] = await Promise.all([
           api.get(`/agent/outbound-precall${sidUrl ? `?surveyId=${sidUrl}` : ''}`, { signal }),
-          // ONLY fetch next number if we aren't already in an edit/search state
+          // Do not auto-fetch if we're not recovering a session. Agent must manually fetch via dropdown.
           (isEditMode || editAnswersRef.current) 
             ? Promise.resolve({ data: { number: editAnswersRef.current?.phone || currentNumber?.number, serialNumber: editAnswersRef.current?.serial_number || currentNumber?.serialNumber } }) 
-            : api.get(`/agent/next-number${sidUrl ? `?surveyId=${sidUrl}` : ''}`, { signal })
+            : Promise.resolve({ data: null })
         ]);
         if (cancelled) return;
         setSurveyId(precallRes.data.surveyId || null);
@@ -394,18 +396,12 @@ const [surveyId, setSurveyId] = useState(null);
       try {
         const urlParams = new URLSearchParams(window.location.search);
         const sidUrl = urlParams.get('surveyId');
-        const nextNumRes = await api.get(`/agent/next-number${sidUrl ? `?surveyId=${sidUrl}` : ''}`);
-        const nextNum = nextNumRes.data;
-        setCurrentNumber(nextNum);
-        if (nextNum && nextNum.number) {
-          setAnswers(prev => ({ ...prev, phone: nextNum.number }));
-        }
-        if (nextNum && nextNum.serialNumber) {
-          setAnswers(prev => ({ ...prev, serial_number: nextNum.serialNumber }));
-        }
+        // Do not auto-fetch on New Form. They must click Fetch.
+        setCurrentNumber(null);
+        setAnswers(prev => ({ ...prev, phone: '', serial_number: '' }));
         setIsEditMode(false);
       } catch (e) {
-        console.error("Failed to load next number:", e);
+        console.error("Failed to reset number:", e);
       } finally {
         setNumberLoading(false);
       }
@@ -417,6 +413,36 @@ const [surveyId, setSurveyId] = useState(null);
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const fetchNumber = async (govOverride) => {
+    const govToFetch = typeof govOverride === 'string' ? govOverride : selectedGov;
+    setNumberLoading(true);
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const sidUrl = urlParams.get('surveyId');
+      const nextNumRes = await api.get(`/agent/next-number?governorate=${encodeURIComponent(govToFetch)}${sidUrl ? `&surveyId=${sidUrl}` : ''}`);
+      const nextNum = nextNumRes.data;
+      
+      setCurrentNumber(nextNum);
+      if (nextNum && nextNum.number) {
+        setAnswers(prev => ({ ...prev, phone: nextNum.number, serial_number: nextNum.serialNumber || '' }));
+      } else {
+        setAnswers(prev => ({ ...prev, phone: '', serial_number: '' }));
+        alert("No numbers available for the selected region.");
+      }
+    } catch (e) {
+      console.error("Failed to load next number:", e);
+      alert("Failed to load number");
+    } finally {
+      setNumberLoading(false);
+    }
+  };
+
+  const handleGovChange = (e) => {
+    const newGov = e.target.value;
+    setSelectedGov(newGov);
+    fetchNumber(newGov);
   };
 
   const hintText = useMemo(() => {
@@ -521,6 +547,27 @@ const [surveyId, setSurveyId] = useState(null);
                 <Icon size={18} color="var(--primary)" />
                 <span>{metaLine(config.meta, titleKey, t)}</span>
               </div>
+              
+              {sec === 'phone' && !isEditMode && (
+                <div className="precall-field" style={{ marginBottom: '1.25rem', padding: '1rem', background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: '8px' }}>
+                  <label className="precall-label" style={{ fontWeight: 600, color: 'var(--primary)' }}>Target Governorate</label>
+                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <select className="input-field" style={{ flex: 1, minWidth: '200px' }} value={selectedGov} onChange={handleGovChange} disabled={numberLoading}>
+                      <option value="All">All Governorates (Random)</option>
+                      {EGYPTIAN_GOVERNORATES.map(g => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
+                    </select>
+                    {!currentNumber && (
+                      <button type="button" className="btn-primary" onClick={() => fetchNumber(selectedGov)} disabled={numberLoading}>
+                        {numberLoading ? <Loader2 size={16} className="spin-icon" /> : 'Get Number'}
+                      </button>
+                    )}
+                  </div>
+                  {!currentNumber && <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Select a region and click "Get Number" to fetch the next available lead.</p>}
+                </div>
+              )}
+
               {sectionFields.map((field) => {
                 if (!isFieldVisible(field, answers)) return null;
                 const v = answers[field.id];

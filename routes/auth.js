@@ -7,10 +7,8 @@ const authController = require('../controllers/authController');
 
 const strictAuthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 50,
-  message: { error: 'Too many attempts, try again later' },
-  standardHeaders: true,
-  legacyHeaders: false,
+  max: 20,
+  message: { error: "Too many attempts, please try again later." }
 });
 
 router.get('/has-users', authController.hasUsers);

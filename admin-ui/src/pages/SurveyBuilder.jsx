@@ -11,6 +11,7 @@ import {
   hasStoredOutboundCustom,
   newFieldTemplate,
 } from '../utils/outboundPrecallConfig';
+import { EGYPTIAN_GOVERNORATES } from '../utils/governorates';
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
 import ConditionBuilder from '../components/ConditionBuilder';
@@ -46,11 +47,15 @@ export default function SurveyBuilder() {
     questions: []
   }]);
   
+  const [governorateGoals, setGovernorateGoals] = useState([]);
+  
   // Numbers tab state
   const [numbers, setNumbers] = useState([]);
   const [numbersStats, setNumbersStats] = useState({ total: 0, pending: 0, called: 0, qualified: 0, disqualified: 0 });
   const [numbersLoading, setNumbersLoading] = useState(false);
   const [pendingCsv, setPendingCsv] = useState(null);
+  const [selectedUploadGov, setSelectedUploadGov] = useState('');
+  const [numbersGovFilter, setNumbersGovFilter] = useState('All');
   const fileInputRef = useRef();
 
   useEffect(() => {
@@ -59,6 +64,7 @@ export default function SurveyBuilder() {
         setTitle(res.data.title || '');
         setIsActive(res.data.isActive !== false);
         setGoal(res.data.goal || 0);
+        setGovernorateGoals(res.data.governorateGoals || []);
         const norm = normalizeOutboundPrecall(res.data.outboundPrecall);
         setOutboundConfig(norm);
         setCustomizeOutbound(hasStoredOutboundCustom(res.data.outboundPrecall));
@@ -76,7 +82,7 @@ export default function SurveyBuilder() {
     if (!id) return;
     setNumbersLoading(true);
     try {
-      const res = await api.get(`/admin/survey/${id}/numbers`);
+      const res = await api.get(`/admin/survey/${id}/numbers?governorate=${numbersGovFilter}`);
       if (Array.isArray(res.data)) {
         setNumbers(res.data);
       } else {
@@ -92,7 +98,7 @@ export default function SurveyBuilder() {
 
   useEffect(() => {
     if (id) loadNumbers();
-  }, [id, loadNumbers]);
+  }, [id, loadNumbers, numbersGovFilter]);
 
   const downloadDisqualified = async () => {
     try {
@@ -227,6 +233,7 @@ export default function SurveyBuilder() {
         goal,
         introScript: '',
         sections,
+        governorateGoals,
         outboundPrecall: customizeOutbound ? outboundConfig : null,
       };
       
@@ -241,6 +248,9 @@ export default function SurveyBuilder() {
       if (pendingCsv && finalId) {
         const formData = new FormData();
         formData.append('xlsx', pendingCsv);
+        if (selectedUploadGov) {
+          formData.append('governorate', selectedUploadGov);
+        }
         await api.post(`/admin/survey/${finalId}/numbers`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
@@ -376,6 +386,60 @@ export default function SurveyBuilder() {
       </div>
 
       <div className="glass-card" style={{ marginTop: '1.25rem' }}>
+        <h2 style={{ margin: 0, fontSize: '1.25rem', marginBottom: '0.5rem' }}>Governorate Goals</h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+          Target sum: <strong>{governorateGoals.reduce((sum, g) => sum + (Number(g.goal) || 0), 0)}</strong> / {goal || 0}
+          {governorateGoals.reduce((sum, g) => sum + (Number(g.goal) || 0), 0) > goal && (
+            <span style={{ color: 'red', marginLeft: '0.5rem', fontWeight: 'bold' }}>Error: Exceeds campaign goal!</span>
+          )}
+        </p>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+          {governorateGoals.map((govObj, i) => (
+            <div key={i} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'var(--surface)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+              <span style={{ fontWeight: 600, flex: 1 }}>{govObj.governorate}</span>
+              <input 
+                type="number" 
+                className="input-field" 
+                style={{ width: '80px', padding: '0.4rem' }} 
+                value={govObj.goal} 
+                onChange={e => {
+                  if (!isAdmin) return;
+                  const newGoals = [...governorateGoals];
+                  newGoals[i].goal = Number(e.target.value) || 0;
+                  setGovernorateGoals(newGoals);
+                }}
+                readOnly={!isAdmin}
+              />
+              {isAdmin && (
+                <button type="button" className="btn-secondary" style={{ padding: '0.4rem 0.6rem' }} onClick={() => {
+                  setGovernorateGoals(governorateGoals.filter((_, idx) => idx !== i));
+                }}>✕</button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {isAdmin && (
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1rem' }}>
+            <select className="input-field" style={{ maxWidth: '200px' }} id="add-gov-select">
+              <option value="">Select Governorate...</option>
+              {EGYPTIAN_GOVERNORATES.filter(g => !governorateGoals.find(existing => existing.governorate === g)).map(g => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+            <button type="button" className="btn-secondary" onClick={() => {
+              const sel = document.getElementById('add-gov-select');
+              if (sel && sel.value) {
+                setGovernorateGoals([...governorateGoals, { governorate: sel.value, goal: 0 }]);
+                sel.value = '';
+              }
+            }}>Add Goal</button>
+          </div>
+        )}
+      </div>
+
+      <div className="glass-card" style={{ marginTop: '1.25rem' }}>
         <h2 style={{ margin: 0, fontSize: '1.25rem', marginBottom: '1rem' }}>Outbound Call List (XLSX)</h2>
         {id && (
           <>
@@ -407,23 +471,43 @@ export default function SurveyBuilder() {
             </div>
           </div>
 
-          <div className="table-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Numbers Detail Table</h3>
+          <div className="table-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Numbers Detail Table</h3>
+              <select className="input-field" style={{ minWidth: '150px', padding: '0.25rem 0.5rem' }} value={numbersGovFilter} onChange={e => setNumbersGovFilter(e.target.value)}>
+                <option value="All">All Governorates</option>
+                {EGYPTIAN_GOVERNORATES.map(g => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+            </div>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Showing last 200 activity logs</span>
           </div>
           </>
         )}
         {isAdmin && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1rem' }}>
-            <input 
-              type="file" 
-              accept=".xlsx" 
-              ref={fileInputRef}
-              onChange={(e) => setPendingCsv(e.target.files[0])} 
-              className="input-field" 
-              style={{ maxWidth: '300px', cursor: 'pointer' }}
-            />
-            {pendingCsv && <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>File selected: {pendingCsv.name} (Will submit on Save)</span>}
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1rem', marginTop: '1rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <label className="form-label" style={{ fontSize: '0.8rem' }}>Assign to Governorate</label>
+              <select className="input-field" value={selectedUploadGov} onChange={e => setSelectedUploadGov(e.target.value)} style={{ minWidth: '180px' }}>
+                <option value="">None / Unknown</option>
+                {EGYPTIAN_GOVERNORATES.map(g => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <label className="form-label" style={{ fontSize: '0.8rem' }}>XLSX File</label>
+              <input 
+                type="file" 
+                accept=".xlsx" 
+                ref={fileInputRef}
+                onChange={(e) => setPendingCsv(e.target.files[0])} 
+                className="input-field" 
+                style={{ maxWidth: '300px', cursor: 'pointer' }}
+              />
+            </div>
+            {pendingCsv && <span style={{ color: 'var(--primary)', fontWeight: 'bold', marginTop: '1.25rem' }}>File selected: {pendingCsv.name} (Will submit on Save)</span>}
           </div>
         )}
         

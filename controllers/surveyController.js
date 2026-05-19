@@ -69,8 +69,14 @@ exports.deleteSurvey = async (req, res) => {
     if (survey.isActive !== false) {
       return res.status(400).json({ error: 'Cannot delete an active campaign. Please end the campaign first.' });
     }
+    const Response = require('../models/Response');
+    const responseCount = await Response.countDocuments({ surveyId: req.params.id });
+    if (responseCount > 0) {
+      return res.status(400).json({ error: 'Cannot delete a survey that has collected responses. To hide it, ensure it is set to inactive.' });
+    }
+
     await Survey.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Survey deleted successfully. Response data has been preserved.' });
+    res.json({ message: 'Survey deleted successfully.' });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }

@@ -289,6 +289,25 @@ export function normalizeOutboundPrecall(raw) {
         }
         return f;
       });
+
+    const hasOutcomeReason = base.fields.some(f => f.id === 'outcome_reason');
+    if (!hasOutcomeReason) {
+      const interviewResultIdx = base.fields.findIndex(f => f.id === 'interview_result');
+      const reasonField = {
+        id: 'outcome_reason',
+        label: 'Reason for outcome',
+        type: 'text',
+        required: false,
+        section: 'call',
+        visibleWhen: { type: 'rule', fieldId: 'interview_result', operator: 'in', value: 'partial,refused,postponed' }
+      };
+      if (interviewResultIdx !== -1) {
+        base.fields.splice(interviewResultIdx + 1, 0, reasonField);
+      } else {
+        base.fields.push(reasonField);
+      }
+    }
+
     return base;
   }
   if (!raw.fields && (raw.title || raw.script || raw.researcherName)) {
@@ -572,6 +591,14 @@ const MINIMAL_OUTBOUND_V2 = {
         { value: 'postponed', label: 'Postponed' },
         { value: 'not_contacted', label: 'Not contacted' },
       ],
+    },
+    {
+      id: 'outcome_reason',
+      label: 'Reason for outcome',
+      type: 'text',
+      required: false,
+      section: 'call',
+      visibleWhen: { type: 'rule', fieldId: 'interview_result', operator: 'in', value: 'partial,refused,postponed' }
     },
   ],
 };

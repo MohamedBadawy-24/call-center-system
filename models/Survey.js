@@ -40,6 +40,10 @@ const SurveySchema = new mongoose.Schema({
   outboundPrecall: { type: mongoose.Schema.Types.Mixed, default: undefined },
   sections: [SectionSchema],
   goal: { type: Number, default: 0 },
+  governorateGoals: [{
+    governorate: String,
+    goal: Number
+  }],
   isActive: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now },
 });

@@ -242,13 +242,13 @@ exports.exportCsv = async (req, res) => {
     const survey = await Survey.findById(req.params.id);
     if (!survey) return res.status(404).json({ error: 'Survey not found' });
 
-    const responses = await Response.aggregate([
-      { $match: { surveyId: req.params.id } },
+    const cursor = Response.aggregate([
+      { $match: { surveyId: new mongoose.Types.ObjectId(req.params.id) } },
       { $addFields: { agentObjectId: { $convert: { input: '$agentId', to: 'objectId', onError: null, onNull: null } } } },
       { $lookup: { from: 'users', localField: 'agentObjectId', foreignField: '_id', as: 'agent' } },
       { $unwind: { path: '$agent', preserveNullAndEmptyArrays: true } },
       { $sort: { startedAt: -1 } },
-    ]);
+    ]).cursor({ batchSize: 1000 }).exec();
 
     const questions = [];
     survey.sections.forEach(section => {
@@ -258,32 +258,44 @@ exports.exportCsv = async (req, res) => {
       });
     });
 
-    const headers = ['Submission Date', 'Status', 'Agent Name', 'Agent Email', 'Duration (sec)'];
-    questions.forEach(q => headers.push(q.text.replace(/,/g, '')));
-    let csvContent = headers.join(',') + '\n';
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=export_${survey.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.csv`);
 
-    responses.forEach(r => {
+    const headers = ['Submission Date', 'Status', 'Agent Name', 'Agent Email', 'Duration (sec)', 'Outcome Reason'];
+    questions.forEach(q => headers.push(q.text.replace(/,/g, '')));
+    res.write('\uFEFF'); // BOM for Excel UTF-8
+    res.write(headers.join(',') + '\n');
+
+    cursor.on('data', (r) => {
       const row = [
-        new Date(r.startedAt).toISOString(),
+        new Date(r.startedAt || r.completedAt || Date.now()).toISOString(),
         r.status,
-        r.agent ? `"${r.agent.name.replace(/"/g, '""')}"` : 'Unknown',
-        r.agent ? `"${r.agent.email.replace(/"/g, '""')}"` : 'Unknown',
+        r.agent ? `"${(r.agent.name || '').replace(/"/g, '""')}"` : 'Unknown',
+        r.agent ? `"${(r.agent.email || '').replace(/"/g, '""')}"` : 'Unknown',
         r.durationSecs || 0,
+        `"${(r.outcomeReason || '').replace(/"/g, '""')}"`,
       ];
       questions.forEach(q => {
-        const answer = r.answers.find(a => a.questionId === q.id);
+        const answer = (r.answers || []).find(a => a.questionId === q.id);
         let val = answer ? answer.value : '';
         val = encodeValue(val);
         const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : val;
         row.push(`"${strVal}"`);
       });
-      csvContent += row.join(',') + '\n';
+      res.write(row.join(',') + '\n');
     });
 
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename=export_${survey.title.replace(/\s+/g, '_')}.csv`);
-    res.status(200).send(csvContent);
+    cursor.on('end', () => {
+      res.end();
+    });
+
+    cursor.on('error', (err) => {
+      console.error('Export CSV Cursor Error:', err);
+      res.end();
+    });
+
   } catch (err) {
+    console.error('Export CSV Error:', err);
     res.status(500).json({ error: 'Failed to generate export' });
   }
 };
@@ -317,34 +329,70 @@ exports.exportAdvanced = async (req, res) => {
       });
     });
 
+    const filenameBase = `export_${survey.title.replace(/\s+/g, '_')}_${Date.now()}`;
+
+    if (format === 'access' || format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename=${filenameBase}.csv`);
+      res.write('\uFEFF'); // BOM
+
+      const headers = ['Serial', 'Submission_Date', 'Status', 'Interview_Outcome', 'Outcome_Reason', 'Agent_Name', 'Duration_Secs'];
+      questions.forEach(q => headers.push(q.text.replace(/,/g, '')));
+      res.write(headers.join(',') + '\n');
+
+      const cursor = Response.find(filter).populate('agentId', 'name email').sort({ completedAt: 1 }).cursor({ batchSize: 1000 });
+      
+      cursor.on('data', (r) => {
+        const row = [
+          `"${(r.serialNumber || 'N/A').replace(/"/g, '""')}"`,
+          `"${new Date(r.completedAt || r.startedAt || Date.now()).toISOString()}"`,
+          `"${(r.status || '').replace(/"/g, '""')}"`,
+          `"${(r.interviewOutcome || '').replace(/"/g, '""')}"`,
+          `"${(r.outcomeReason || '').replace(/"/g, '""')}"`,
+          `"${(r.agentId?.name || 'Unknown').replace(/"/g, '""')}"`,
+          r.durationSecs || 0
+        ];
+        questions.forEach(q => {
+          const answer = (r.answers || []).find(a => a.questionId === q.id);
+          let val = answer ? encodeValue(answer.value) : '';
+          const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : val;
+          row.push(`"${strVal}"`);
+        });
+        res.write(row.join(',') + '\n');
+      });
+
+      cursor.on('end', () => res.end());
+      cursor.on('error', (err) => {
+        console.error('Advanced CSV Cursor Error:', err);
+        res.end();
+      });
+      return;
+    }
+
+    // For XLSX and SAV, we still must load into memory due to library constraints
+    const responses = await Response.find(filter).populate('agentId', 'name email').sort({ completedAt: 1 }).lean();
+
     const exportData = responses.map(r => {
       const row = {
         Serial: r.serialNumber || 'N/A',
-        Submission_Date: new Date(r.completedAt || r.startedAt).toLocaleString(),
+        Submission_Date: new Date(r.completedAt || r.startedAt || Date.now()).toLocaleString(),
         Status: r.status,
         Interview_Outcome: r.interviewOutcome,
+        Outcome_Reason: r.outcomeReason,
         Agent_Name: r.agentId?.name || 'Unknown',
         Duration_Secs: r.durationSecs || 0,
       };
       questions.forEach(q => {
-        const answer = r.answers.find(a => a.questionId === q.id);
+        const answer = (r.answers || []).find(a => a.questionId === q.id);
         row[q.text] = answer ? encodeValue(answer.value) : '';
       });
       return row;
     });
 
-    const filenameBase = `export_${survey.title.replace(/\s+/g, '_')}_${Date.now()}`;
-
-    if (format === 'xlsx' || format === 'access') {
+    if (format === 'xlsx') {
       const wb = xlsx.utils.book_new();
       const ws = xlsx.utils.json_to_sheet(exportData);
       xlsx.utils.book_append_sheet(wb, ws, 'Responses');
-      if (format === 'access') {
-        const csv = xlsx.utils.sheet_to_csv(ws);
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', `attachment; filename=${filenameBase}.csv`);
-        return res.status(200).send(csv);
-      }
       const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=${filenameBase}.xlsx`);
@@ -357,6 +405,7 @@ exports.exportAdvanced = async (req, res) => {
         { name: 'S_DATE', label: 'Submission Date', type: VariableType.String, width: 32 },
         { name: 'STATUS', label: 'Completion Status', type: VariableType.String, width: 16 },
         { name: 'OUTCOME', label: 'Interview Outcome', type: VariableType.String, width: 32 },
+        { name: 'REASON', label: 'Outcome Reason', type: VariableType.String, width: 128 },
         { name: 'AGENT', label: 'Agent Name', type: VariableType.String, width: 64 },
         { name: 'DURATION', label: 'Duration (Secs)', type: VariableType.Numeric, width: 8, decimal: 0 },
       ];
@@ -380,6 +429,7 @@ exports.exportAdvanced = async (req, res) => {
           new Date(r.completedAt || r.startedAt).toISOString(),
           r.status,
           r.interviewOutcome,
+          r.outcomeReason || '',
           r.agentId?.name || 'Unknown',
           r.durationSecs || 0,
         ];

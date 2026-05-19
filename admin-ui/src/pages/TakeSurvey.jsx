@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useContext } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { AuthContext } from '../context/AuthContext';
 import { UIContext } from '../context/UIContext';
@@ -7,18 +7,9 @@ import { INTERVIEW_OUTCOME_OPTIONS, evaluateCondition } from '../utils/outboundP
 import HandoverModal from '../components/HandoverModal';
 import { UserPlus } from 'lucide-react';
 
-function surveyEligibilityIntroReason(reason, t) {
-  if (reason === 'under_18' || reason === 'under_18_not_qualified') return t('under18CannotStartSurvey');
-  if (reason === 'not_active') return t('mustBeActive');
-  if (reason === 'survey_mismatch') return t('cannotStartSurveyWrongCampaign');
-  return t('cannotStartSurveyGeneric');
-}
-
 export default function TakeSurvey() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const urlSerial = searchParams.get('serial');
   const { user, setUser } = useContext(AuthContext);
   const { t } = useContext(UIContext);
   const [survey, setSurvey] = useState(null);
@@ -29,15 +20,14 @@ export default function TakeSurvey() {
   const [answers, setAnswers] = useState({});
   const [startTime, setStartTime] = useState(null);
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [interviewOutcome, setInterviewOutcome] = useState('');
-  const [outcomeReason, setOutcomeReason] = useState('');
   const [precallSerialNumber, setPrecallSerialNumber] = useState('');
   const [eligibility, setEligibility] = useState({ checked: false, canStart: false, reason: '' });
   const [eligLoading, setEligLoading] = useState(true);
   const [isHandoverOpen, setIsHandoverOpen] = useState(false);
 
   useEffect(() => {
-    const hasSerialParam = !!urlSerial;
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasSerialParam = !!urlParams.get('serial');
     if (
       !hasSerialParam &&
       user?.role === 'agent' &&
@@ -46,7 +36,7 @@ export default function TakeSurvey() {
     ) {
       navigate(`/agent/precall?surveyId=${id}`, { replace: true });
     }
-  }, [navigate, user?.currentStatus, user?.precallCompletedForActiveSession, user?.role, id, urlSerial]);
+  }, [navigate, user?.currentStatus, user?.precallCompletedForActiveSession, user?.role, id]);
 
   useEffect(() => {
     api
@@ -66,11 +56,12 @@ export default function TakeSurvey() {
       .catch(console.error);
   }, [id]);
 
-  const refreshEligibility = useCallback(async () => {
+  const refreshEligibility = async () => {
     setEligLoading(true);
     try {
-      const serialQ = urlSerial ? `&serial=${encodeURIComponent(urlSerial)}` : '';
-      const res = await api.get(`/agent/survey-eligibility?surveyId=${id}${serialQ}`);
+      const urlParams = new URLSearchParams(window.location.search);
+      const serialParam = urlParams.get('serial');
+      const res = await api.get(`/agent/survey-eligibility?surveyId=${id}${serialParam ? `&serial=${serialParam}` : ''}`);
       const data = res.data;
       setEligibility({
         checked: true,
@@ -86,147 +77,133 @@ export default function TakeSurvey() {
     } finally {
       setEligLoading(false);
     }
-  }, [id, urlSerial]);
+  };
 
   useEffect(() => {
     if (user?.role === 'agent' && user?.currentStatus === 'active') {
       refreshEligibility();
     }
-  }, [user?.role, user?.currentStatus, user?.precallCompletedForActiveSession, refreshEligibility]);
+  }, [user?.role, user?.currentStatus, user?.precallCompletedForActiveSession]);
 
-  const findNextVisibleIdx = useCallback(
-    (startIndex, currentAnswers) => {
-      if (!Array.isArray(questions)) return -1;
-      for (let i = startIndex; i < questions.length; i++) {
-        const qst = questions[i];
-        if (!qst) continue;
-        if (!qst.visibility) return i;
-        try {
-          if (evaluateCondition(qst.visibility, currentAnswers || {})) return i;
-        } catch (err) {
-          console.error('Condition evaluation error at index', i, err);
-          return i;
-        }
-      }
-      return -1;
-    },
-    [questions]
-  );
+  // Persist answers to API as they change
+  useEffect(() => {
+    if (phase === 'questions' && user?.id && precallSerialNumber) {
+      const draftData = {
+        surveyId: id,
+        serialNumber: precallSerialNumber,
+        answers,
+        currentIdx,
+      };
+      // Debounce slightly or fire and forget
+      api.post('/agent/draft', draftData).catch(() => { /* ignore */ });
+    }
+  }, [answers, currentIdx, phase, user?.id, id, precallSerialNumber]);
 
-  const goToInterviewStep = useCallback(() => {
-    setPhase('interview');
-    setInterviewOutcome('');
-  }, []);
+  if (!survey) return <div className="container">{t('loading')}</div>;
 
-  const handleStartCall = useCallback(async () => {
+  const handleStartCall = async () => {
     if (questions.length === 0) {
       alert('This survey has no questions!');
       return;
     }
     const data = await refreshEligibility();
     if (!data?.canStartSurvey) {
-      alert(surveyEligibilityIntroReason(data?.reason, t));
+      if (data?.reason === 'under_18' || data?.reason === 'under_18_not_qualified') {
+        alert(t('under18CannotStartSurvey'));
+      } else {
+        alert(t('cannotStartSurveyGeneric'));
+      }
       return;
     }
 
     setPrecallSerialNumber(data.precallSerialNumber || '');
     setStartTime(Date.now());
-
-    let merged = {
+    
+    // Merge pre-call answers AND existing survey answers so visibility logic and state are correct
+    const initialAnswers = { 
       ...(data.payload || {}),
-      ...(data.existingAnswers || {}),
+      ...(data.existingAnswers || {})
     };
-    let targetIdx = findNextVisibleIdx(0, merged);
+    setAnswers(initialAnswers);
 
-    if (data?.precallSerialNumber) {
-      try {
-        const draftRes = await api.get(`/drafts/${encodeURIComponent(data.precallSerialNumber)}`);
-        const draft = draftRes.data;
-        if (draft?.answers) {
-          merged = { ...merged, ...draft.answers };
-        }
-        if (draft && typeof draft.currentIdx === 'number' && questions.length > 0) {
-          const clamped = Math.max(0, Math.min(draft.currentIdx, questions.length - 1));
-          const fromDraft = findNextVisibleIdx(clamped, merged);
-          targetIdx = fromDraft !== -1 ? fromDraft : findNextVisibleIdx(0, merged);
-        } else if (draft?.answers) {
-          targetIdx = findNextVisibleIdx(0, merged);
-        }
-      } catch (err) {
-        console.error('Draft restoration error:', err);
-      }
-    }
-
-    setAnswers(merged);
-    if (data?.interviewOutcome) setInterviewOutcome(data.interviewOutcome);
-    if (data?.outcomeReason) setOutcomeReason(data.outcomeReason);
-
-    if (targetIdx === -1) {
+    // Find first visible question based on merged answers
+    const firstIdx = findNextVisibleIdx(0, initialAnswers);
+    if (firstIdx === -1) {
       goToInterviewStep();
     } else {
       setPhase('questions');
-      setCurrentIdx(targetIdx);
-    }
-  }, [questions, refreshEligibility, findNextVisibleIdx, goToInterviewStep, t]);
-
-  // Persist answers to Server as they change (must run every render — do not place after early return)
-  useEffect(() => {
-    if (phase === 'questions' && precallSerialNumber) {
-      const timer = setTimeout(async () => {
+      setCurrentIdx(firstIdx);
+      // Attempt to restore progress if we have a draft for this serial
+      if (data?.precallSerialNumber) {
         try {
-          await api.post('/drafts', {
-            surveyId: id,
-            serialNumber: precallSerialNumber,
-            answers,
-            currentIdx,
-          });
-        } catch (err) {
-          console.error('Failed to save draft to server:', err);
-        }
-      }, 500);
-      return () => clearTimeout(timer);
+          const draftRes = await api.get(`/agent/draft/${data.precallSerialNumber}`);
+          if (draftRes.data && draftRes.data.answers && Object.keys(draftRes.data.answers).length > 0) {
+            const mergedWithDraft = { ...initialAnswers, ...draftRes.data.answers };
+            setAnswers(mergedWithDraft);
+            if (typeof draftRes.data.currentIdx === 'number' && draftRes.data.currentIdx < (questions?.length || 0)) {
+              setCurrentIdx(draftRes.data.currentIdx);
+            }
+          }
+        } catch (_) { /* ignore bad draft */ }
+      }
     }
-  }, [answers, currentIdx, phase, id, precallSerialNumber]);
+  };
 
-  if (!survey) return <div className="container">{t('loading')}</div>;
+  const findNextVisibleIdx = (startIndex, currentAnswers) => {
+    if (!Array.isArray(questions)) return -1;
+    for (let i = startIndex; i < questions.length; i++) {
+      const qst = questions[i];
+      if (!qst) continue;
+      if (!qst.visibility) return i;
+      try {
+        if (evaluateCondition(qst.visibility, currentAnswers || {})) return i;
+      } catch (err) {
+        console.error("Condition evaluation error at index", i, err);
+        // If visibility logic fails, we show the question to avoid blocking the survey
+        return i;
+      }
+    }
+    return -1;
+  };
+
+  const goToInterviewStep = () => {
+    setPhase('interview');
+  };
 
   const submitResponse = async () => {
-    if (!interviewOutcome) {
+    const finalOutcome = answers.interview_result;
+    if (!finalOutcome) {
       alert(t('mustSelectInterviewOutcome'));
       return;
     }
-    if (['partial', 'refused', 'postponed'].includes(interviewOutcome) && !outcomeReason.trim()) {
-      alert(t('outcomeReasonRequired') || 'Reason is required for this outcome.');
-      return;
-    }
-
     const duration = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+    const finalReason = ['partial', 'refused', 'postponed'].includes(finalOutcome) 
+      ? ((answers.outcome_reason || '').trim() || 'none') 
+      : '';
+      
     const payload = {
       surveyId: survey._id,
       durationSecs: duration,
       answers: Object.keys(answers).map((k) => ({ questionId: k, value: answers[k] })),
-      interviewOutcome,
-      outcomeReason: ['partial', 'refused', 'postponed'].includes(interviewOutcome) ? outcomeReason.trim() : '',
+      interviewOutcome: finalOutcome,
+      outcomeReason: finalReason,
       precallSerialNumber: precallSerialNumber || '',
     };
     try {
-      console.log('[TakeSurvey] Submitting response payload:', payload);
-      const res = await api.post('/response', payload);
-      console.log('[TakeSurvey] Response submission successful:', res.data);
-
-      if (user?.id && user?.statusStartedAt) {
-        const draftKey = `precallDraft:${user.id}:${String(user.statusStartedAt)}`;
+      await api.post('/response', payload);
+      
+      // Clear the pre-call checklist draft for this survey
+      if (user?.id) {
+        const draftKey = `precallDraft:${user.id}:${survey._id || 'default'}`;
         sessionStorage.removeItem(draftKey);
       }
 
-      if (precallSerialNumber) {
-        await api.delete(`/drafts/${encodeURIComponent(precallSerialNumber)}`);
-      }
+      // Drafts are handled by the backend automatically. We don't need to manually clear them here.
 
       const me = await api.get('/auth/me');
       setUser(me.data.user);
       localStorage.setItem('user', JSON.stringify(me.data.user));
-      navigate('/', { replace: true });
+      navigate(`/agent/precall?surveyId=${survey._id}`, { replace: true });
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.error || 'Error saving response');
@@ -255,6 +232,7 @@ export default function TakeSurvey() {
       if (choiceLogic.action === 'skip' && choiceLogic.skipToQuestionId) {
         const targetIdx = questions.findIndex((qst) => qst.questionId === choiceLogic.skipToQuestionId);
         if (targetIdx !== -1) {
+          // Still check visibility for the target question and beyond
           const nextIdx = findNextVisibleIdx(targetIdx, newAnswers);
           if (nextIdx !== -1) {
             setCurrentIdx(nextIdx);
@@ -274,6 +252,8 @@ export default function TakeSurvey() {
     }
   };
 
+
+
   // Intro
   if (phase === 'intro') {
     return (
@@ -286,9 +266,7 @@ export default function TakeSurvey() {
           </div>
         )}
         {user?.role === 'agent' && eligibility.checked && !eligibility.canStart && (
-          <p style={{ color: 'var(--danger)', fontWeight: 700, marginBottom: '1rem' }}>
-            {surveyEligibilityIntroReason(eligibility.reason, t)}
-          </p>
+          <p style={{ color: 'var(--danger)', fontWeight: 700, marginBottom: '1rem' }}>{t('under18CannotStartSurvey')}</p>
         )}
         <button
           className="btn-primary"
@@ -309,11 +287,11 @@ export default function TakeSurvey() {
           </button>
         )}
 
-        <HandoverModal
-          isOpen={isHandoverOpen}
-          onClose={() => setIsHandoverOpen(false)}
-          serialNumber={precallSerialNumber}
-          onSuccess={() => navigate('/', { replace: true })}
+        <HandoverModal 
+            isOpen={isHandoverOpen} 
+            onClose={() => setIsHandoverOpen(false)}
+            serialNumber={precallSerialNumber}
+            onSuccess={() => navigate('/', { replace: true })}
         />
       </div>
     );
@@ -328,8 +306,8 @@ export default function TakeSurvey() {
         <select
           className="input-field"
           style={{ marginBottom: '1rem', maxWidth: '100%' }}
-          value={interviewOutcome}
-          onChange={(e) => setInterviewOutcome(e.target.value)}
+          value={answers.interview_result || ''}
+          onChange={(e) => setAnswers({ ...answers, interview_result: e.target.value })}
         >
           <option value="">{t('precallSelectPlaceholder')}</option>
           {INTERVIEW_OUTCOME_OPTIONS.map((v) => (
@@ -338,26 +316,23 @@ export default function TakeSurvey() {
             </option>
           ))}
         </select>
-        {['partial', 'refused', 'postponed'].includes(interviewOutcome) && (
+        {['partial', 'refused', 'postponed'].includes(answers.interview_result) && (
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 700, color: 'var(--primary)' }}>
-              {interviewOutcome === 'postponed' && t('postponedReasonLabel')}
-              {interviewOutcome === 'partial' && t('partialReasonLabel')}
-              {interviewOutcome === 'refused' && t('refusedReasonLabel')}
-              <span style={{ color: 'var(--danger)', marginLeft: '0.25rem' }}>*</span>
+            <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>
+              {t('reason') || 'Reason'}
             </label>
             <textarea
               className="input-field"
               rows={3}
-              placeholder={t('typeReasonPlaceholder')}
-              value={outcomeReason}
-              onChange={(e) => setOutcomeReason(e.target.value)}
-              style={{ width: '100%', resize: 'vertical', borderColor: !outcomeReason.trim() ? 'var(--danger)' : '' }}
+              placeholder={t('typeReasonPlaceholder') || 'Type reason here... (defaults to "none" if empty)'}
+              value={answers.outcome_reason || ''}
+              onChange={(e) => setAnswers({ ...answers, outcome_reason: e.target.value })}
+              style={{ width: '100%', resize: 'vertical' }}
             />
           </div>
         )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-          <button type="button" className="btn-primary" onClick={() => submitResponse()} disabled={!interviewOutcome}>
+          <button type="button" className="btn-primary" onClick={() => submitResponse()} disabled={!answers.interview_result}>
             {t('submitSurvey')}
           </button>
           <button type="button" className="btn-secondary" onClick={() => navigate('/agent/precall')}>
@@ -373,11 +348,11 @@ export default function TakeSurvey() {
   if (!q) return <div>No valid question data format found.</div>;
 
   const parseDynamicText = (text) => {
-    if (!text) return '';
+    if (!text) return "";
     let parsed = String(text);
     const matches = parsed.match(/\{([^}]+)\}/g);
     if (matches) {
-      matches.forEach((match) => {
+      matches.forEach(match => {
         const key = match.slice(1, -1);
         if (answers[key] !== undefined) {
           parsed = parsed.replace(match, String(answers[key]));
@@ -414,12 +389,13 @@ export default function TakeSurvey() {
         <div className="choice-grid">
           {Array.isArray(q.choices) &&
             q.choices.map((c, i) => {
-              const isActive = answers[q.questionId || `q_${currentIdx}`] === c.text;
+              const isSelected = answers[q.questionId || `q_${currentIdx}`] === c.text;
               return (
                 <button 
                   key={i} 
-                  className={`choice-btn ${isActive ? 'active' : ''}`} 
+                  className={`choice-btn ${isSelected ? 'active' : ''}`} 
                   onClick={() => handleAnswer(c.text, c.logic)}
+                  style={isSelected ? { backgroundColor: 'var(--primary)', color: 'white', borderColor: 'var(--primary)' } : {}}
                 >
                   {c.text}
                 </button>
@@ -429,50 +405,33 @@ export default function TakeSurvey() {
       )}
 
       {q.type === 'text' && (
-        <div className="form-group" style={{ marginTop: '1rem' }}>
+        <div className="form-group" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <input
             type="text"
             className="input-field"
             placeholder={t('typeAnswer')}
-            value={answers[q.questionId || `q_${currentIdx}`] || ''}
-            onChange={(e) => setAnswers(prev => ({ ...prev, [q.questionId || `q_${currentIdx}`]: e.target.value }))}
+            defaultValue={answers[q.questionId || `q_${currentIdx}`] || ''}
+            id={`text-input-${currentIdx}`}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && e.target.value) {
                 handleAnswer(e.target.value);
               }
             }}
+            style={{ flex: 1 }}
             autoFocus
           />
+          <button 
+            className="btn-primary"
+            onClick={() => {
+              const val = document.getElementById(`text-input-${currentIdx}`).value;
+              if (val) handleAnswer(val);
+            }}
+            style={{ padding: '0 1.5rem', height: '42px' }}
+          >
+            {t('next')}
+          </button>
         </div>
       )}
-
-      <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem', justifyContent: 'space-between' }}>
-        <button 
-          className="btn-secondary" 
-          onClick={() => {
-            setCurrentIdx(Math.max(0, currentIdx - 1));
-            window.scrollTo(0, 0);
-          }}
-          disabled={currentIdx === 0}
-        >
-          {t('previous') || 'Previous'}
-        </button>
-        <button 
-          className="btn-primary" 
-          onClick={() => {
-            const nextIdx = findNextVisibleIdx(currentIdx + 1, answers);
-            if (nextIdx !== -1) {
-              setCurrentIdx(nextIdx);
-              window.scrollTo(0, 0);
-            } else {
-              goToInterviewStep();
-              window.scrollTo(0, 0);
-            }
-          }}
-        >
-          {t('next') || 'Next'}
-        </button>
-      </div>
     </div>
   );
 }

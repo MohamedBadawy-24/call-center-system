@@ -124,9 +124,16 @@ exports.completePrecall = async (req, res) => {
       doc.markModified('payload');
       await doc.save({ session });
     } else if (currentNumberDoc && !payload.serial_number) {
-      payload.serial_number = currentNumberDoc.serialNumber;
-      doc.serialNumber = currentNumberDoc.serialNumber;
-      doc.payload.serial_number = currentNumberDoc.serialNumber;
+      // If the phone number already has a serial use it; otherwise generate a fresh one
+      const existingSerial = currentNumberDoc.serialNumber;
+      const serial = existingSerial || await getNextSerialNumber('survey_numbers');
+      if (!existingSerial) {
+        currentNumberDoc.serialNumber = serial;
+        await currentNumberDoc.save({ session });
+      }
+      payload.serial_number = serial;
+      doc.serialNumber = serial;
+      doc.payload.serial_number = serial;
       doc.markModified('payload');
       await doc.save({ session });
     }

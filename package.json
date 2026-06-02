@@ -14,10 +14,29 @@
     "start": "node server.js",
     "lint": "eslint . --fix",
     "lint:fix": "eslint . --fix",
-    "test": "node --check server.js",
+    "test": "jest --runInBand --forceExit --testTimeout=30000 --detectOpenHandles",
+    "test:auth": "jest --runInBand --forceExit tests/auth.test.js",
+    "test:workflow": "jest --runInBand --forceExit tests/agent-workflow.test.js",
+    "test:draft": "jest --runInBand --forceExit tests/draft.test.js",
+    "test:handover": "jest --runInBand --forceExit tests/handover.test.js",
+    "test:campaign": "jest --runInBand --forceExit tests/campaign.test.js",
+    "test:upload": "jest --runInBand --forceExit tests/bulk-upload.test.js",
+    "test:exports": "jest --runInBand --forceExit tests/exports.test.js",
+    "test:rbac": "jest --runInBand --forceExit tests/rbac.test.js",
+    "test:ws": "jest --runInBand --forceExit tests/websocket.test.js",
     "test:ui": "cd admin-ui && npm run test",
     "db:migrate": "node scripts/migrate-indexes.js",
     "db:seed": "node scripts/seed-admin.js"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "<rootDir>/tests/**/*.test.js"
+    ],
+    "globalSetup":    "./tests/globalSetup.js",
+    "globalTeardown": "./tests/globalTeardown.js",
+    "testTimeout": 30000,
+    "verbose": true
   },
   "devDependencies": {
     "axios": "^1.16.1",

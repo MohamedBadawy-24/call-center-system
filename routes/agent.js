@@ -64,7 +64,7 @@ router.get('/search-serial/:serial', auth, agentController.searchBySerial);
 router.get('/draft/:serialNumber', auth, agentController.getDraft);
 router.post('/draft', auth, agentController.saveDraft);
 router.post('/handover', auth, agentController.handoverCall);
-router.get('/next-number', auth, agentController.getNextNumber);
+router.get('/next-number', agentActiveAuth, agentController.getNextNumber);
 router.post('/mark-number/:id', [auth, agentActiveAuth], agentController.markNumberCalled);
 router.get('/pending-serials', auth, agentController.getPendingSerials);
 router.get('/handover-candidates', auth, agentController.listHandoverCandidates);

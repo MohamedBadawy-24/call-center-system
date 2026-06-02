@@ -498,8 +498,8 @@ app.get("/admin/export-advanced", staffAuth, async (req, res) => {
 
     const filenameBase = `export_${survey.title.replace(/\\s+/g, "_")}_${new Date().getTime()}`;
 
-    if (format === 'xlsx' || format === 'access') {
-      const isAccess = format === 'access';
+    if (format === 'xlsx' || format === 'access' || format === 'csv') {
+      const isAccess = format === 'access' || format === 'csv';
       if (isAccess) {
         res.setHeader("Content-Type", "text/csv");
         res.setHeader("Content-Disposition", `attachment; filename=${filenameBase}.csv`);
@@ -524,6 +524,24 @@ app.get("/admin/export-advanced", staffAuth, async (req, res) => {
 
       const cursor = Response.find(filter).populate('agentId', 'name email').sort({ completedAt: 1 }).cursor({ batchSize: 1000 });
       
+      // Strip "other:" prefix and flatten arrays for export cells
+      const processExportValue = (value) => {
+        if (value == null) return "";
+        if (Array.isArray(value)) {
+          return value.map(v => {
+            const s = typeof v === 'string' ? v : String(v);
+            if (s.toLowerCase().startsWith('other:')) return s.substring(6).trim();
+            if (s.startsWith('Other: ')) return s.substring(7);
+            return s;
+          }).join(' | ');
+        }
+        if (typeof value === 'string') {
+          if (value.toLowerCase().startsWith('other:')) return value.substring(6).trim();
+          if (value.startsWith('Other: ')) return value.substring(7);
+        }
+        return value;
+      };
+
       cursor.on('data', (r) => {
         const row = [
           isAccess ? `"${(r.serialNumber || 'N/A').replace(/"/g, '""')}"` : (r.serialNumber || 'N/A'),
@@ -536,7 +554,7 @@ app.get("/admin/export-advanced", staffAuth, async (req, res) => {
         
         questions.forEach(q => {
           const answer = r.answers.find(a => a.questionId === q.id);
-          let val = answer ? answer.value : "";
+          let val = processExportValue(answer ? answer.value : "");
           const lowerVal = String(val).toLowerCase().trim();
           if (lowerVal === "yes" || lowerVal === "نعم") val = 1;
           else if (lowerVal === "no" || lowerVal === "لا") val = 0;
@@ -694,7 +712,11 @@ app.post('/admin/survey/:id/numbers', [upload.single('xlsx'), adminAuth, validat
       }
 
       if (numberValue) {
-        extractedNumbers.push(String(numberValue).trim());
+        const cleaned = String(numberValue).trim();
+        const digitsOnly = cleaned.replace(/[^0-9]/g, '');
+        if (digitsOnly.length >= 7 && digitsOnly.length <= 15) {
+          extractedNumbers.push(cleaned);
+        }
       }
     }
 
@@ -703,41 +725,40 @@ app.post('/admin/survey/:id/numbers', [upload.single('xlsx'), adminAuth, validat
     const total = extractedNumbers.length;
 
     if (total > 0) {
-      const session = await mongoose.startSession();
-      try {
-        await session.withTransaction(async () => {
-          const existingNumbers = await PhoneNumber.find({ surveyId }, { number: 1 }).session(session);
-          const existingSet = new Set(existingNumbers.map(n => n.number));
+      const { runTransaction } = require('./utils/runTransaction');
+      await runTransaction(async (session) => {
+        const q = PhoneNumber.find({ surveyId }, { number: 1 });
+        if (session) q.session(session);
+        const existingNumbers = await q;
+        const existingSet = new Set(existingNumbers.map(n => n.number));
 
-          const toInsert = [];
-          for (const num of extractedNumbers) {
-            if (existingSet.has(num)) {
-              skipped++;
-            } else {
-              toInsert.push(num);
-              existingSet.add(num);
-            }
+        const toInsert = [];
+        for (const num of extractedNumbers) {
+          if (existingSet.has(num)) {
+            skipped++;
+          } else {
+            toInsert.push(num);
+            existingSet.add(num);
           }
+        }
 
-          if (toInsert.length > 0) {
-            const serials = await allocateSerialBatch('survey_numbers', toInsert.length, session);
-            const results = [];
-            for (let i = 0; i < toInsert.length; i++) {
-              results.push({
-                surveyId,
-                number: toInsert[i],
-                status: 'pending',
-                serialNumber: serials[i],
-                governorate: req.body.governorate || undefined
-              });
-            }
-            await PhoneNumber.insertMany(results, { session });
-            uploaded = results.length;
+        if (toInsert.length > 0) {
+          const serials = await allocateSerialBatch('survey_numbers', toInsert.length, session);
+          const results = [];
+          for (let i = 0; i < toInsert.length; i++) {
+            results.push({
+              surveyId,
+              number: toInsert[i],
+              status: 'pending',
+              serialNumber: serials[i],
+              governorate: req.body.governorate || undefined
+            });
           }
-        });
-      } finally {
-        await session.endSession();
-      }
+          const insertOpts = session ? { session } : {};
+          await PhoneNumber.insertMany(results, insertOpts);
+          uploaded = results.length;
+        }
+      });
     }
 
     fs.unlinkSync(req.file.path);
@@ -946,6 +967,8 @@ app.get('/admin/survey/:id/numbers/disqualified/export', [staffAuth, validateSur
 app.delete('/admin/survey/:id/numbers', [adminAuth, validateSurveyId], async (req, res) => {
   try {
     await PhoneNumber.deleteMany({ surveyId: req.params.id });
+    const io = req.app.get('io');
+    if (io) io.emit('stats-update');
     res.json({ message: 'Numbers list cleared successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to clear numbers list' });
@@ -971,6 +994,7 @@ app.post("/quality/suspend-agent/:id", staffAuth, async (req, res) => {
     await user.save();
     
     io.emit("agentSuspended", { agentId: user._id });
+    io.emit("stats-update");
     io.to(user._id.toString()).emit("status-pushed", { status: 'off-duty', statusStartedAt: user.statusStartedAt });
 
     res.json({ message: "Agent suspended successfully", user });
@@ -990,6 +1014,8 @@ app.post("/quality/unsuspend-agent/:id", staffAuth, async (req, res) => {
     user.suspendedReason = null;
     await user.save();
 
+    const io = req.app.get('io');
+    if (io) io.emit('stats-update');
     res.json({ message: "Agent unsuspended successfully", user });
   } catch (err) {
     console.error("Error unsuspending agent:", err);
@@ -1561,6 +1587,8 @@ app.post("/reviews/:responseId/flag", staffAuth, async (req, res) => {
       });
     }
     await review.save();
+    const io = req.app.get('io');
+    if (io) io.emit('stats-update');
     res.json(review);
   } catch (err) {
     res.status(500).json({ error: "Failed to flag response" });
@@ -1604,6 +1632,8 @@ app.put("/admin/settings/dailyGoal", adminAuth, async (req, res) => {
       { value: goal },
       { upsert: true, returnDocument: 'after' }
     );
+    const io = req.app.get('io');
+    if (io) io.emit('stats-update');
     res.json({ success: true, dailyGoal: goal });
   } catch (err) {
     res.status(500).json({ error: "Failed to save daily goal" });
@@ -1627,6 +1657,8 @@ app.post("/sops", staffAuth, async (req, res) => {
     if (!title || !content) return res.status(400).json({ error: "Title and content are required" });
     const sop = new SopUpdate({ title, content, createdBy: req.user.id });
     await sop.save();
+    const io = req.app.get('io');
+    if (io) io.emit('stats-update');
     res.json(sop);
   } catch (err) {
     res.status(500).json({ error: "Failed to create SOP update" });

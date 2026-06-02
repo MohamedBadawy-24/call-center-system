@@ -196,6 +196,10 @@ export const translations = {
     refusedReasonLabel: "Reason for refusal",
     outcomeReasonRequired: "Please provide a reason for this outcome.",
     typeReasonPlaceholder: "Type reason here...",
+    allowMultipleOtherLabel: "Allow multiple Other entries",
+    addAnother: "+ Add another",
+    pleaseSpecifyOther: "Please specify at least one option.",
+    activeCampaignWarning: "Campaign is active. Switch it to inactive to make edits.",
   },
   ar: {
     baseera: "بصيرة",
@@ -394,5 +398,9 @@ export const translations = {
     refusedReasonLabel: "سبب الرفض",
     outcomeReasonRequired: "يرجى تقديم سبب لهذه النتيجة.",
     typeReasonPlaceholder: "اكتب السبب هنا...",
+    allowMultipleOtherLabel: "السماح بأكثر من إجابة في 'أخرى'",
+    addAnother: "+ إضافة أخرى",
+    pleaseSpecifyOther: "يرجى تحديد خيار واحد على الأقل.",
+    activeCampaignWarning: "الحملة نشطة. قم بتعطيلها أولاً لإجراء التعديلات.",
   },
 };

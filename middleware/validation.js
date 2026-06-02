@@ -3,7 +3,11 @@ const { body, param, validationResult, query } = require('express-validator');
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
+    const errorArray = errors.array();
+    return res.status(400).json({ 
+      error: errorArray[0].msg, 
+      errors: errorArray 
+    });
   }
   next();
 };
@@ -53,7 +57,7 @@ const validatePrecallComplete = [
 const validateResponseSubmit = [
   body('surveyId').isMongoId().withMessage('Valid survey ID required'),
   body('interviewOutcome').isIn(['completed', 'partial', 'postponed', 'refused', 'no_qualified', 'not_contacted']),
-  body('answers').isArray().notEmpty(),
+  body('answers').isArray().withMessage('Answers must be an array'),
   handleValidationErrors
 ];
 

@@ -16,8 +16,10 @@ function categorizeInterviewOutcome(ir) {
  * Converts a raw age value to a finite number or null.
  */
 function toFiniteAge(raw) {
-  if (raw === '' || raw === null || raw === undefined) return null;
-  const n = Number(raw);
+  if (raw === null || raw === undefined) return null;
+  const trimmed = String(raw).trim();
+  if (trimmed === '') return null;
+  const n = Number(trimmed);
   return Number.isFinite(n) ? n : null;
 }
 
@@ -41,15 +43,14 @@ function parseRespondentAgeYears(payload) {
 /**
  * Returns the latest PrecallCompletion for a given user+session, optionally filtered by survey.
  */
-async function getLatestPrecallForSession(userId, statusStartedAt, surveyId) {
+async function getLatestPrecallForSession(userId, statusStartedAt, surveyId, session = null) {
   const query = { userId, statusStartedAt };
   if (surveyId && mongoose.Types.ObjectId.isValid(surveyId)) {
     query.surveyId = new mongoose.Types.ObjectId(String(surveyId));
   }
-  const rows = await PrecallCompletion.find(query)
-    .sort({ completedAt: -1 })
-    .limit(1)
-    .lean();
+  let q = PrecallCompletion.find(query).sort({ completedAt: -1 }).limit(1).lean();
+  if (session) q = q.session(session);
+  const rows = await q;
   return rows[0] || null;
 }
 
@@ -79,13 +80,11 @@ async function computePrecallCompletedForSession(user) {
  * Full eligibility state check — used by the eligibility endpoint and
  * the response submission gate.
  */
-async function getSurveyEligibilityState(user, surveyId, serialParam = null) {
+async function getSurveyEligibilityState(user, surveyId, serialParam = null, session = null) {
   const serialParamTrimmed =
     serialParam != null && String(serialParam).trim() !== '' ? String(serialParam).trim() : null;
 
   // Admin and Quality can always walk through the survey.
-  // We only return early if NO serial is provided (new session).
-  // If a serial is provided, we fall through to load the existing data.
   const isStaff = user && (user.role === 'admin' || user.role === 'quality');
   if (isStaff && !serialParamTrimmed) {
     return {
@@ -97,21 +96,34 @@ async function getSurveyEligibilityState(user, surveyId, serialParam = null) {
     };
   }
 
+  // Rule 1: Agent must be active
   if (!user || (!isStaff && (user.role !== 'agent' || user.currentStatus !== 'active'))) {
     return { canStartSurvey: false, reason: 'not_active', precallSerialNumber: '', payload: {} };
   }
 
+  // Rule 2: A PrecallCompletion document exists for this serialNumber
   let lastPrecall;
   if (serialParamTrimmed) {
     const pcQuery = { serialNumber: serialParamTrimmed };
     if (!isStaff) pcQuery.userId = user._id;
-    lastPrecall = await PrecallCompletion.findOne(pcQuery).lean();
+    let pcQ = PrecallCompletion.findOne(pcQuery).lean();
+    if (session) pcQ = pcQ.session(session);
+    lastPrecall = await pcQ;
   } else {
-    lastPrecall = await getLatestPrecallForSession(user._id, user.statusStartedAt, surveyId);
+    lastPrecall = await getLatestPrecallForSession(user._id, user.statusStartedAt, surveyId, session);
   }
 
   if (!lastPrecall) {
     return { canStartSurvey: false, reason: 'no_precall', precallSerialNumber: '', payload: {} };
+  }
+
+  // Rule 5: The PrecallCompletion belongs to the agent's current active session
+  if (!isStaff && lastPrecall.statusStartedAt) {
+    const precallSessionTime = new Date(lastPrecall.statusStartedAt).getTime();
+    const currentSessionTime = new Date(user.statusStartedAt).getTime();
+    if (precallSessionTime !== currentSessionTime) {
+      return { canStartSurvey: false, reason: 'not_in_session', precallSerialNumber: serialParamTrimmed || '', payload: lastPrecall.payload || {} };
+    }
   }
 
   if (surveyId && mongoose.Types.ObjectId.isValid(surveyId) && lastPrecall.surveyId) {
@@ -129,14 +141,17 @@ async function getSurveyEligibilityState(user, surveyId, serialParam = null) {
   const payload = lastPrecall.payload || {};
   const ageYears = parseRespondentAgeYears(payload);
 
-  if (!isStaff && (Number.isNaN(ageYears) || (Number.isFinite(ageYears) && ageYears < 18))) {
+  // Rule 3: Age field is filled AND toFiniteAge(age) >= 18
+  if (!isStaff && (Number.isNaN(ageYears) || ageYears === null || (Number.isFinite(ageYears) && ageYears < 18))) {
     return { canStartSurvey: false, reason: 'under_18', precallSerialNumber: serial, payload };
   }
   if (!isStaff && lastPrecall.under18NotQualified) {
     return { canStartSurvey: false, reason: 'under_18_not_qualified', precallSerialNumber: serial, payload };
   }
 
-  const existingResponse = await Response.findOne({ serialNumber: serial }).lean();
+  let respQ = Response.findOne({ serialNumber: serial }).lean();
+  if (session) respQ = respQ.session(session);
+  const existingResponse = await respQ;
   const existingAnswers = existingResponse
     ? existingResponse.answers.reduce((acc, a) => ({ ...acc, [a.questionId]: a.value }), {})
     : {};

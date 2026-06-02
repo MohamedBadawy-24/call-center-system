@@ -21,13 +21,17 @@ export default function LiveMonitoring() {
     if (!user?.role) return;
     if (user.role !== 'admin' && user.role !== 'quality') return;
 
-    socketRef.current = io(SOCKET_BASE, { transports: ['websocket', 'polling'] });
+    const token = localStorage.getItem('token');
+    socketRef.current = io(SOCKET_BASE, {
+      auth: { token },
+      transports: ['websocket', 'polling'],
+    });
     socketRef.current.emit('join-monitoring', { id: user.id, role: user.role });
 
     const fetchAgents = async () => {
       try {
         const res = await api.get('/stats/agents');
-        setActiveAgents(res.data.filter(a => a.currentStatus === 'active'));
+        setActiveAgents(res.data.filter(a => a.role === 'agent' && a.currentStatus === 'active'));
       } catch(e) {}
     };
     fetchAgents();

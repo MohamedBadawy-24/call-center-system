@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
+import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function AdminDashboard() {
@@ -22,10 +23,12 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState('overview');
   const [dailyGoal, setDailyGoal] = useState(50);
+  const [suspendModal, setSuspendModal] = useState({ open: false, agentId: null, reason: "" });
   const socketRef = useRef(null);
 
   const isAdmin = user?.role === 'admin';
   const isQuality = user?.role === 'quality';
+  const isStaff = isAdmin || isQuality;
 
   const fetchData = async () => {
     try {
@@ -48,7 +51,9 @@ export default function AdminDashboard() {
     fetchData();
 
     // Setup Real-time Sync
+    const token = localStorage.getItem('token');
     socketRef.current = io(SOCKET_BASE, {
+      auth: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -85,7 +90,7 @@ export default function AdminDashboard() {
       link.click();
       link.remove();
     } catch (err) {
-      alert("Failed to export data");
+      toast.error("Failed to export data");
     } finally {
       setIsExporting(null);
     }
@@ -125,31 +130,69 @@ export default function AdminDashboard() {
   const toggleSurveyStatus = async (surveyId) => {
     if (!isAdmin) return;
     try {
-      await api.put(`/surveys/${surveyId}/toggle`);
+      await api.put(`/surveys/${surveyId}/toggle`, {});
       // Update locally immediately for punchy UI
       setSurveys(surveys.map(s => s._id === surveyId ? { ...s, isActive: !s.isActive } : s));
     } catch (err) {
-      alert("Failed to toggle status");
+      toast.error("Failed to toggle status");
     }
   };
 
   const deleteSurvey = async (surveyId, isActive) => {
     if (!isAdmin) return;
-    if (isActive !== false) return alert("End campaign to delete");
-    if (!window.confirm(t('confirmDeleteSurvey'))) return;
+    if (isActive !== false) return toast.warning("End campaign to delete");
+    
+    toast(
+      ({ closeToast }) => (
+        <div>
+          <p>{t('confirmDeleteSurvey')}</p>
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <button className="btn-secondary danger" onClick={async () => {
+              closeToast();
+              try {
+                await api.delete(`/survey/${surveyId}`);
+                setSurveys(surveys.filter(s => s._id !== surveyId));
+                toast.success("Survey deleted");
+              } catch (err) {
+                toast.error(err.response?.data?.error || "Failed to delete survey");
+              }
+            }}>Delete</button>
+            <button className="btn-secondary" onClick={closeToast}>Cancel</button>
+          </div>
+        </div>
+      ),
+      { autoClose: false, closeOnClick: false }
+    );
+  };
+
+  const handleSuspend = async () => {
+    if (!suspendModal.reason) return toast.error("Reason is required");
     try {
-      await api.delete(`/survey/${surveyId}`);
-      setSurveys(surveys.filter(s => s._id !== surveyId));
+      await api.post(`/quality/suspend-agent/${suspendModal.agentId}`, { reason: suspendModal.reason });
+      toast.success("Agent suspended");
+      setSuspendModal({ open: false, agentId: null, reason: "" });
+      fetchData();
     } catch (err) {
-      alert(err.response?.data?.error || "Failed to delete survey");
+      toast.error("Failed to suspend agent");
+    }
+  };
+
+  const handleUnsuspend = async (agentId) => {
+    try {
+      await api.post(`/quality/unsuspend-agent/${agentId}`);
+      toast.success("Agent unsuspended");
+      fetchData();
+    } catch (err) {
+      toast.error("Failed to unsuspend agent");
     }
   };
 
   const updateDailyGoal = async (val) => {
     try {
       await api.put('/admin/settings/dailyGoal', { dailyGoal: Number(val) });
+      toast.success("Daily goal updated");
     } catch (err) {
-      alert("Failed to save daily goal");
+      toast.error("Failed to save daily goal");
     }
   };
 
@@ -372,6 +415,7 @@ export default function AdminDashboard() {
               <th style={{ color: 'var(--success)' }}>{t('completed')}</th>
               <th style={{ color: 'var(--danger)' }}>{t('disqualified')}</th>
               <th>{t('aht')}</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -379,8 +423,11 @@ export default function AdminDashboard() {
               {agentsList.map(a => {
                 const agentAHT = a.completed > 0 ? Math.floor(a.totalDurationSecs / a.completed) : 0;
                 return (
-                  <motion.tr layout key={a._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                    <td style={{ fontWeight: 800 }}>{a.agentName}</td>
+                  <motion.tr layout key={a._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ opacity: a.suspended ? 0.5 : 1 }}>
+                    <td style={{ fontWeight: 800 }}>
+                      {a.agentName}
+                      {a.suspended && <span style={{ marginLeft: '0.5rem', color: 'var(--danger)' }}>🔴 Suspended</span>}
+                    </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                         <div className={`status-dot ${a.currentStatus}`} style={{ background: getStatusColor(a.currentStatus) }}></div>
@@ -398,6 +445,14 @@ export default function AdminDashboard() {
                     <td style={{ fontWeight: 700 }}>{a.completed}</td>
                     <td style={{ fontWeight: 700 }}>{a.disqualified}</td>
                     <td style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{formatTime(agentAHT)}</td>
+                    <td>
+                      {isStaff && !a.suspended && a.role === 'agent' && (
+                        <button className="btn-secondary danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }} onClick={() => setSuspendModal({ open: true, agentId: a._id, reason: "" })}>Suspend</button>
+                      )}
+                      {isStaff && a.suspended && a.role === 'agent' && (
+                        <button className="btn-primary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }} onClick={() => handleUnsuspend(a._id)}>Unsuspend</button>
+                      )}
+                    </td>
                   </motion.tr>
                 );
               })}
@@ -461,6 +516,31 @@ export default function AdminDashboard() {
       </motion.div>
       </>
       )}
+
+      {/* Suspend Modal */}
+      <AnimatePresence>
+        {suspendModal.open && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="drawer-overlay" onClick={() => setSuspendModal({ open: false, agentId: null, reason: "" })} />
+            <motion.div initial={{ scale: 0.9, opacity: 0, x: '-50%', y: '-50%' }} animate={{ scale: 1, opacity: 1, x: '-50%', y: '-50%' }} exit={{ scale: 0.9, opacity: 0, x: '-50%', y: '-50%' }} className="glass-card" style={{ position: 'fixed', top: '50%', left: '50%', zIndex: 1000, width: '400px', maxWidth: '90vw' }}>
+              <h3>Suspend Agent</h3>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Please provide a reason for suspension.</p>
+              <textarea 
+                value={suspendModal.reason} 
+                onChange={e => setSuspendModal(prev => ({ ...prev, reason: e.target.value }))} 
+                className="glass-input" 
+                rows="3" 
+                style={{ width: '100%', marginBottom: '1rem', padding: '0.75rem' }} 
+                placeholder="Reason..." 
+              />
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button className="btn-secondary" onClick={() => setSuspendModal({ open: false, agentId: null, reason: "" })}>Cancel</button>
+                <button className="btn-primary" onClick={handleSuspend} style={{ background: 'var(--danger)' }}>Suspend</button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

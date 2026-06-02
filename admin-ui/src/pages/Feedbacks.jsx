@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { MessageSquare, Plus } from 'lucide-react';
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
+import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function Feedbacks() {
@@ -23,15 +24,20 @@ export default function Feedbacks() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [revRes, agentsRes] = await Promise.all([
-        api.get('/reviews'),
-        api.get('/users/list')
-      ]);
-      setFeedbacks(revRes.data);
-      const filteredAgents = user.role === 'quality' 
-        ? agentsRes.data.filter(u => u.role !== 'admin')
-        : agentsRes.data;
-      setAgents(filteredAgents);
+      if (user.role === 'agent') {
+        const res = await api.get('/reviews/my-reviews');
+        setFeedbacks(res.data);
+      } else {
+        const [revRes, agentsRes] = await Promise.all([
+          api.get('/reviews'),
+          api.get('/users/list')
+        ]);
+        setFeedbacks(revRes.data);
+        const filteredAgents = user.role === 'quality' 
+          ? agentsRes.data.filter(u => u.role !== 'admin')
+          : agentsRes.data;
+        setAgents(filteredAgents);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -45,9 +51,10 @@ export default function Feedbacks() {
       await api.post('/reviews', formData);
       setFormData({ agentId: '', type: 'Feedback', feedbackText: '' });
       setShowForm(false);
+      toast.success('Feedback submitted');
       fetchData();
     } catch (err) {
-      alert('Failed to submit feedback');
+      toast.error('Failed to submit feedback');
     }
   };
 
@@ -60,9 +67,11 @@ export default function Feedbacks() {
           <MessageSquare size={32} color="var(--primary)" />
           {t('feedbacks')}
         </h1>
-        <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
-          <Plus size={18} /> {t('addFeedback') || 'Add Feedback'}
-        </button>
+        {user.role !== 'agent' && (
+          <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+            <Plus size={18} /> {t('addFeedback') || 'Add Feedback'}
+          </button>
+        )}
       </div>
 
       {showForm && (
@@ -117,7 +126,12 @@ export default function Feedbacks() {
             {feedbacks.map(f => (
               <div key={f._id} style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                  <strong>{f.type || 'Feedback'}: Target: {f.agentId ? `${f.agentId.name}` : 'General (None)'}</strong>
+                  <strong style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    {f.type || 'Feedback'}: Target: {f.agentId ? `${f.agentId.name}` : 'General (None)'}
+                    {user.role === 'agent' && f.seenBy?.includes(user.id) && (
+                      <span title="Read" style={{ color: 'var(--success)', display: 'inline-flex', alignItems: 'center' }}>✓</span>
+                    )}
+                  </strong>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                     {new Date(f.createdAt).toLocaleString()}
                   </span>

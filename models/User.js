@@ -19,7 +19,12 @@ const UserSchema = new mongoose.Schema({
   statusStartedAt: { type: Date, default: Date.now },
   lastSeenSopAt: { type: Date, default: Date.now },
   lastSeenFeedbackAt: { type: Date, default: Date.now },
+  precallCompletedForActiveSession: { type: Boolean, default: false },
+  suspended: { type: Boolean, default: false },
+  suspendedReason: { type: String },
   createdAt: { type: Date, default: Date.now },
 });
+
+UserSchema.index({ role: 1, currentStatus: 1 });
 
 module.exports = mongoose.model("User", UserSchema);

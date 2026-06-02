@@ -37,4 +37,7 @@ const ProfileRequestSchema = new mongoose.Schema({
   }
 });
 
+ProfileRequestSchema.index({ status: 1, createdAt: -1 });
+ProfileRequestSchema.index({ userId: 1, type: 1, status: 1 });
+
 module.exports = mongoose.model("ProfileRequest", ProfileRequestSchema);

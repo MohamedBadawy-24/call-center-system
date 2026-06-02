@@ -7,10 +7,13 @@ import LoadingSpinner from '../components/LoadingSpinner';
 
 import { io } from 'socket.io-client';
 import { SOCKET_BASE } from '../api/client';
-import { Download, X as CloseIcon, Filter } from 'lucide-react';
+import { Download, X as CloseIcon, Filter, Flag, AlertTriangle } from 'lucide-react';
+import { AuthContext } from '../context/AuthContext';
+import { toast } from 'react-toastify';
 
 export default function ResponseHistory() {
   const { t, language } = useContext(UIContext);
+  const { user } = useContext(AuthContext);
   const [responses, setResponses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
@@ -29,18 +32,26 @@ export default function ResponseHistory() {
     endDate: '',
     format: 'xlsx'
   });
+  const [viewFlagged, setViewFlagged] = useState(false);
+  const [flagModal, setFlagModal] = useState({ open: false, responseId: null, note: '' });
 
   useEffect(() => {
-    fetchResponses(true);
+    if (viewFlagged) {
+      fetchFlagged();
+    } else {
+      fetchResponses(true);
+    }
     fetchMetadata();
 
-    const socket = io(SOCKET_BASE);
+    const token = localStorage.getItem('token');
+    const socket = io(SOCKET_BASE, { auth: { token } });
     socket.on('stats-update', () => {
-      fetchResponses(false);
+      if (viewFlagged) fetchFlagged();
+      else fetchResponses(false);
     });
 
     return () => socket.disconnect();
-  }, []);
+  }, [viewFlagged]);
 
   const fetchMetadata = async () => {
     try {
@@ -64,6 +75,40 @@ export default function ResponseHistory() {
       console.error("Failed to fetch responses:", err);
     } finally {
       if (showSpinner) setLoading(false);
+    }
+  };
+
+  const fetchFlagged = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/reviews/flagged');
+      // Map the flagged array to look like responses, but add the flag info
+      const mapped = res.data.map(f => {
+        if (!f.responseId) return null;
+        return {
+          ...f.responseId,
+          flagNote: f.flagNote,
+          flaggedBy: f.qualityId?.name,
+          flaggedAt: f.createdAt
+        };
+      }).filter(Boolean);
+      setResponses(mapped);
+    } catch (err) {
+      toast.error("Failed to fetch flagged responses");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFlag = async () => {
+    if (!flagModal.note) return toast.error("Flag note is required");
+    try {
+      await api.post(`/reviews/${flagModal.responseId}/flag`, { flagNote: flagModal.note });
+      toast.success("Response flagged successfully");
+      setFlagModal({ open: false, responseId: null, note: '' });
+      if (viewFlagged) fetchFlagged();
+    } catch (err) {
+      toast.error("Failed to flag response");
     }
   };
 
@@ -138,6 +183,13 @@ export default function ResponseHistory() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+          <button 
+            className="btn-secondary" 
+            onClick={() => setViewFlagged(!viewFlagged)} 
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: viewFlagged ? 'var(--danger)' : '', color: viewFlagged ? '#fff' : '' }}
+          >
+            <Flag size={18} /> {viewFlagged ? 'View All' : 'Flagged Only'}
+          </button>
           <button className="btn-primary" onClick={() => setShowExportModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Download size={18} /> {t('advancedExport')}
           </button>
@@ -372,13 +424,25 @@ export default function ResponseHistory() {
                         </span>
                       </td>
                       <td style={{ padding: '1.25rem', textAlign: 'center' }}>
-                        <button 
-                          className="btn-secondary" 
-                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem' }}
-                        >
-                          {expandedId === r._id ? t('closeAnswers') : t('viewAnswers')}
-                          {expandedId === r._id ? <ChevronUp size={14} style={{ marginLeft: '0.4rem' }} /> : <ChevronDown size={14} style={{ marginLeft: '0.4rem' }} />}
-                        </button>
+                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                          <button 
+                            className="btn-secondary" 
+                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem' }}
+                          >
+                            {expandedId === r._id ? t('closeAnswers') : t('viewAnswers')}
+                            {expandedId === r._id ? <ChevronUp size={14} style={{ marginLeft: '0.4rem' }} /> : <ChevronDown size={14} style={{ marginLeft: '0.4rem' }} />}
+                          </button>
+                          {(user?.role === 'quality' || user?.role === 'admin') && !viewFlagged && (
+                            <button 
+                              className="btn-secondary danger" 
+                              style={{ padding: '0.4rem' }}
+                              onClick={(e) => { e.stopPropagation(); setFlagModal({ open: true, responseId: r._id, note: "" }); }}
+                              title="Flag for re-review"
+                            >
+                              <Flag size={14} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                     
@@ -393,14 +457,22 @@ export default function ResponseHistory() {
                               style={{ overflow: 'hidden' }}
                             >
                               <div style={{ padding: '1.5rem 2.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
-                                {r.outcomeReason && (
-                                  <div className="answer-item" style={{ borderLeft: '3px solid var(--warning)', paddingLeft: '1rem', gridColumn: '1 / -1' }}>
-                                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
-                                      {t('reason') || 'Reason for Outcome'}
+                                  {r.flagNote && (
+                                    <div className="answer-item" style={{ borderLeft: '3px solid var(--danger)', paddingLeft: '1rem', gridColumn: '1 / -1', background: 'rgba(var(--danger-rgb), 0.05)', padding: '1rem', borderRadius: '8px' }}>
+                                      <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--danger)', marginBottom: '0.25rem', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <AlertTriangle size={16} /> Flagged for Re-review by {r.flaggedBy} on {new Date(r.flaggedAt).toLocaleDateString()}
+                                      </div>
+                                      <div style={{ fontWeight: 600 }}>{r.flagNote}</div>
                                     </div>
-                                    <div style={{ fontWeight: 600 }}>{r.outcomeReason}</div>
-                                  </div>
-                                )}
+                                  )}
+                                  {r.outcomeReason && (
+                                    <div className="answer-item" style={{ borderLeft: '3px solid var(--warning)', paddingLeft: '1rem', gridColumn: '1 / -1' }}>
+                                      <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
+                                        {t('reason') || 'Reason for Outcome'}
+                                      </div>
+                                      <div style={{ fontWeight: 600 }}>{r.outcomeReason}</div>
+                                    </div>
+                                  )}
                                 {r.answers && r.answers.length > 0 ? (
                                   r.answers.map((ans, idx) => (
                                     <div key={idx} className="answer-item" style={{ borderLeft: '3px solid var(--primary)', paddingLeft: '1rem' }}>
@@ -426,6 +498,30 @@ export default function ResponseHistory() {
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {flagModal.open && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="drawer-overlay" onClick={() => setFlagModal({ open: false, responseId: null, note: '' })} />
+            <motion.div initial={{ scale: 0.9, opacity: 0, x: '-50%', y: '-50%' }} animate={{ scale: 1, opacity: 1, x: '-50%', y: '-50%' }} exit={{ scale: 0.9, opacity: 0, x: '-50%', y: '-50%' }} className="glass-card" style={{ position: 'fixed', top: '50%', left: '50%', zIndex: 2001, width: '400px', maxWidth: '90vw' }}>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--danger)' }}><Flag size={20} /> Flag Response</h3>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Enter the reason for flagging this response for re-review.</p>
+              <textarea 
+                value={flagModal.note} 
+                onChange={e => setFlagModal({ ...flagModal, note: e.target.value })} 
+                className="glass-input" 
+                rows="3" 
+                placeholder="Reason..." 
+                style={{ width: '100%', marginBottom: '1.5rem', padding: '0.75rem' }} 
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                <button className="btn-secondary" onClick={() => setFlagModal({ open: false, responseId: null, note: '' })}>Cancel</button>
+                <button className="btn-primary" onClick={handleFlag} style={{ background: 'var(--danger)' }}>Flag Response</button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
       
       <style>{`
         .hover-row:hover {

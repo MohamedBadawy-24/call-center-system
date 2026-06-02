@@ -15,6 +15,7 @@ import { EGYPTIAN_GOVERNORATES } from '../utils/governorates';
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
 import ConditionBuilder from '../components/ConditionBuilder';
+import { toast } from 'react-toastify';
 
 const META_KEYS = [
   { key: 'title', label: 'Page title' },
@@ -39,6 +40,7 @@ export default function SurveyBuilder() {
   const [title, setTitle] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [goal, setGoal] = useState(0);
+  const [targetGovernorate, setTargetGovernorate] = useState('All');
   const [customizeOutbound, setCustomizeOutbound] = useState(false);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [outboundConfig, setOutboundConfig] = useState(() => getDefaultOutboundClone());
@@ -64,6 +66,7 @@ export default function SurveyBuilder() {
         setTitle(res.data.title || '');
         setIsActive(res.data.isActive !== false);
         setGoal(res.data.goal || 0);
+        setTargetGovernorate(res.data.targetGovernorate || 'All');
         setGovernorateGoals(res.data.governorateGoals || []);
         const norm = normalizeOutboundPrecall(res.data.outboundPrecall);
         setOutboundConfig(norm);
@@ -111,7 +114,7 @@ export default function SurveyBuilder() {
       link.click();
       link.remove();
     } catch (e) {
-      alert("Failed to download disqualified numbers.");
+      toast.error("Failed to download disqualified numbers.");
     }
   };
 
@@ -119,10 +122,10 @@ export default function SurveyBuilder() {
     if (!window.confirm("Are you sure you want to clear the entire numbers list for this campaign?")) return;
     try {
       await api.delete(`/admin/survey/${id}/numbers`);
-      alert("Numbers list cleared.");
+      toast.success("Numbers list cleared.");
       loadNumbers();
     } catch(e) {
-      alert("Failed to clear numbers.");
+      toast.error("Failed to clear numbers.");
     }
   };
 
@@ -170,6 +173,7 @@ export default function SurveyBuilder() {
   };
 
   const removeOption = (fIdx, oIdx) => {
+    if (!window.confirm("Are you sure you want to remove this option?")) return;
     setOutboundConfig((prev) => {
       const fields = [...prev.fields];
       const opts = (fields[fIdx].options || []).filter((_, i) => i !== oIdx);
@@ -199,9 +203,10 @@ export default function SurveyBuilder() {
   const removeField = (idx) => {
     const field = outboundConfig.fields[idx];
     if (field && field.id === 'phone') {
-      alert('The phone number field is system-managed and cannot be removed. You can move it to a different section instead.');
+      toast.warning('The phone number field is system-managed and cannot be removed. You can move it to a different section instead.');
       return;
     }
+    if (!window.confirm("Are you sure you want to remove this field?")) return;
     setOutboundConfig((prev) => ({
       ...prev,
       fields: prev.fields.filter((_, i) => i !== idx),
@@ -222,7 +227,7 @@ export default function SurveyBuilder() {
 
   const saveSurvey = async () => {
     if (id && isActive) {
-      alert('You cannot edit an active campaign. Please go back to the dashboard and End the Campaign first.');
+      toast.warning('You cannot edit an active campaign. Please go back to the dashboard and End the Campaign first.');
       return;
     }
 
@@ -231,6 +236,7 @@ export default function SurveyBuilder() {
         title,
         isActive,
         goal,
+        targetGovernorate,
         introScript: '',
         sections,
         governorateGoals,
@@ -256,10 +262,10 @@ export default function SurveyBuilder() {
         });
       }
 
-      alert('Survey saved successfully!');
+      toast.success('Survey saved successfully!');
       navigate('/admin');
     } catch (err) {
-      alert(err.response?.data?.error || 'Error saving survey');
+      toast.error(err.response?.data?.error || 'Error saving survey');
     }
   };
 
@@ -269,10 +275,10 @@ export default function SurveyBuilder() {
       return;
     }
     try {
-      await api.put(`/surveys/${id}/toggle`);
+      await api.put(`/surveys/${id}/toggle`, {});
       setIsActive(!isActive);
     } catch (err) {
-      alert("Failed to toggle campaign status");
+      toast.error("Failed to toggle campaign status");
     }
   };
 
@@ -372,6 +378,15 @@ export default function SurveyBuilder() {
           <label className="form-label">{t('campaignGoal') || 'Campaign Goal'}</label>
           <input type="number" className="input-field" value={goal} onChange={e => setGoal(Number(e.target.value))} placeholder="Target count" readOnly={!isAdmin} />
         </div>
+        <div style={{ marginLeft: '2rem', width: '200px' }}>
+          <label className="form-label">Target Governorate</label>
+          <select className="input-field" value={targetGovernorate} onChange={e => setTargetGovernorate(e.target.value)} disabled={!isAdmin}>
+            <option value="All">All Governorates</option>
+            {EGYPTIAN_GOVERNORATES.map(g => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+        </div>
         <div style={{ marginLeft: '2rem' }}>
           <label className="form-label" style={{ display: 'block', marginBottom: '0.5rem' }}>Campaign Status</label>
           <button 
@@ -413,6 +428,7 @@ export default function SurveyBuilder() {
               />
               {isAdmin && (
                 <button type="button" className="btn-secondary" style={{ padding: '0.4rem 0.6rem' }} onClick={() => {
+                  if (!window.confirm("Are you sure you want to remove this governorate target?")) return;
                   setGovernorateGoals(governorateGoals.filter((_, idx) => idx !== i));
                 }}>✕</button>
               )}

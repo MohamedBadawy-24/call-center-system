@@ -17,6 +17,7 @@ import {
 } from '../utils/outboundPrecallConfig';
 import { EGYPTIAN_GOVERNORATES } from '../utils/governorates';
 import HandoverModal from '../components/HandoverModal';
+import { toast } from 'react-toastify';
 
 function formatLocalDate(d) {
   const y = d.getFullYear();
@@ -141,6 +142,7 @@ const [surveyId, setSurveyId] = useState(null);
   const [serialSearchTerm, setSerialSearchTerm] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedGov, setSelectedGov] = useState('All');
+  const [targetGovernorate, setTargetGovernorate] = useState('All');
   const [isEditMode, setIsEditMode] = useState(false);
   const editAnswersRef = useRef(null);
   const [isHandoverOpen, setIsHandoverOpen] = useState(false);
@@ -182,13 +184,13 @@ const [surveyId, setSurveyId] = useState(null);
             });
         }
         
-        alert(t('serialFound') || 'Form found and loaded.');
+        toast.success(t('serialFound') || 'Form found and loaded.');
       } else {
-        alert(t('serialNotFound') || 'Serial number not found.');
+        toast.error(t('serialNotFound') || 'Serial number not found.');
       }
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.error || 'Search failed');
+      toast.error(err.response?.data?.error || 'Search failed');
     } finally {
       setSearchLoading(false);
     }
@@ -198,6 +200,18 @@ const [surveyId, setSurveyId] = useState(null);
     const id = setInterval(() => setTick(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      // If they have fetched a number but haven't submitted, warn them
+      if (answers.phone && !submitting) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [answers.phone, submitting]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -218,6 +232,16 @@ const [surveyId, setSurveyId] = useState(null);
         ]);
         if (cancelled) return;
         setSurveyId(precallRes.data.surveyId || null);
+        
+        const tg = precallRes.data.targetGovernorate || 'All';
+        setTargetGovernorate(tg);
+        // If agent, enforce their assigned governorate locally. Others start at the target but can change.
+        if (user?.role === 'agent') {
+          setSelectedGov(tg);
+        } else {
+          setSelectedGov(tg); // Admins/Quality can change it later
+        }
+
         const norm = normalizeOutboundPrecall(precallRes.data.outboundPrecall);
         setConfig(norm);
         const nextNum = numberRes.data;
@@ -374,7 +398,7 @@ const [surveyId, setSurveyId] = useState(null);
       }
     } catch (e) {
       console.error(e);
-      alert(e.response?.data?.error || e.message || 'Failed to save');
+      toast.error(e.response?.data?.error || e.message || 'Failed to save');
     } finally {
       setSubmitting(false);
     }
@@ -382,7 +406,7 @@ const [surveyId, setSurveyId] = useState(null);
 
   const onNewForm = async () => {
     if (!user?.id || !canSaveNew) {
-      alert('Please fill in all required fields including the Interview outcome before saving.');
+      toast.warning('Please fill in all required fields including the Interview outcome before saving.');
       return;
     }
     setSubmitting(true);
@@ -409,7 +433,7 @@ const [surveyId, setSurveyId] = useState(null);
       await refreshFormsCount();
     } catch (e) {
       console.error(e);
-      alert(e.response?.data?.error || e.message || 'Failed to save');
+      toast.error(e.response?.data?.error || e.message || 'Failed to save');
     } finally {
       setSubmitting(false);
     }
@@ -429,11 +453,11 @@ const [surveyId, setSurveyId] = useState(null);
         setAnswers(prev => ({ ...prev, phone: nextNum.number, serial_number: nextNum.serialNumber || '' }));
       } else {
         setAnswers(prev => ({ ...prev, phone: '', serial_number: '' }));
-        alert("No numbers available for the selected region.");
+        toast.warning("No numbers available for the selected region.");
       }
     } catch (e) {
       console.error("Failed to load next number:", e);
-      alert("Failed to load number");
+      toast.error("Failed to load number");
     } finally {
       setNumberLoading(false);
     }
@@ -488,7 +512,7 @@ const [surveyId, setSurveyId] = useState(null);
             </div>
           </div>
           <div className="precall-pill" style={{ display: 'flex', gap: '1rem', background: 'transparent', border: 'none', padding: 0 }}>
-            {answers.serial_number && (
+            {answers.serial_number && user?.role !== 'agent' && (
               <button 
                 type="button" 
                 className="btn-secondary" 
@@ -500,6 +524,7 @@ const [surveyId, setSurveyId] = useState(null);
               </button>
             )}
             
+            {user?.role !== 'agent' && (
             <form onSubmit={handleSerialSearch} style={{ display: 'flex', gap: '0.5rem' }}>
               <div style={{ position: 'relative' }}>
                 <Hash size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
@@ -516,6 +541,7 @@ const [surveyId, setSurveyId] = useState(null);
                 {searchLoading ? <Loader2 size={16} className="spin-icon" /> : <Hash size={16} />}
               </button>
             </form>
+            )}
 
             <div className="precall-pill">
               <CalendarClock size={16} />
@@ -552,7 +578,7 @@ const [surveyId, setSurveyId] = useState(null);
                 <div className="precall-field" style={{ marginBottom: '1.25rem', padding: '1rem', background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: '8px' }}>
                   <label className="precall-label" style={{ fontWeight: 600, color: 'var(--primary)' }}>Target Governorate</label>
                   <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                    <select className="input-field" style={{ flex: 1, minWidth: '200px' }} value={selectedGov} onChange={handleGovChange} disabled={numberLoading}>
+                    <select className="input-field" style={{ flex: 1, minWidth: '200px' }} value={selectedGov} onChange={handleGovChange} disabled={numberLoading || user?.role === 'agent'}>
                       <option value="All">All Governorates (Random)</option>
                       {EGYPTIAN_GOVERNORATES.map(g => (
                         <option key={g} value={g}>{g}</option>
@@ -564,7 +590,7 @@ const [surveyId, setSurveyId] = useState(null);
                       </button>
                     )}
                   </div>
-                  {!currentNumber && <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Select a region and click "Get Number" to fetch the next available lead.</p>}
+                  {!currentNumber && <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{user?.role === 'agent' ? "Click 'Get Number' to fetch the next available lead from your assigned region." : "Select a region and click 'Get Number' to fetch the next available lead."}</p>}
                 </div>
               )}
 

@@ -7,7 +7,7 @@ import AgentDashboard from './pages/AgentDashboard';
 import PreCallChecklist from './pages/PreCallChecklist';
 import TakeSurvey from './pages/TakeSurvey';
 import AdminDashboard from './pages/AdminDashboard';
-import SurveyBuilder from './pages/SurveyBuilder';
+import SurveyBuilder from './pages/SurveyBuilder/index';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -19,9 +19,14 @@ import Analytics from './pages/Analytics';
 import Feedbacks from './pages/Feedbacks';
 import SopUpdates from './pages/SopUpdates';
 import ResponseHistory from './pages/ResponseHistory';
+import QualityAgentStats from './pages/QualityAgentStats';
+import QualityDropOff from './pages/QualityDropOff';
+import ShadowReview from './pages/ShadowReview';
 import PrivateRoute from './components/PrivateRoute';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import { UIProvider, UIContext } from './context/UIContext';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const StatusSelector = ({ user, updateStatus, t, timer }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -96,7 +101,7 @@ const StatusSelector = ({ user, updateStatus, t, timer }) => {
                       navigate('/agent/precall', { replace: true });
                     }
                   } catch (e) {
-                    alert(e.response?.data?.error || 'Failed to update status');
+                    toast.error(e.response?.data?.error || 'Failed to update status');
                   }
                 }}
               >
@@ -118,7 +123,7 @@ const StatusGuard = ({ children }) => {
   const { t } = useContext(UIContext);
   const location = useLocation();
 
-  const isStaffRole = user?.role === 'agent' || user?.role === 'quality';
+  const isStaffRole = user?.role === 'agent';
   const isNotActive = user?.currentStatus !== 'active';
   const isAuthPage = location.pathname === '/login' || location.pathname === '/forgot-password';
 
@@ -222,9 +227,10 @@ const NavBar = () => {
   useEffect(() => {
     if (user) {
       import('./api/client').then(({ api }) => {
-        if (!isStaff) {
+        if (user.role === 'agent') {
+          api.get('/reviews/unseen-count').then(res => setUnseenFeedbackCount(res.data.count)).catch(console.error);
           api.get('/sops/unseen-count').then(res => setUnseenSopCount(res.data.count)).catch(console.error);
-        } else {
+        } else if (isStaff) {
           api.get('/reviews/unseen-count').then(res => setUnseenFeedbackCount(res.data.count)).catch(console.error);
         }
       });
@@ -288,7 +294,7 @@ const NavBar = () => {
             </Link>
           )}
 
-          {user && isStaff && (
+          {user && (
             <Link to="/admin/feedbacks" style={{ position: 'relative', color: 'inherit' }} onClick={() => setUnseenFeedbackCount(0)}>
               <MessageSquare size={20} />
               {unseenFeedbackCount > 0 && (
@@ -356,18 +362,19 @@ const NavBar = () => {
                   <BookOpen size={18} /> {t('sopUpdates') || 'SOP Updates'}
                 </Link>
 
+                <Link to="/admin/feedbacks" className="drawer-item" onClick={() => { setDrawerOpen(false); setUnseenFeedbackCount(0); }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <MessageSquare size={18} /> {t('feedbacks') || 'Feedbacks'}
+                  </div>
+                  {unseenFeedbackCount > 0 && (
+                    <span style={{ background: 'var(--danger)', color: '#fff', fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: '10px' }}>
+                      {unseenFeedbackCount}
+                    </span>
+                  )}
+                </Link>
+
                 {isStaff && (
                   <>
-                    <Link to="/admin/feedbacks" className="drawer-item" onClick={() => { setDrawerOpen(false); setUnseenFeedbackCount(0); }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <MessageSquare size={18} /> {t('feedbacks') || 'Feedbacks'}
-                      </div>
-                      {unseenFeedbackCount > 0 && (
-                        <span style={{ background: 'var(--danger)', color: '#fff', fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: '10px' }}>
-                          {unseenFeedbackCount}
-                        </span>
-                      )}
-                    </Link>
                     <Link to="/admin/live" className="drawer-item" onClick={() => setDrawerOpen(false)}>
                       <Monitor size={18} /> {t('liveMonitor')}
                     </Link>
@@ -378,6 +385,21 @@ const NavBar = () => {
                       <History size={18} /> {t('responseHistory') || 'Response History'}
                     </Link>
                   </>
+                )}
+
+                {isStaff && (
+                  <div style={{ marginTop: '1.5rem' }}>
+                    <span className="drawer-section-label">{t('qualityTools') || 'Quality Tools'}</span>
+                    <Link to="/quality/agent-stats" className="drawer-item" onClick={() => setDrawerOpen(false)}>
+                      <Activity size={18} /> {t('agentStats') || 'Agent Stats'}
+                    </Link>
+                    <Link to="/quality/drop-off" className="drawer-item" onClick={() => setDrawerOpen(false)}>
+                      <History size={18} /> {t('dropOffReport') || 'Drop-Off Report'}
+                    </Link>
+                    <Link to="/quality/shadow-review" className="drawer-item" onClick={() => setDrawerOpen(false)}>
+                      <Monitor size={18} /> {t('liveAudit') || 'Live Audit'}
+                    </Link>
+                  </div>
                 )}
 
                 <div style={{ marginTop: '2.5rem' }}>
@@ -445,6 +467,7 @@ const AnimatedRoutes = () => {
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
         <Route path="/login" element={<PageWrapper><Login /></PageWrapper>} />
+        <Route path="/register" element={<PageWrapper><Register /></PageWrapper>} />
         <Route path="/forgot-password" element={<PageWrapper><ForgotPassword /></PageWrapper>} />
         <Route path="/profile" element={<PrivateRoute><PageWrapper><ProfileSettings /></PageWrapper></PrivateRoute>} />
         <Route path="/" element={<PrivateRoute><PageWrapper><AgentDashboard /></PageWrapper></PrivateRoute>} />
@@ -456,8 +479,12 @@ const AnimatedRoutes = () => {
         <Route path="/admin" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><AdminDashboard /></PageWrapper></PrivateRoute>} />
         <Route path="/admin/live" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><LiveMonitoring /></PageWrapper></PrivateRoute>} />
         <Route path="/admin/analytics" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><Analytics /></PageWrapper></PrivateRoute>} />
-        <Route path="/admin/feedbacks" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><Feedbacks /></PageWrapper></PrivateRoute>} />
+        <Route path="/admin/feedbacks" element={<PrivateRoute reqRole={['admin', 'quality', 'agent']}><PageWrapper><Feedbacks /></PageWrapper></PrivateRoute>} />
         <Route path="/admin/responses" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><ResponseHistory /></PageWrapper></PrivateRoute>} />
+
+        <Route path="/quality/agent-stats" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><QualityAgentStats /></PageWrapper></PrivateRoute>} />
+        <Route path="/quality/drop-off" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><QualityDropOff /></PageWrapper></PrivateRoute>} />
+        <Route path="/quality/shadow-review" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><ShadowReview /></PageWrapper></PrivateRoute>} />
         
         {/* Strictly Admin routes */}
         <Route path="/admin/requests" element={<PrivateRoute reqRole="admin"><PageWrapper><ProfileRequests /></PageWrapper></PrivateRoute>} />
@@ -478,6 +505,7 @@ function App() {
             <div className="mesh-blob blob-1"></div>
             <div className="mesh-blob blob-2"></div>
           </div>
+          <ToastContainer position="top-right" autoClose={3000} theme="colored" hideProgressBar={false} closeOnClick pauseOnHover />
           <NavBar />
           <main className="container">
             <StatusGuard>

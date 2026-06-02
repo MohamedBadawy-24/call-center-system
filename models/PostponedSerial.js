@@ -9,12 +9,14 @@ const PostponedSerialSchema = new mongoose.Schema({
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
   surveyId: { type: mongoose.Schema.Types.ObjectId, ref: "Survey" },
   statusStartedAt: { type: Date, required: true },
-  serialNumber: { type: String, default: "" },
+  serialNumber: { type: String, required: true },
   source: { type: String, enum: ["precall", "survey"], default: "precall" },
   precallCompletionId: { type: mongoose.Schema.Types.ObjectId, ref: "PrecallCompletion" },
   createdAt: { type: Date, default: Date.now },
 });
 
 PostponedSerialSchema.index({ agentId: 1, createdAt: -1 });
+PostponedSerialSchema.index({ serialNumber: 1 });
+PostponedSerialSchema.index({ agentId: 1, statusStartedAt: 1 });
 
 module.exports = mongoose.model("PostponedSerial", PostponedSerialSchema);

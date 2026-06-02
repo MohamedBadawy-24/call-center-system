@@ -22,6 +22,11 @@ const authenticate = async (req, res) => {
       return false;
     }
 
+    if (user.suspended) {
+      res.status(403).json({ error: "Account suspended. Contact your manager." });
+      return false;
+    }
+
     req.user = {
       id: user._id.toString(),
       name: user.name,
@@ -60,4 +65,14 @@ const staffAuth = async (req, res, next) => {
   next();
 };
 
-module.exports = { auth, adminAuth, staffAuth };
+/** Agents must be in active status for call-handling routes */
+const agentActiveAuth = async (req, res, next) => {
+  const ok = await authenticate(req, res);
+  if (!ok) return;
+  if (req.user.role === "agent" && req.user.currentStatus !== "active") {
+    return res.status(403).json({ error: "You must be active to perform this action" });
+  }
+  next();
+};
+
+module.exports = { auth, adminAuth, staffAuth, agentActiveAuth };

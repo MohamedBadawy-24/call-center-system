@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const AnswerSchema = new mongoose.Schema({
   questionId: String,
-  value: String,
+  value: mongoose.Schema.Types.Mixed,
 });
 
 /**
@@ -13,7 +13,11 @@ const ResponseSchema = new mongoose.Schema({
   surveyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Survey', required: true, index: true },
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   /** completed | partial | postponed | disqualified | abandoned */
-  status: { type: String, default: "completed" },
+  status: {
+    type: String,
+    enum: ['completed', 'partial', 'postponed', 'disqualified', 'abandoned'],
+    default: 'completed',
+  },
   /** completed | partial | postponed → not disqualified; refused | no_qualified | not_contacted → disqualified */
   interviewOutcome: { type: String, default: "" },
   outcomeCategory: {

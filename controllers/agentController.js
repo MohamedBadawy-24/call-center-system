@@ -6,7 +6,8 @@ const PhoneNumber = require('../models/PhoneNumber');
 const Survey = require('../models/Survey');
 const Draft = require('../models/Draft');
 const { getNextSerialNumber } = require('../services/serialService');
-const { categorizeInterviewOutcome, parseRespondentAgeYears, getLatestPrecallForSession } = require('../services/precallService');
+const { categorizeInterviewOutcome, parseRespondentAgeYears } = require('../services/precallService');
+const { runTransaction } = require('../utils/runTransaction');
 
 exports.getPrecallSessionCount = async (req, res) => {
   try {
@@ -25,32 +26,24 @@ exports.getPrecallSessionCount = async (req, res) => {
 };
 
 exports.completePrecall = async (req, res) => {
-  // Wrap in a transaction to guarantee PhoneNumber + PrecallCompletion stay in sync
-  const session = await mongoose.startSession();
-  session.startTransaction();
   try {
     const isStaff = req.user.role === 'admin' || req.user.role === 'quality';
     if (!isStaff && req.user.role !== 'agent') {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
     const user = await User.findById(req.user.id);
     if (!user || (user.role === 'agent' && user.currentStatus !== 'active')) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({ error: 'You must be active to complete the checklist' });
     }
 
     let { surveyId, payload, interviewStartedAt, interviewDate, interviewStartDisplay } = req.body;
     const startedAt = interviewStartedAt ? new Date(interviewStartedAt) : new Date();
     if (Number.isNaN(startedAt.getTime())) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({ error: 'Invalid interviewStartedAt' });
     }
 
+    await runTransaction(async (session) => {
     payload = payload && typeof payload === 'object' ? { ...payload } : {};
     const ageYears = parseRespondentAgeYears(payload);
     let under18NotQualified = false;
@@ -67,7 +60,12 @@ exports.completePrecall = async (req, res) => {
       sid = new mongoose.Types.ObjectId(surveyId);
     }
 
-    const serialNumber = payload.serial_number || '';
+    // Normalise serialNumber: if payload contains no real serial (empty string / missing),
+    // we must NOT write "" to the DB. The unique sparse index ignores absent fields but
+    // treats "" as a concrete duplicate, so we keep it as null and only write it when real.
+    const rawSerial = payload.serial_number || '';
+    const serialNumber = rawSerial.trim() !== '' ? rawSerial.trim() : null;
+
     const precallData = {
       userId: user._id,
       statusStartedAt: user.statusStartedAt,
@@ -81,8 +79,9 @@ exports.completePrecall = async (req, res) => {
       outcomeReason: payload.outcome_reason || '',
       disqualified: disqualified || under18NotQualified,
       under18NotQualified,
-      serialNumber,
     };
+    // Only attach serialNumber when it is a real value so the sparse index is not violated
+    if (serialNumber) precallData.serialNumber = serialNumber;
 
     let doc;
     if (serialNumber) {
@@ -133,12 +132,12 @@ exports.completePrecall = async (req, res) => {
     }
 
     // --- Postponed serial tracking ---
-    if (ir === 'postponed' && payload.serial_number != null) {
+    if (ir === 'postponed' && payload.serial_number != null && String(payload.serial_number).trim() !== '') {
       await PostponedSerial.create([{
         agentId: user._id,
         surveyId: sid,
         statusStartedAt: user.statusStartedAt,
-        serialNumber: String(payload.serial_number),
+        serialNumber: String(payload.serial_number).trim(),
         source: 'precall',
         precallCompletionId: doc._id,
       }], { session });
@@ -169,16 +168,18 @@ exports.completePrecall = async (req, res) => {
       );
     }
 
-    await session.commitTransaction();
-    session.endSession();
+    await User.findByIdAndUpdate(
+      user._id,
+      { precallCompletedForActiveSession: true },
+      { session }
+    );
+    });
 
     const io = req.app.get('io');
     if (io) io.emit('stats-update');
 
     res.json({ ok: true });
   } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
     console.error('Precall Complete Error:', err);
     res.status(500).json({ error: 'Server error' });
   }
@@ -193,6 +194,7 @@ exports.getNextNumber = async (req, res) => {
     if (!user) return res.json(null);
 
     const isStationActive = user.currentStatus === 'active';
+    let governorate = req.query.governorate;
     const { surveyId } = req.query;
     const query = {};
     if (surveyId && mongoose.Types.ObjectId.isValid(surveyId)) {
@@ -204,16 +206,46 @@ exports.getNextNumber = async (req, res) => {
     const targetSurveys = await Survey.find(query).sort({ createdAt: -1 });
     if (!targetSurveys.length) return res.json(null);
 
+    if (req.user.role === 'agent') {
+      const activeSurvey = targetSurveys[0];
+      if (activeSurvey.targetGovernorate && activeSurvey.targetGovernorate !== 'All') {
+        governorate = activeSurvey.targetGovernorate;
+      }
+    }
+
     let number = null;
     for (const s of targetSurveys) {
-      number = await PhoneNumber.findOne({ surveyId: s._id, agentId: user._id, status: 'pending' });
+      let recoveredNumber = await PhoneNumber.findOne({
+        surveyId: s._id,
+        agentId: user._id,
+        status: 'pending',
+      });
+
+      if (recoveredNumber) {
+        if (governorate && governorate !== 'All' && recoveredNumber.governorate !== governorate) {
+          await PhoneNumber.findByIdAndUpdate(recoveredNumber._id, {
+            $unset: { agentId: 1, assignedAt: 1, sessionStatusStartedAt: 1 },
+          });
+          recoveredNumber = null;
+        } else {
+          number = recoveredNumber;
+        }
+      }
+
       if (!number && isStationActive) {
+        const assignQuery = { surveyId: s._id, status: 'pending', agentId: { $exists: false } };
+        if (governorate && governorate !== 'All') assignQuery.governorate = governorate;
         number = await PhoneNumber.findOneAndUpdate(
-          { surveyId: s._id, status: 'pending', agentId: { $exists: false } },
-          { agentId: user._id, sessionStatusStartedAt: user.statusStartedAt, assignedAt: new Date() },
+          assignQuery,
+          {
+            agentId: user._id,
+            sessionStatusStartedAt: user.statusStartedAt,
+            assignedAt: new Date(),
+          },
           { returnDocument: 'after' }
         );
       }
+
       if (number) break;
     }
     res.json(number);
@@ -346,20 +378,14 @@ exports.searchBySerial = async (req, res) => {
 };
 
 exports.handoverCall = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
   try {
     const { serialNumber, targetAgentId } = req.body;
     if (!serialNumber || !targetAgentId) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({ error: 'SerialNumber and TargetAgentId are required' });
     }
 
     const targetAgent = await User.findById(targetAgentId);
     if (!targetAgent || !['agent', 'quality'].includes(targetAgent.role)) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(404).json({ error: 'Target agent not found or invalid role' });
     }
 
@@ -367,28 +393,44 @@ exports.handoverCall = async (req, res) => {
     if (!precall) {
       const phone = await PhoneNumber.findOne({ serialNumber, agentId: req.user.id });
       if (!phone) {
-        await session.abortTransaction();
-        session.endSession();
         return res.status(403).json({ error: 'You do not own this call or serial number.' });
       }
     }
 
-    const Response = require('../models/Response');
-    await PrecallCompletion.updateMany({ serialNumber, userId: req.user.id }, { $set: { userId: targetAgentId } }, { session });
-    await Response.updateMany({ serialNumber, agentId: req.user.id }, { $set: { agentId: targetAgentId } }, { session });
-    await PhoneNumber.updateMany({ serialNumber, agentId: req.user.id }, { $set: { agentId: targetAgentId } }, { session });
-    await Draft.updateMany({ serialNumber, agentId: req.user.id }, { $set: { agentId: targetAgentId } }, { session });
-
-    await session.commitTransaction();
-    session.endSession();
+    const ResponseModel = require('../models/Response');
+    await runTransaction(async (session) => {
+      await PrecallCompletion.updateMany(
+        { serialNumber, userId: req.user.id },
+        { $set: { userId: targetAgentId } },
+        { session }
+      );
+      await ResponseModel.updateMany(
+        { serialNumber, agentId: req.user.id },
+        { $set: { agentId: targetAgentId } },
+        { session }
+      );
+      await PhoneNumber.updateMany(
+        { serialNumber, agentId: req.user.id },
+        { $set: { agentId: targetAgentId } },
+        { session }
+      );
+      await Draft.updateMany(
+        { serialNumber, agentId: req.user.id },
+        { $set: { agentId: targetAgentId } },
+        { session }
+      );
+      await PostponedSerial.updateMany(
+        { serialNumber, agentId: req.user.id },
+        { $set: { agentId: targetAgentId } },
+        { session }
+      );
+    });
 
     const io = req.app.get('io');
     if (io) io.emit('stats-update');
 
     res.json({ message: `Successfully handed over to ${targetAgent.name}` });
   } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
     console.error('Handover Error:', err);
     res.status(500).json({ error: 'Failed to perform handover' });
   }
@@ -411,7 +453,7 @@ exports.saveDraft = async (req, res) => {
           updatedAt: new Date()
         }
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
     );
 
     res.json({ success: true, draft });

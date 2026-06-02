@@ -3,6 +3,7 @@ const Response = require('../models/Response');
 const PrecallCompletion = require('../models/PrecallCompletion');
 const PhoneNumber = require('../models/PhoneNumber');
 const PostponedSerial = require('../models/PostponedSerial');
+const Draft = require('../models/Draft');
 const Survey = require('../models/Survey');
 const User = require('../models/User');
 const xlsx = require('xlsx');
@@ -10,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const { saveToFile, VariableType } = require('sav-writer');
 const { getSurveyEligibilityState, categorizeInterviewOutcome } = require('../services/precallService');
+const { runTransaction } = require('../utils/runTransaction');
 
 const encodeValue = (val) => {
   if (typeof val !== 'string') return val;
@@ -19,36 +21,68 @@ const encodeValue = (val) => {
   return val;
 };
 
+const parseAnswerValue = (value) => {
+  if (value == null) return { main: "", others: [] };
+
+  if (Array.isArray(value)) {
+    const mainValues = [];
+    const others = [];
+    value.forEach(v => {
+      if (typeof v === 'string' && v.toLowerCase().startsWith('other:')) {
+        others.push(v.substring(6).trim());
+      } else {
+        mainValues.push(v);
+      }
+    });
+
+    let mainStr = mainValues.join(' | ');
+    if (others.length > 0) {
+      if (mainStr) {
+        mainStr += ' | ' + others[0];
+      } else {
+        mainStr = others[0];
+      }
+      return { main: mainStr, others: others.slice(1) };
+    }
+    return { main: mainStr, others: [] };
+  }
+
+  if (typeof value === 'string') {
+    if (value.startsWith('Other: ')) {
+      return { main: value.substring(7), others: [] };
+    }
+    if (value.startsWith('other:')) {
+      return { main: value.substring(6), others: [] };
+    }
+    return { main: value, others: [] };
+  }
+
+  return { main: String(value), others: [] };
+};
+
 exports.submitResponse = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
   try {
     const isStaff = req.user.role === 'admin' || req.user.role === 'quality';
     if (!isStaff && req.user.role !== 'agent') {
-      await session.abortTransaction(); session.endSession();
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
     const user = await User.findById(req.user.id);
-    if (!user) { await session.abortTransaction(); session.endSession(); return res.status(401).json({ error: 'User not found' }); }
+    if (!user) return res.status(401).json({ error: 'User not found' });
     if (user.role === 'agent' && user.currentStatus !== 'active') {
-      await session.abortTransaction(); session.endSession();
       return res.status(400).json({ error: 'You must be active to submit a response' });
     }
 
     const surveyIdRaw = req.body.surveyId;
     if (!surveyIdRaw || String(surveyIdRaw).trim() === '') {
-      await session.abortTransaction(); session.endSession();
       return res.status(400).json({ error: 'Survey ID is required' });
     }
     if (!mongoose.Types.ObjectId.isValid(String(surveyIdRaw))) {
-      await session.abortTransaction(); session.endSession();
       return res.status(400).json({ error: 'Invalid survey ID' });
     }
 
     const interviewOutcome = String(req.body.interviewOutcome || '');
     if (!interviewOutcome) {
-      await session.abortTransaction(); session.endSession();
       return res.status(400).json({ error: 'Interview outcome is required' });
     }
 
@@ -57,113 +91,131 @@ exports.submitResponse = async (req, res) => {
         ? String(req.body.precallSerialNumber).trim()
         : null;
 
-    const elig = await getSurveyEligibilityState(user, req.body.surveyId, precallSerialFromBody);
-
-    const qualifiedOutcomes = ['completed', 'partial'];
-    if (qualifiedOutcomes.includes(interviewOutcome) && !elig.canStartSurvey) {
-      await session.abortTransaction(); session.endSession();
-      return res.status(403).json({
-        error: 'Not eligible to submit qualified responses for this session',
-        reason: elig.reason,
-      });
-    }
-
-    const { category, disqualified } = categorizeInterviewOutcome(interviewOutcome);
-    let status = 'completed';
-    if (interviewOutcome === 'partial') status = 'partial';
-    else if (interviewOutcome === 'postponed') status = 'postponed';
-    else if (category === 'disqualified' || disqualified) status = 'disqualified';
-
-    const now = new Date();
-    const serialNumber = elig.precallSerialNumber;
-
-    const responseData = {
-      surveyId: req.body.surveyId,
-      answers: Array.isArray(req.body.answers) ? req.body.answers : [],
-      durationSecs: typeof req.body.durationSecs === 'number' ? req.body.durationSecs : 0,
-      agentId: req.user.id,
-      interviewOutcome,
-      outcomeCategory: category,
-      status,
-      sessionStatusStartedAt: user.statusStartedAt,
-      completedAt: now,
-      serialNumber,
-      outcomeReason: req.body.outcomeReason || '',
-    };
-
-    let response;
-    if (serialNumber) {
-      const responseFilter = { serialNumber };
-      if (!isStaff) responseFilter.agentId = user._id;
-
-      response = await Response.findOneAndUpdate(
-        responseFilter,
-        { $set: responseData },
-        { upsert: true, returnDocument: 'after', session }
+    const response = await runTransaction(async (session) => {
+      const elig = await getSurveyEligibilityState(
+        user,
+        req.body.surveyId,
+        precallSerialFromBody,
+        session
       );
-      // Sync outcome back to PrecallCompletion so checklist reflects the final state
-      const precallFilter = { serialNumber };
-      if (!isStaff) precallFilter.userId = user._id;
 
-      await PrecallCompletion.findOneAndUpdate(
-        precallFilter,
-        {
-          $set: {
-            interviewOutcome,
-            outcomeCategory: category,
-            outcomeReason: req.body.outcomeReason || '',
-            disqualified: disqualified || false,
-            'payload.interview_result': interviewOutcome,
-            'payload.outcome_reason': req.body.outcomeReason || '',
-          },
-        },
-        { session }
-      );
-    } else {
-      [response] = await Response.create([responseData], { session });
-    }
-
-    // PhoneNumber final status
-    let phoneFinalStatus = status;
-    if (phoneFinalStatus === 'partial') phoneFinalStatus = 'completed';
-    if (!['completed', 'disqualified', 'postponed'].includes(phoneFinalStatus)) phoneFinalStatus = 'completed';
-
-    const phoneFilter = serialNumber
-      ? { serialNumber }
-      : { agentId: user._id, surveyId: new mongoose.Types.ObjectId(String(req.body.surveyId)) };
-
-    await PhoneNumber.findOneAndUpdate(
-      phoneFilter,
-      { $set: { status: phoneFinalStatus, calledAt: now, outcomeReason: `Contacted | ${interviewOutcome}` } },
-      { sort: { assignedAt: -1 }, session }
-    );
-
-    // Postponed serial tracking (use server-resolved serial so it matches Response / PrecallCompletion)
-    if (interviewOutcome === 'postponed' && serialNumber && String(serialNumber).trim() !== '') {
-      let sid;
-      if (req.body.surveyId && mongoose.Types.ObjectId.isValid(req.body.surveyId)) {
-        sid = new mongoose.Types.ObjectId(req.body.surveyId);
+      const qualifiedOutcomes = ['completed', 'partial'];
+      if (qualifiedOutcomes.includes(interviewOutcome) && !elig.canStartSurvey) {
+        const err = new Error('Not eligible to submit qualified responses for this session');
+        err.status = 403;
+        err.reason = elig.reason;
+        throw err;
       }
-      await PostponedSerial.create([{
-        agentId: user._id,
-        surveyId: sid,
-        statusStartedAt: user.statusStartedAt,
-        serialNumber: String(serialNumber),
-        source: 'survey',
-      }], { session });
-    }
 
-    await session.commitTransaction();
-    session.endSession();
+      const { category, disqualified } = categorizeInterviewOutcome(interviewOutcome);
+      let status = 'completed';
+      if (interviewOutcome === 'partial') status = 'partial';
+      else if (interviewOutcome === 'postponed') status = 'postponed';
+      else if (category === 'disqualified' || disqualified) status = 'disqualified';
+
+      const now = new Date();
+      const serialNumber =
+        elig.precallSerialNumber && String(elig.precallSerialNumber).trim() !== ''
+          ? String(elig.precallSerialNumber).trim()
+          : null;
+
+      const responseData = {
+        surveyId: req.body.surveyId,
+        answers: Array.isArray(req.body.answers) ? req.body.answers : [],
+        durationSecs: typeof req.body.durationSecs === 'number' ? req.body.durationSecs : 0,
+        agentId: req.user.id,
+        interviewOutcome,
+        outcomeCategory: category,
+        status,
+        sessionStatusStartedAt: user.statusStartedAt,
+        completedAt: now,
+        outcomeReason: req.body.outcomeReason || '',
+      };
+      if (serialNumber) responseData.serialNumber = serialNumber;
+
+      let saved;
+      if (serialNumber) {
+        const responseFilter = { serialNumber };
+        if (!isStaff) responseFilter.agentId = user._id;
+
+        saved = await Response.findOneAndUpdate(
+          responseFilter,
+          { $set: responseData },
+          { upsert: true, returnDocument: 'after', session }
+        );
+
+        const precallFilter = { serialNumber };
+        if (!isStaff) precallFilter.userId = user._id;
+
+        await PrecallCompletion.findOneAndUpdate(
+          precallFilter,
+          {
+            $set: {
+              interviewOutcome,
+              outcomeCategory: category,
+              outcomeReason: req.body.outcomeReason || '',
+              disqualified: disqualified || false,
+              'payload.interview_result': interviewOutcome,
+              'payload.outcome_reason': req.body.outcomeReason || '',
+            },
+          },
+          { session }
+        );
+      } else {
+        [saved] = await Response.create([responseData], { session });
+      }
+
+      let phoneFinalStatus = status;
+      if (phoneFinalStatus === 'partial') phoneFinalStatus = 'completed';
+      if (!['completed', 'disqualified', 'postponed'].includes(phoneFinalStatus)) {
+        phoneFinalStatus = 'completed';
+      }
+
+      const phoneFilter = serialNumber
+        ? { serialNumber }
+        : { agentId: user._id, surveyId: new mongoose.Types.ObjectId(String(req.body.surveyId)) };
+
+      await PhoneNumber.findOneAndUpdate(
+        phoneFilter,
+        { $set: { status: phoneFinalStatus, calledAt: now, outcomeReason: `Contacted | ${interviewOutcome}` } },
+        { sort: { assignedAt: -1 }, session }
+      );
+
+      if (interviewOutcome === 'postponed' && serialNumber) {
+        let sid;
+        if (req.body.surveyId && mongoose.Types.ObjectId.isValid(req.body.surveyId)) {
+          sid = new mongoose.Types.ObjectId(req.body.surveyId);
+        }
+        await PostponedSerial.create(
+          [{
+            agentId: user._id,
+            surveyId: sid,
+            statusStartedAt: user.statusStartedAt,
+            serialNumber: String(serialNumber),
+            source: 'survey',
+          }],
+          { session }
+        );
+      }
+
+      if (serialNumber) {
+        const draftFilter = { serialNumber };
+        if (!isStaff) draftFilter.agentId = user._id;
+        await Draft.deleteOne(draftFilter, { session });
+      }
+
+      return saved;
+    });
 
     const io = req.app.get('io');
     if (io) io.emit('stats-update');
 
     res.json(response);
   } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
     console.error('Submit Response Error:', err);
+    if (err.status === 403) {
+      return res.status(403).json({ error: err.message, reason: err.reason });
+    }
     res.status(500).json({ error: 'Failed to submit response' });
   }
 };
@@ -261,8 +313,30 @@ exports.exportCsv = async (req, res) => {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename=export_${survey.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.csv`);
 
+    const preScanResponses = await Response.find({ surveyId: new mongoose.Types.ObjectId(req.params.id) }, 'answers').lean();
+    const maxOtherCount = {};
+    preScanResponses.forEach(r => {
+      (r.answers || []).forEach(a => {
+        let count = 0;
+        if (Array.isArray(a.value)) {
+          count = a.value.filter(v => typeof v === 'string' && v.toLowerCase().startsWith('other:')).length;
+        } else if (typeof a.value === 'string' && (a.value.startsWith('Other: ') || a.value.startsWith('other:'))) {
+          count = 1;
+        }
+        if (count > (maxOtherCount[a.questionId] || 0)) {
+          maxOtherCount[a.questionId] = count;
+        }
+      });
+    });
+
     const headers = ['Submission Date', 'Status', 'Agent Name', 'Agent Email', 'Duration (sec)', 'Outcome Reason'];
-    questions.forEach(q => headers.push(q.text.replace(/,/g, '')));
+    questions.forEach(q => {
+      headers.push(q.text.replace(/,/g, ''));
+      const max = maxOtherCount[q.id] || 0;
+      for (let i = 2; i <= max; i++) {
+        headers.push(`${q.text.replace(/,/g, '')} (Other ${i})`);
+      }
+    });
     res.write('\uFEFF'); // BOM for Excel UTF-8
     res.write(headers.join(',') + '\n');
 
@@ -277,10 +351,18 @@ exports.exportCsv = async (req, res) => {
       ];
       questions.forEach(q => {
         const answer = (r.answers || []).find(a => a.questionId === q.id);
-        let val = answer ? answer.value : '';
-        val = encodeValue(val);
+        const parsed = parseAnswerValue(answer ? answer.value : null);
+        
+        let val = encodeValue(parsed.main);
         const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : val;
         row.push(`"${strVal}"`);
+        
+        const max = maxOtherCount[q.id] || 0;
+        for (let i = 2; i <= max; i++) {
+          let extraVal = encodeValue(parsed.others[i - 2] || '');
+          const strExtra = typeof extraVal === 'string' ? extraVal.replace(/"/g, '""').replace(/\n/g, ' ') : extraVal;
+          row.push(`"${strExtra}"`);
+        }
       });
       res.write(row.join(',') + '\n');
     });
@@ -319,13 +401,28 @@ exports.exportAdvanced = async (req, res) => {
       if (endDate) filter.completedAt.$lte = new Date(endDate);
     }
 
-    const responses = await Response.find(filter).populate('agentId', 'name email').sort({ completedAt: 1 }).lean();
 
     const questions = [];
     survey.sections.forEach(section => {
       section.questions.forEach(q => {
         const id = q.questionId || (q._id ? q._id.toString() : undefined);
         if (id) questions.push({ id, text: q.text, type: q.type, options: q.options || [] });
+      });
+    });
+
+    const preScanResponses = await Response.find(filter, 'answers').lean();
+    const maxOtherCount = {};
+    preScanResponses.forEach(r => {
+      (r.answers || []).forEach(a => {
+        let count = 0;
+        if (Array.isArray(a.value)) {
+          count = a.value.filter(v => typeof v === 'string' && v.toLowerCase().startsWith('other:')).length;
+        } else if (typeof a.value === 'string' && (a.value.startsWith('Other: ') || a.value.startsWith('other:'))) {
+          count = 1;
+        }
+        if (count > (maxOtherCount[a.questionId] || 0)) {
+          maxOtherCount[a.questionId] = count;
+        }
       });
     });
 
@@ -337,7 +434,13 @@ exports.exportAdvanced = async (req, res) => {
       res.write('\uFEFF'); // BOM
 
       const headers = ['Serial', 'Submission_Date', 'Status', 'Interview_Outcome', 'Outcome_Reason', 'Agent_Name', 'Duration_Secs'];
-      questions.forEach(q => headers.push(q.text.replace(/,/g, '')));
+      questions.forEach(q => {
+        headers.push(q.text.replace(/,/g, ''));
+        const max = maxOtherCount[q.id] || 0;
+        for (let i = 2; i <= max; i++) {
+          headers.push(`${q.text.replace(/,/g, '')} (Other ${i})`);
+        }
+      });
       res.write(headers.join(',') + '\n');
 
       const cursor = Response.find(filter).populate('agentId', 'name email').sort({ completedAt: 1 }).cursor({ batchSize: 1000 });
@@ -354,9 +457,18 @@ exports.exportAdvanced = async (req, res) => {
         ];
         questions.forEach(q => {
           const answer = (r.answers || []).find(a => a.questionId === q.id);
-          let val = answer ? encodeValue(answer.value) : '';
+          const parsed = parseAnswerValue(answer ? answer.value : null);
+          
+          let val = encodeValue(parsed.main);
           const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : val;
           row.push(`"${strVal}"`);
+          
+          const max = maxOtherCount[q.id] || 0;
+          for (let i = 2; i <= max; i++) {
+            let extraVal = encodeValue(parsed.others[i - 2] || '');
+            const strExtra = typeof extraVal === 'string' ? extraVal.replace(/"/g, '""').replace(/\n/g, ' ') : extraVal;
+            row.push(`"${strExtra}"`);
+          }
         });
         res.write(row.join(',') + '\n');
       });
@@ -384,7 +496,13 @@ exports.exportAdvanced = async (req, res) => {
       };
       questions.forEach(q => {
         const answer = (r.answers || []).find(a => a.questionId === q.id);
-        row[q.text] = answer ? encodeValue(answer.value) : '';
+        const parsed = parseAnswerValue(answer ? answer.value : null);
+        row[q.text] = encodeValue(parsed.main);
+        
+        const max = maxOtherCount[q.id] || 0;
+        for (let i = 2; i <= max; i++) {
+          row[`${q.text} (Other ${i})`] = encodeValue(parsed.others[i - 2] || '');
+        }
       });
       return row;
     });
@@ -421,6 +539,17 @@ exports.exportAdvanced = async (req, res) => {
           width: isNumeric ? 8 : 255,
           decimal: 0,
         });
+
+        const max = maxOtherCount[q.id] || 0;
+        for (let i = 2; i <= max; i++) {
+          vars.push({
+            name: `Q${idx + 1}_OTHER${i}`,
+            label: `${q.text.substring(0, 240)} (Other ${i})`,
+            type: VariableType.String,
+            width: 255,
+            decimal: 0
+          });
+        }
       });
 
       const records = responses.map(r => {
@@ -435,8 +564,8 @@ exports.exportAdvanced = async (req, res) => {
         ];
         questions.forEach(q => {
           const answer = r.answers.find(a => a.questionId === q.id);
-          const rawVal = answer ? answer.value : '';
-          const encoded = encodeValue(rawVal);
+          const parsed = parseAnswerValue(answer ? answer.value : null);
+          const encoded = encodeValue(parsed.main);
           
           const isYesNo = q.options?.some(opt => ['Yes', 'No', 'نعم', 'لا'].includes(opt.trim()));
           const isNumeric = q.type === 'number' || q.type === 'rating' || isYesNo;
@@ -445,6 +574,11 @@ exports.exportAdvanced = async (req, res) => {
             rec.push(Number.isFinite(encoded) ? encoded : (Number(encoded) || 0));
           } else {
             rec.push(String(encoded));
+          }
+
+          const max = maxOtherCount[q.id] || 0;
+          for (let i = 2; i <= max; i++) {
+            rec.push(String(encodeValue(parsed.others[i - 2] || '')));
           }
         });
         return rec;

@@ -72,7 +72,10 @@ export const AuthProvider = ({ children }) => {
 
         // Connect socket for status sync
         if (!socketRef.current) {
-          socketRef.current = io(SOCKET_BASE);
+          const token = localStorage.getItem('token');
+          socketRef.current = io(SOCKET_BASE, {
+            auth: { token },
+          });
           socketRef.current.emit('join-monitoring', { id: nextUser.id, role: nextUser.role });
           
           socketRef.current.on('status-pushed', (data) => {
@@ -112,7 +115,7 @@ export const AuthProvider = ({ children }) => {
     const fullUser = me.data.user;
     localStorage.setItem('user', JSON.stringify(fullUser));
     setUser(fullUser);
-    if (fullUser.role === 'admin') navigate('/admin');
+    if (fullUser.role === 'admin' || fullUser.role === 'quality') navigate('/admin');
     else navigate('/');
   };
 

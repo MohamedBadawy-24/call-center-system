@@ -18,6 +18,10 @@ const QuestionSchema = new mongoose.Schema({
   category: String, // intro, screening, demographic, main
   type: String, // text, single_choice, multiple_choice, info
   choices: [ChoiceSchema],
+  allowOther: { type: Boolean, default: false },
+  allowMultipleOther: { type: Boolean, default: false },
+  minSelections: { type: Number },
+  maxSelections: { type: Number },
   visibility: { type: mongoose.Schema.Types.Mixed, default: undefined }, // Advanced nested logic
 });
 
@@ -40,11 +44,13 @@ const SurveySchema = new mongoose.Schema({
   outboundPrecall: { type: mongoose.Schema.Types.Mixed, default: undefined },
   sections: [SectionSchema],
   goal: { type: Number, default: 0 },
+  targetGovernorate: { type: String, default: 'All' },
   governorateGoals: [{
     governorate: String,
     goal: Number
   }],
   isActive: { type: Boolean, default: true },
+  draftData: { type: mongoose.Schema.Types.Mixed, default: undefined },
   createdAt: { type: Date, default: Date.now },
 });
 

@@ -1,9 +1,10 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { LogIn, Mail, Lock, ShieldCheck } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { UIContext } from '../context/UIContext';
+import { api } from '../api/client';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -13,6 +14,16 @@ export default function Login() {
   
   const { login } = useContext(AuthContext);
   const { t } = useContext(UIContext);
+  const [hasUsers, setHasUsers] = useState(true);
+
+  useEffect(() => {
+    api.get('/auth/has-users')
+      .then(res => {
+        setHasUsers(res.data.hasUsers);
+        console.log('hasUsers response:', res.data.hasUsers);
+      })
+      .catch(err => console.error('Failed to check users:', err));
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -119,7 +130,7 @@ export default function Login() {
           <button 
             type="submit" 
             className="btn-primary" 
-            style={{ width: '100%', padding: '1rem' }}
+            style={{ width: '100%', padding: '1rem', marginBottom: !hasUsers ? '1rem' : '0' }}
             disabled={isLoading}
           >
             {isLoading ? (
@@ -128,6 +139,12 @@ export default function Login() {
               <><LogIn size={20} /> {t('signIn')}</>
             )}
           </button>
+          
+          {!hasUsers && (
+            <Link to="/register" style={{ display: 'block', textAlign: 'center', color: 'var(--primary)', fontWeight: 'bold', textDecoration: 'none' }}>
+              Create Initial Admin Account
+            </Link>
+          )}
         </form>
       </motion.div>
     </div>

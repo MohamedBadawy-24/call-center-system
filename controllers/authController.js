@@ -1,11 +1,11 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const mongoose = require('mongoose');
 const User = require('../models/User');
 const ProfileRequest = require('../models/ProfileRequest');
 const StatusLog = require('../models/StatusLog');
 const sendEmail = require('../utils/mailer');
 const { computePrecallCompletedForSession } = require('../services/precallService');
+const { runTransaction } = require('../utils/runTransaction');
 
 const validatePassword = (password) => {
   const regex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@_\-.])[a-zA-Z\d@_\-.]{8,}$/;
@@ -14,6 +14,16 @@ const validatePassword = (password) => {
   }
   return null;
 };
+
+const signToken = (payload) =>
+  new Promise((resolve, reject) => {
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) return reject(new Error('JWT_SECRET missing'));
+    jwt.sign(payload, jwtSecret, { expiresIn: '8h' }, (err, token) => {
+      if (err) reject(err);
+      else resolve(token);
+    });
+  });
 
 exports.hasUsers = async (req, res) => {
   try {
@@ -38,16 +48,18 @@ exports.register = async (req, res) => {
       const jwtSecret = process.env.JWT_SECRET;
       if (!jwtSecret) return res.status(500).json({ error: 'System configuration error: JWT_SECRET missing' });
       const decoded = jwt.verify(tokenHeader.replace('Bearer ', ''), jwtSecret);
-      if (decoded.role !== 'admin') return res.status(403).json({ error: 'Only admins can register users' });
+      const requestingUser = await User.findById(decoded.id).select('role');
+      if (!requestingUser || requestingUser.role !== 'admin') {
+        return res.status(403).json({ error: 'Only admins can register users' });
+      }
     }
 
-    let user = await User.findOne({ email });
-    if (user) return res.status(400).json({ error: 'User already exists' });
+    const existing = await User.findOne({ email });
+    if (existing) return res.status(400).json({ error: 'User already exists' });
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
-    user = new User({ name, email, password: hashedPassword, role: finalRole });
-    await user.save();
+    await User.create({ name, email, password: hashedPassword, role: finalRole });
     res.json({ message: 'User registered successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -60,34 +72,55 @@ exports.login = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(400).json({ error: 'Invalid credentials' });
 
+    if (user.suspended) {
+      return res.status(403).json({
+        error: 'Your account has been temporarily suspended. Please contact your quality supervisor.',
+      });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ error: 'Invalid credentials' });
 
-    const payload = { id: user._id, name: user.name, role: user.role };
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) return res.status(500).json({ error: 'System configuration error: JWT_SECRET missing' });
+    const payload = {
+      id: user._id,
+      name: user.name,
+      role: user.role,
+    };
 
     if (user.role !== 'admin') {
       const now = new Date();
-      const lastLog = await StatusLog.findOne({ userId: user.id, endTime: { $exists: false } }).sort({ startTime: -1 });
-      if (lastLog) {
-        lastLog.endTime = now;
-        lastLog.durationSecs = Math.floor((now - lastLog.startTime) / 1000);
-        await lastLog.save();
-      }
-      user.currentStatus = 'preparing';
-      user.statusStartedAt = now;
-      await user.save();
-      await StatusLog.create({ userId: user.id, status: 'preparing', startTime: now });
+      await runTransaction(async (session) => {
+        const lastLog = await StatusLog.findOne(
+          { userId: user._id, endTime: { $exists: false } }
+        )
+          .sort({ startTime: -1 })
+          .session(session);
+
+        if (lastLog) {
+          lastLog.endTime = now;
+          lastLog.durationSecs = Math.floor((now - lastLog.startTime) / 1000);
+          await lastLog.save({ session });
+        }
+
+        user.currentStatus = 'preparing';
+        user.statusStartedAt = now;
+        user.precallCompletedForActiveSession = false;
+        await user.save({ session });
+
+        await StatusLog.create(
+          [{ userId: user._id, status: 'preparing', startTime: now }],
+          { session }
+        );
+      });
+
       payload.currentStatus = 'preparing';
-      payload.statusStartedAt = now;
+      payload.statusStartedAt = user.statusStartedAt;
     }
 
-    jwt.sign(payload, jwtSecret, { expiresIn: '8h' }, (err, token) => {
-      if (err) throw err;
-      res.json({ token, user: payload });
-    });
+    const token = await signToken(payload);
+    res.json({ token, user: payload });
   } catch (err) {
+    console.error('Login error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 };
@@ -152,14 +185,20 @@ exports.resetPassword = async (req, res) => {
     if (passError) return res.status(400).json({ error: passError });
 
     const user = await User.findOne({ email });
-    if (!user || !user.resetCode || !user.resetCodeExpires) return res.status(400).json({ error: 'Invalid request' });
-    if (Date.now() > user.resetCodeExpires) return res.status(400).json({ error: 'Code has expired' });
+    if (!user || !user.resetCode || !user.resetCodeExpires) {
+      return res.status(400).json({ error: 'Invalid request' });
+    }
+    if (Date.now() > user.resetCodeExpires) {
+      return res.status(400).json({ error: 'Code has expired' });
+    }
 
     const isMatch = await bcrypt.compare(code, user.resetCode);
     if (!isMatch) return res.status(400).json({ error: 'Invalid reset code' });
 
     const isSameAsOld = await bcrypt.compare(newPassword, user.password);
-    if (isSameAsOld) return res.status(400).json({ error: 'New password must be different from the old password.' });
+    if (isSameAsOld) {
+      return res.status(400).json({ error: 'New password must be different from the old password.' });
+    }
 
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(newPassword, salt);
@@ -175,7 +214,7 @@ exports.resetPassword = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const { name, email, oldPassword, password } = req.body;
-    let user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     if (user.role === 'agent') {
@@ -188,7 +227,9 @@ exports.updateProfile = async (req, res) => {
       const passError = validatePassword(password);
       if (passError) return res.status(400).json({ error: passError });
       if (!oldPassword) return res.status(400).json({ error: 'Old password is required to set a new password.' });
-      if (oldPassword === password) return res.status(400).json({ error: 'New password must be different from the old password.' });
+      if (oldPassword === password) {
+        return res.status(400).json({ error: 'New password must be different from the old password.' });
+      }
       const isMatch = await bcrypt.compare(oldPassword, user.password);
       if (!isMatch) return res.status(400).json({ error: 'Old password is incorrect.' });
       const salt = await bcrypt.genSalt(10);
@@ -198,19 +239,22 @@ exports.updateProfile = async (req, res) => {
     if (name) user.name = name;
     if (email) {
       const existingUser = await User.findOne({ email });
-      if (existingUser && existingUser.id !== req.user.id) return res.status(400).json({ error: 'Email already in use' });
+      if (existingUser && existingUser.id !== req.user.id) {
+        return res.status(400).json({ error: 'Email already in use' });
+      }
       user.email = email;
     }
     await user.save();
 
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) return res.status(500).json({ error: 'System configuration error: JWT_SECRET missing' });
-
-    const payload = { id: user._id, name: user.name, role: user.role, currentStatus: user.currentStatus, statusStartedAt: user.statusStartedAt };
-    jwt.sign(payload, jwtSecret, { expiresIn: '8h' }, (err, token) => {
-      if (err) throw err;
-      res.json({ token, user: payload, message: 'Profile updated successfully' });
-    });
+    const payload = {
+      id: user._id,
+      name: user.name,
+      role: user.role,
+      currentStatus: user.currentStatus,
+      statusStartedAt: user.statusStartedAt,
+    };
+    const token = await signToken(payload);
+    res.json({ token, user: payload, message: 'Profile updated successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -224,13 +268,20 @@ exports.requestProfileChange = async (req, res) => {
     const pending = await ProfileRequest.findOne({ userId: req.user.id, type, status: 'pending' });
     if (pending) return res.status(400).json({ error: `You already have a pending ${type} change request.` });
 
-    const lastApproved = await ProfileRequest.findOne({ userId: req.user.id, type, status: 'approved' }).sort({ resolvedAt: -1 });
-    if (lastApproved && lastApproved.resolvedAt) {
+    const lastApproved = await ProfileRequest.findOne({
+      userId: req.user.id,
+      type,
+      status: 'approved',
+    }).sort({ resolvedAt: -1 });
+
+    if (lastApproved?.resolvedAt) {
       const cooldownPeriod = 24 * 60 * 60 * 1000;
       const timeSinceResolution = Date.now() - lastApproved.resolvedAt.getTime();
       if (timeSinceResolution < cooldownPeriod) {
         const remainingHours = Math.ceil((cooldownPeriod - timeSinceResolution) / (60 * 60 * 1000));
-        return res.status(403).json({ error: `You must wait ${remainingHours} more hours before requesting another ${type} change after an approval.` });
+        return res.status(403).json({
+          error: `You must wait ${remainingHours} more hours before requesting another ${type} change after an approval.`,
+        });
       }
     }
 
@@ -320,31 +371,41 @@ exports.updateStatus = async (req, res) => {
     }
 
     const user = await User.findById(req.user.id);
-    if (!['agent', 'quality'].includes(user.role)) {
+    if (!user || !['agent', 'quality'].includes(user.role)) {
       return res.status(403).json({ error: 'Unauthorized status role' });
     }
 
     const now = new Date();
-    const lastLog = await StatusLog.findOne({ userId: user.id, endTime: { $exists: false } }).sort({ startTime: -1 });
-    if (lastLog) {
-      lastLog.endTime = now;
-      lastLog.durationSecs = Math.floor((now - lastLog.startTime) / 1000);
-      await lastLog.save();
-    }
+    await runTransaction(async (session) => {
+      const lastLog = await StatusLog.findOne(
+        { userId: user._id, endTime: { $exists: false } }
+      )
+        .sort({ startTime: -1 })
+        .session(session);
 
-    user.currentStatus = status;
-    user.currentBreakReason = status === 'break' ? breakReason : null;
-    user.statusStartedAt = now;
-    await user.save();
+      if (lastLog) {
+        lastLog.endTime = now;
+        lastLog.durationSecs = Math.floor((now - lastLog.startTime) / 1000);
+        await lastLog.save({ session });
+      }
 
-    await StatusLog.create({
-      userId: user.id,
-      status,
-      breakReason: status === 'break' ? breakReason : null,
-      startTime: now,
+      user.currentStatus = status;
+      user.currentBreakReason = status === 'break' ? breakReason : null;
+      user.statusStartedAt = now;
+      user.precallCompletedForActiveSession = false;
+      await user.save({ session });
+
+      await StatusLog.create(
+        [{
+          userId: user._id,
+          status,
+          breakReason: status === 'break' ? breakReason : null,
+          startTime: now,
+        }],
+        { session }
+      );
     });
 
-    // Emit via the io instance attached to app
     const io = req.app.get('io');
     if (io) io.emit('stats-update');
 

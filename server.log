@@ -1,0 +1,5 @@
+◇ injected env (5) from .env // tip: ⌘ suppress logs { quiet: true }
+Connecting to MongoDB...
+Server (with Real-time Support) running on http://localhost:3000
+MongoDB Connected ✅
+Email notification failed: Missing credentials for "PLAIN"

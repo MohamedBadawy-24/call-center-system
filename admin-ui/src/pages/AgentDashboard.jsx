@@ -56,7 +56,7 @@ export default function AgentDashboard() {
         }
         
         if (statsRes.status === 'fulfilled' && statsRes.value.data && statsRes.value.data.length > 0) {
-          const myStats = statsRes.value.data.find(a => a._id === user.id);
+          const myStats = statsRes.value.data.find(a => String(a._id) === String(user.id));
           if (myStats) setStats(myStats);
         }
 
@@ -81,7 +81,9 @@ export default function AgentDashboard() {
       const startStreaming = async () => {
         try {
           // Initialize Socket
+          const token = localStorage.getItem('token');
           socketRef.current = io(SOCKET_BASE, {
+            auth: { token },
             transports: ['websocket', 'polling'],
             reconnection: true,
             reconnectionAttempts: Infinity,
@@ -194,8 +196,8 @@ export default function AgentDashboard() {
   };
 
   const handleStartSurvey = (e, surveyId) => {
-    const isAdmin = user.role === 'admin';
-    if (!isAdmin && user.currentStatus !== 'active') {
+    const isStaff = user.role === 'admin' || user.role === 'quality';
+    if (!isStaff && user.currentStatus !== 'active') {
       e.preventDefault();
       alert(t('mustBeActive'));
       return;
@@ -298,8 +300,8 @@ export default function AgentDashboard() {
 
       <motion.div variants={itemVariants} className="choice-grid">
         {surveys.map(s => {
-          const isAdmin = user.role === 'admin';
-          const isActive = user.currentStatus === 'active' || isAdmin;
+          const isStaff = user.role === 'admin' || user.role === 'quality';
+          const isActive = user.currentStatus === 'active' || isStaff;
           return (
             <motion.div 
               variants={itemVariants}
@@ -319,7 +321,7 @@ export default function AgentDashboard() {
                 {new Date(s.createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
               </p>
               
-              {!isActive && !isAdmin && (
+              {!isActive && !isStaff && (
                 <div style={{ fontSize: '0.75rem', color: 'var(--danger)', marginTop: '1rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   ⚠ {t('mustBeActive')}
                 </div>

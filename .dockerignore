@@ -1,0 +1,14 @@
+node_modules
+admin-ui/node_modules
+.git
+.env
+admin-ui/.env
+uploads/*
+!uploads/.gitkeep
+scratch
+server_backup.js
+test.js
+test-email.js
+seed-test.js
+e2e_results.json
+.cursor

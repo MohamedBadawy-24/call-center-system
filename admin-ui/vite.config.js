@@ -6,7 +6,18 @@ export default defineConfig({
     react()
   ],
   server: {
-    port: 3001
+    port: 5000,
+    host: '0.0.0.0',
+    allowedHosts: true,
+    proxy: {
+      '/auth': 'http://localhost:3000',
+      '/admin': 'http://localhost:3000',
+      '/agent': 'http://localhost:3000',
+      '/survey': 'http://localhost:3000',
+      '/surveys': 'http://localhost:3000',
+      '/response': 'http://localhost:3000',
+      '/responses': 'http://localhost:3000',
+    }
   },
   test: {
     environment: 'jsdom',
@@ -16,4 +27,3 @@ export default defineConfig({
     fileParallelism: false,
   }
 });
-

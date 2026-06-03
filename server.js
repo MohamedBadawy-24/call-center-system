@@ -221,6 +221,8 @@ app.get("/surveys", auth, async (req, res) => {
 // TOGGLE SURVEY STATUS (Admin Only)
 app.put("/surveys/:id/toggle", adminAuth, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id))
+      return res.status(404).json({ error: "Survey not found" });
     const survey = await Survey.findById(req.params.id);
     if (!survey) return res.status(404).json({ error: "Survey not found" });
 

@@ -22,3 +22,8 @@ admin-ui/dist/
 ### uploads
 uploads/
 
+### database files
+data/db/
+
+### local configs
+.local/

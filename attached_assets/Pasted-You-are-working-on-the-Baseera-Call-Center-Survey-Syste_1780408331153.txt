@@ -1,0 +1,305 @@
+You are working on the **Baseera Call Center Survey System**. Before writing any test code, read every file listed at the bottom. Do not write a single test until you have seen the relevant source file for that area. This is a live production codebase — tests must be non-destructive and run against isolated local data only.
+
+---
+
+## PART 1 — ENVIRONMENT SETUP
+
+### 1.1 Prerequisites
+Confirm the following are running before any test is executed:
+- `docker-compose up` has started both the Express app container and the MongoDB replica set container
+- The replica set is initialized (`rs.status()` shows a primary node)
+- The frontend Vite dev server is running (`npm run dev` inside `admin-ui/`)
+- At least the following seed accounts exist in the database:
+  - 1 Admin account
+  - 1 Quality account
+  - 2 Agent accounts (Agent A and Agent B)
+  - 1 active Campaign with at least 20 phone numbers uploaded
+
+### 1.2 Test Data Contract
+- All test phone numbers must use a dedicated test prefix (e.g. `0100000XXXX`) so they can be bulk-deleted after testing
+- All test responses created during the run must be tagged or noted so they can be cleaned up
+- Never run destructive tests (delete user, delete campaign, clear queue) against real data
+
+---
+
+## PART 2 — AUTOMATED API TEST SCRIPTS
+
+Write a self-contained test suite using **Jest + Axios** (no Supertest — hit the running Docker container directly at `http://localhost:PORT`). Organize tests into the following files under a new `/tests` directory at the project root:
+
+---
+
+### `tests/auth.test.js`
+**Authentication & Session**
+- `POST /auth/login` with valid credentials → expect `200` + JWT token in response
+- `POST /auth/login` with wrong password → expect `401`
+- `POST /auth/login` with suspended account → expect `403`
+- `GET /auth/me` with valid token → expect `200` + correct user object
+- `GET /auth/me` with no token → expect `401`
+- `GET /auth/me` with expired/malformed token → expect `401`
+- Rate limiting: fire 10 rapid login attempts with wrong password → expect `429` on the final attempts
+
+---
+
+### `tests/agent-workflow.test.js`
+**Full Agent Call Workflow (W1)**
+Run these in order as a stateful sequence using `beforeAll` / `afterAll`:
+
+1. Set Agent A status to `active` → expect `statusStartedAt` to be written
+2. Call `GET /agent/next-number` → expect a phone number assigned with `sessionStatusStartedAt` matching agent's `statusStartedAt`
+3. Call `POST /agent/precall-complete` with a valid payload (contacted, age ≥ 18, no `interviewOutcome`) → expect:
+   - `200` response
+   - `PrecallCompletion` document created in DB with `disqualified: false` (**B1 regression**)
+   - `serialNumber` written to both `PrecallCompletion` and `PhoneNumber`
+4. Call `POST /agent/precall-complete` with a blank age field → expect the age gate to return null/invalid, not `0` (**B2 regression**)
+5. Call `POST /response` with valid survey answers and `interviewOutcome: 'completed'` → expect:
+   - `200` response
+   - `Response` document created
+   - `PhoneNumber.status` updated to `'completed'`
+   - `PrecallCompletion` final outcome updated
+   - `Draft` for this serial deleted
+   - All three writes confirmed in DB (transaction integrity — **B3/B4 regression**)
+6. Call `POST /response` a second time with the same `serialNumber` → expect `409` or appropriate rejection (duplicate guard)
+7. Set Agent A status to `break` then attempt `GET /agent/next-number` → expect `403` (R1 enforcement)
+
+---
+
+### `tests/draft.test.js`
+**Draft Autosave & Resume (W2)**
+- `POST /agent/draft` with valid payload → expect `200` + draft upserted in DB
+- `GET /agent/draft/:serialNumber` → expect saved answers and `currentIdx` returned
+- After `POST /response` (final submit) → expect draft for that serial no longer exists in DB
+- Confirm TTL index is set to 7 days on the `drafts` collection (`db.drafts.getIndexes()`)
+
+---
+
+### `tests/handover.test.js`
+**Call Handover (W3)**
+- Assign a number to Agent A, complete precall
+- Call `POST /agent/handover` transferring to Agent B → expect:
+  - `PrecallCompletion.userId` updated to Agent B
+  - `PhoneNumber.agentId` updated to Agent B
+  - `Draft.agentId` updated to Agent B (if draft exists)
+- Verify Agent A's active number slot is cleared after handover
+
+---
+
+### `tests/campaign.test.js`
+**Campaign Lifecycle & Edit Guard (W4 + B8)**
+- `PUT /survey/:id` on an **active** campaign → expect `403` or appropriate block
+- Set campaign to inactive, then `PUT /survey/:id` → expect `200` and changes persisted (**B8 regression** — must succeed even when responses exist)
+- `PUT /survey/:id` on inactive campaign with existing responses → expect `200` (response count must NOT block the edit)
+- Toggle campaign back to active → expect `isActive: true` in DB
+- Attempt `PUT /survey/:id` again → expect blocked again
+
+---
+
+### `tests/bulk-upload.test.js`
+**Bulk Phone Number Upload (W5 + B7)**
+- `POST /admin/survey/:id/upload` with a valid `.xlsx` file containing 5 numbers → expect:
+  - `200` response
+  - 5 new `PhoneNumber` documents in DB with consecutive `serialNumber` values
+  - `Counter` collection updated to reflect new max sequence
+- Upload the same file again → expect duplicates to be skipped, no duplicate documents inserted
+- Upload a file with invalid numbers (fewer than 7 digits, letters) → expect those rows rejected, valid rows still inserted
+- (**B7 regression**) Confirm the upload endpoint is reachable independently of the campaign Save button — test it as a standalone `multipart/form-data` POST
+
+---
+
+### `tests/exports.test.js`
+**Dataset Export (W6 + Other-prefix fix)**
+- `GET /admin/survey/:id/export?format=xlsx` → expect `200` + valid Excel binary (check `Content-Type: application/vnd.openxmlformats...`)
+- Parse the returned Excel file and assert:
+  - No cell value starts with `"other:"` or `"Other: "` (prefix strip regression)
+  - Multi-other answers appear in separate columns, not as a JSON array string in one cell
+  - Extra columns are named `{Question Text} (Other 2)`, `(Other 3)`, etc.
+  - Rows with fewer other values than the max have empty strings in the extra columns
+- `GET /admin/survey/:id/export?format=csv` → expect `200` + valid UTF-8 CSV, same prefix and column assertions
+- `GET /admin/survey/:id/export?format=spss` → expect `200` + binary `.sav` response
+
+---
+
+### `tests/rbac.test.js`
+**Role-Based Access Control**
+- Agent token hitting `GET /admin/users` → expect `403`
+- Quality token hitting `POST /admin/register` → expect `403`
+- Agent token hitting `DELETE /admin/survey/:id/numbers` → expect `403`
+- No token hitting any protected route → expect `401`
+- Suspended agent token hitting `GET /agent/next-number` → expect `403`
+- Admin trying to delete their own account → expect `400` or appropriate rejection
+- Admin trying to delete the last remaining admin → expect `400`
+
+---
+
+### `tests/websocket.test.js`
+**Socket.io Broadcasts (B5 regression)**
+Connect a Socket.io test client and listen for `"stats-update"` events. For each of the following actions, assert that a `"stats-update"` event is received within 2 seconds after the HTTP response returns:
+- `POST /quality/suspend-agent/:id`
+- `POST /quality/unsuspend-agent/:id`
+- `DELETE /admin/survey/:id/numbers`
+- `POST /reviews`
+- `POST /reviews/:responseId/flag`
+- `PUT /admin/settings/dailyGoal`
+- `POST /sops`
+- `POST /admin/resolve-profile-request/:id`
+
+---
+
+## PART 3 — MANUAL BROWSER CHECKLIST
+
+Execute the following manually in the browser at `http://localhost:VITE_PORT`. Check off each item. Mark each as **PASS**, **FAIL**, or **SKIP** (with reason).
+
+---
+
+### AUTH & SESSION
+- [ ] Login with valid Admin credentials → lands on Admin Dashboard
+- [ ] Login with wrong password → shows error message (not a blank screen)
+- [ ] Login with suspended account → shows suspension message
+- [ ] Refresh page while logged in → session persists (token in storage, user not logged out)
+- [ ] Logout → redirected to Login, protected routes inaccessible
+
+---
+
+### AGENT WORKFLOW
+- [ ] Agent logs in → sees Agent Dashboard
+- [ ] Agent sets status to `active` → status badge updates, `statusStartedAt` set
+- [ ] Agent sets status to `break` → break reason dropdown appears (Lunch / Meeting)
+- [ ] Agent on break clicks "Get Number" → blocked with appropriate message
+- [ ] Agent sets status back to `active` → can proceed
+- [ ] Agent clicks "Get Number" → phone number appears on Pre-call Checklist
+- [ ] Agent fills checklist with age < 18 → "New Form" button activates, "Next" stays locked
+- [ ] Agent fills checklist with age ≥ 18, call result = contacted → "Next" button unlocks
+- [ ] Agent clicks "Next" → **B1 regression**: `PrecallCompletion` must NOT be saved as `disqualified: true`; agent must reach `/take-survey` page successfully
+- [ ] Agent leaves age field blank (whitespace only) → **B2 regression**: must not pass age gate as age `0`; must show inline validation error
+- [ ] Agent reaches survey → answers questions, branching logic skips correct questions
+- [ ] Agent autosave works → change an answer, reload the page → answers and position restored
+- [ ] Agent reaches final outcome page → selects `interviewOutcome`, submits
+- [ ] After submission → agent returned to dashboard, number slot cleared, next number fetchable
+
+---
+
+### SURVEY BUILDER & CAMPAIGN
+- [ ] Admin opens Survey Builder for an **active** campaign → Save button is **disabled**
+- [ ] Warning message visible next to Save button: "Campaign is active. Switch it to inactive to make edits." — **B2 (builder warning) regression**
+- [ ] Admin sets campaign to **inactive** → Save button becomes enabled, warning disappears
+- [ ] Admin edits a question, clicks Save → **B8 regression**: changes persist in DB even when responses exist
+- [ ] Admin adds a question with `allowOther: true` → secondary toggle "Allow multiple Other entries" appears below it
+- [ ] Admin enables `allowMultipleOther` on a question, saves → setting persisted
+- [ ] Admin sets campaign back to **active** → Save blocked again
+
+---
+
+### MULTI-OTHER ANSWER INPUT (AGENT)
+- [ ] Agent reaches a single-choice question with `allowMultipleOther: true`, selects "Other" → single text field appears
+- [ ] Agent presses Enter or clicks "+ Add another" → second text field appends and is focused
+- [ ] Agent presses the `−` remove button on a field → field removed; first field's remove button disabled when only one remains
+- [ ] Agent submits with all Other fields empty while "Other" is selected → inline red border + helper text appears (no toast-only error)
+- [ ] Same behavior confirmed on a multiple-choice question with `allowMultipleOther: true`
+
+---
+
+### QUALITY & ADMIN MANAGEMENT
+- [ ] Admin opens User Management → agent list visible with status badges
+- [ ] Admin suspends an agent → **B5 regression**: live dashboard updates without manual refresh
+- [ ] Admin unsuspends agent → dashboard updates again
+- [ ] Quality user logs in → cannot see Register or Campaign management links
+- [ ] Quality opens Response History → flag button visible per response
+- [ ] Quality clicks Flag → **B3 (flag modal) regression**: modal opens and is fully interactable, backdrop does not block it
+- [ ] Quality selects flag reason, confirms → flag saved, response marked
+
+---
+
+### SHADOW REVIEW
+- [ ] Quality opens Shadow Review for a completed response → all questions pre-populated with original answers
+- [ ] Quality re-enters answers and submits → review saved, no duplicate response created
+
+---
+
+### EXPORTS
+- [ ] Admin exports campaign as Excel → file downloads
+- [ ] Open downloaded file → **Other-prefix regression**: no cell contains `"other:"` or `"Other: "` prefix
+- [ ] Multi-other answers appear in separate columns (`Question (Other 2)`, `(Other 3)`) not as a JSON array
+- [ ] Admin exports as CSV → same prefix and column checks
+- [ ] Admin exports as SPSS → `.sav` file downloads without error
+
+---
+
+### LIVE MONITORING & REAL-TIME
+- [ ] Quality opens Live Monitoring → active agents visible with correct status and elapsed time
+- [ ] Agent changes status → Live Monitoring updates within ~2 seconds without page refresh
+- [ ] Admin Dashboard goal counter updates after a new response is submitted
+
+---
+
+### PROFILE & SETTINGS
+- [ ] Agent submits a profile change request (name or email) → request appears in Admin's Profile Requests panel
+- [ ] Admin approves request → agent's profile updated, email notification sent
+- [ ] Agent changes password → old password rejected on next login, new password accepted
+- [ ] Admin updates daily goal → **B5 regression**: dashboard goal counter updates live
+
+---
+
+### SOP UPDATES
+- [ ] Admin posts a new SOP update → agents see the SOP notification badge on next login
+- [ ] Agent acknowledges SOP → badge clears, `lastSeenSopAt` updated
+
+---
+
+## PART 4 — BUG REGRESSION SUMMARY TABLE
+
+After all tests are complete, fill in this table:
+
+| Bug ID | Description | Automated Test | Manual Check | Status |
+|--------|-------------|---------------|--------------|--------|
+| B1 | Precall disqualified:true blocking survey start | `agent-workflow.test.js` step 3 | Agent Workflow checklist | |
+| B2 | Whitespace age resolves to 0 | `agent-workflow.test.js` step 4 | Agent Workflow checklist | |
+| B3 | Precall submit missing transaction | `agent-workflow.test.js` step 5 | — | |
+| B4 | eligibility check outside transaction | `agent-workflow.test.js` step 5 | — | |
+| B5 | Missing socket broadcasts | `websocket.test.js` | Admin/Quality checklist | |
+| B6 | Toast-only field validation | — | Multi-other + Agent checklist | |
+| B7 | Phone upload silent failure | `bulk-upload.test.js` | — | |
+| B8 | Campaign edit blocked by response count | `campaign.test.js` | Survey Builder checklist | |
+
+---
+
+## PART 5 — TEST RUNNER SETUP
+
+### `tests/setup.js`
+Create a shared setup file that:
+- Reads `BASE_URL` from `.env.test` (default: `http://localhost:5000`)
+- Logs in as Admin, Agent A, Agent B, and Quality once using `beforeAll` and stores their JWT tokens in a shared module
+- Exports `{ adminToken, agentAToken, agentBToken, qualityToken }` for use across all test files
+
+### `package.json` additions
+Add the following scripts:
+```json
+"test": "jest --runInBand --testPathPattern=tests/",
+"test:auth": "jest tests/auth.test.js",
+"test:agent": "jest tests/agent-workflow.test.js",
+"test:exports": "jest tests/exports.test.js",
+"test:ws": "jest tests/websocket.test.js"
+```
+`--runInBand` is required because the agent workflow tests are stateful and must run serially.
+
+---
+
+## Coding Standards to Follow
+
+- Read every relevant source file before writing a test for it
+- Tests must not hardcode ObjectIds — fetch them dynamically from the API or DB in `beforeAll`
+- Every test that creates data must clean it up in `afterAll`
+- No test should depend on the order of another test file — only within `agent-workflow.test.js` is order intentional
+- Use descriptive `it()` labels that a non-developer can read
+- Log the HTTP response body on failure for every assertion so failures are debuggable
+
+---
+
+## Files to Read Before Writing Any Test Code
+
+1. `server.js` — all inline route handlers and their paths
+2. `routes/auth.js`, `routes/admin.js`, `routes/agent.js` — all declared routes
+3. `controllers/agentController.js` — precall, next-number, draft, handover logic
+4. `controllers/responseController.js` — submit and export logic
+5. `controllers/authController.js` — login, status change logic
+6. `middleware/auth.js` — token validation and role guard logic
+7. `models/` — all model files to understand DB shape for assertion queries
+8. `package.json` — confirm Jest is available or add it as a dev dependency

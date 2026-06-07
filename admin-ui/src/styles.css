@@ -1117,3 +1117,159 @@ td:last-child { border-right: var(--glass-border); border-radius: 0 var(--radius
   width: 100%;
   max-width: 450px;
 }
+
+/* Flag Popover Styles */
+.flag-popover-card {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1000;
+  width: 320px;
+  background: var(--card-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  margin-top: 0.5rem;
+  text-align: left;
+}
+
+[dir='rtl'] .flag-popover-card {
+  right: auto;
+  left: 0;
+  text-align: right;
+}
+
+.flag-popover-header {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.flag-pills-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.flag-pills-container.has-error {
+  border-color: var(--danger);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.flag-pill-button {
+  padding: 0.4rem 0.75rem;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.flag-pill-button:hover {
+  background: var(--border-color);
+}
+
+.flag-pill-button.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+  box-shadow: 0 4px 10px rgba(var(--p-h), var(--p-s), var(--p-l), 0.3);
+}
+
+.flag-textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border-radius: var(--radius-sm);
+  border: var(--glass-border);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  resize: vertical;
+  min-height: 80px;
+  margin-bottom: 0.25rem;
+  outline: none;
+  font-family: inherit;
+}
+
+.flag-textarea:focus {
+  border-color: var(--primary);
+}
+
+.flag-textarea.has-error {
+  border-color: var(--danger);
+}
+
+.flag-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.flag-error-text {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.flag-char-counter.has-error {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.flag-submit-btn {
+  width: 100%;
+  padding: 0.6rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+.flag-cancel-link {
+  display: block;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.flag-cancel-link:hover {
+  color: var(--text-primary);
+}
+
+.flag-readonly-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.flag-readonly-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.flag-readonly-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+

@@ -6,11 +6,11 @@ function trimTrailingSlashes(s) {
 
 /** HTTP API base (no trailing slash). Override with `VITE_API_URL`. */
 export const API_BASE =
-  trimTrailingSlashes(import.meta.env.VITE_API_URL) || 'http://localhost:3000';
+  trimTrailingSlashes(import.meta.env.VITE_API_URL) || '/api';
 
 /** WebSocket server URL (defaults to same host as API). Override with `VITE_SOCKET_URL`. */
 export const SOCKET_BASE =
-  trimTrailingSlashes(import.meta.env.VITE_SOCKET_URL) || API_BASE;
+  trimTrailingSlashes(import.meta.env.VITE_SOCKET_URL) || '';
 
 export const api = axios.create({
   baseURL: API_BASE,

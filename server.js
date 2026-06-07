@@ -25,6 +25,8 @@ const SystemSettingSchema = new mongoose.Schema({
 const SystemSetting = mongoose.model('SystemSetting', SystemSettingSchema);
 
 const { auth, adminAuth, staffAuth } = require("./middleware/auth");
+const { runTransaction } = require("./utils/runTransaction");
+const sendEmail = require("./utils/mailer");
 const {
   validateResponseSubmit,
   validateSurveyId,
@@ -91,18 +93,43 @@ app.use(
 );
 
 const corsOrigins = process.env.CORS_ORIGIN;
+const allowedOrigins = corsOrigins
+  ? corsOrigins.split(",").map((o) => o.trim()).filter(Boolean)
+  : [];
+
 app.use(
-  cors(
-    corsOrigins
-      ? {
-          origin: corsOrigins
-            .split(",")
-            .map((o) => o.trim())
-            .filter(Boolean),
-          credentials: true,
-        }
-      : {}
-  )
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // Allow any configured CORS_ORIGIN
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      // Allow local loopback and local network subnets
+      if (
+        origin.startsWith("http://192.168.") ||
+        origin.startsWith("https://192.168.") ||
+        origin.startsWith("http://10.") ||
+        origin.startsWith("https://10.") ||
+        origin.startsWith("http://172.") ||
+        origin.startsWith("https://172.") ||
+        origin.startsWith("http://localhost") ||
+        origin.startsWith("https://localhost") ||
+        origin.startsWith("http://127.0.0.1") ||
+        origin.startsWith("https://127.0.0.1")
+      ) {
+        return callback(null, true);
+      }
+
+      callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  })
 );
 app.use(express.json({ limit: '10mb' }));
 
@@ -374,6 +401,29 @@ app.get("/admin/responses", staffAuth, async (req, res) => {
       new Date(b.completedAt || 0) - new Date(a.completedAt || 0)
     ).slice(Number(skip), Number(skip) + Number(limit));
 
+    // Fetch active flags for the returned responses/precalls
+    const responseIds = combined.map(c => c._id);
+    const flags = await Review.find({ responseId: { $in: responseIds }, type: 'Flag', flagged: true })
+      .populate('qualityId', 'name')
+      .lean();
+
+    const flagsMap = new Map(flags.map(f => [f.responseId?.toString(), f]));
+    combined.forEach(c => {
+      const flag = flagsMap.get(c._id.toString());
+      if (flag) {
+        c.flagged = true;
+        c.flagNote = flag.flagNote;
+        c.flagCategory = flag.flagCategory;
+        c.flaggedBy = flag.qualityId?.name;
+        c.flaggedAt = flag.createdAt;
+        c.resolved = flag.resolved || false;
+        c.resolvedBy = flag.resolvedBy;
+        c.resolvedAt = flag.resolvedAt;
+      } else {
+        c.flagged = false;
+      }
+    });
+
     res.json(combined);
   } catch (err) {
     console.error("Fetch responses error:", err);
@@ -382,283 +432,9 @@ app.get("/admin/responses", staffAuth, async (req, res) => {
 });
 
 // EXPORT SURVEY DATA (CSV)
-app.get("/admin/export-survey/:id", staffAuth, async (req, res) => {
-  try {
-    const survey = await Survey.findById(req.params.id);
-    if (!survey) return res.status(404).json({ error: "Survey not found" });
+app.get("/admin/export-survey/:id", staffAuth, responseController.exportCsv);
 
-    // Fetch all responses and populate agent info
-    const responses = await Response.aggregate([
-      { $match: { surveyId: req.params.id } },
-      {
-        $addFields: {
-          agentObjectId: {
-            $convert: { input: '$agentId', to: 'objectId', onError: null, onNull: null }
-          }
-        }
-      },
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'agentObjectId',
-          foreignField: '_id',
-          as: 'agent'
-        }
-      },
-      { $unwind: { path: '$agent', preserveNullAndEmptyArrays: true } },
-      { $sort: { startedAt: -1 } }
-    ]);
-
-    // Prepare CSV Headers
-    const questions = [];
-    survey.sections.forEach(section => {
-      section.questions.forEach(q => {
-        // Answers are keyed by the builder's `questionId` (see SurveyBuilder + TakeSurvey),
-        // not the Mongo subdocument `_id`.
-        const id = q.questionId || (q._id ? q._id.toString() : undefined);
-        if (!id) return;
-        questions.push({ id, text: q.text });
-      });
-    });
-
-    const headers = ["Submission Date", "Status", "Agent Name", "Agent Email", "Duration (sec)"];
-    questions.forEach(q => headers.push(q.text.replace(/,/g, "")));
-
-    let csvContent = headers.join(",") + "\n";
-
-    // Prepare CSV Rows
-    responses.forEach(r => {
-      const row = [
-        new Date(r.startedAt).toISOString(),
-        r.status,
-        r.agent ? `"${r.agent.name.replace(/"/g, '""')}"` : "Unknown",
-        r.agent ? `"${r.agent.email.replace(/"/g, '""')}"` : "Unknown",
-        r.durationSecs || 0
-      ];
-
-      questions.forEach(q => {
-        const answer = r.answers.find(a => a.questionId === q.id);
-        let val = answer ? answer.value.replace(/"/g, '""').replace(/\n/g, " ") : "";
-        
-        // Yes/No to 1/0 conversion
-        const lowerVal = val.toLowerCase().trim();
-        if (lowerVal === "yes" || lowerVal === "نعم") val = "1";
-        else if (lowerVal === "no" || lowerVal === "لا") val = "0";
-
-        row.push(`"${val}"`);
-      });
-
-      csvContent += row.join(",") + "\n";
-    });
-
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", `attachment; filename=export_${survey.title.replace(/\s+/g, "_")}.csv`);
-    res.status(200).send(csvContent);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to generate export" });
-  }
-});
-
-// ADVANCED EXPORT (Excel, SPSS, Access)
-app.get("/admin/export-advanced", staffAuth, async (req, res) => {
-  try {
-    const { surveyId, agentId, status, startDate, endDate, format = 'xlsx' } = req.query;
-
-    if (!surveyId || !mongoose.Types.ObjectId.isValid(surveyId)) {
-      return res.status(400).json({ error: "Valid Survey ID is required" });
-    }
-
-    const survey = await Survey.findById(surveyId);
-    if (!survey) return res.status(404).json({ error: "Survey not found" });
-
-    // 1. Build Filter
-    const filter = { surveyId };
-    if (agentId && mongoose.Types.ObjectId.isValid(agentId)) filter.agentId = agentId;
-    if (status) filter.status = status;
-    if (startDate || endDate) {
-      filter.completedAt = {};
-      if (startDate) filter.completedAt.$gte = new Date(startDate);
-      if (endDate) filter.completedAt.$lte = new Date(endDate);
-    }
-    
-    // 2. Prepare Metadata (Question columns)
-    const questions = [];
-    survey.sections.forEach(section => {
-      section.questions.forEach(q => {
-        const id = q.questionId || (q._id ? q._id.toString() : undefined);
-        if (!id) return;
-        questions.push({
-          id,
-          text: q.text,
-          type: q.type,
-          options: q.options || []
-        });
-      });
-    });
-
-    const filenameBase = `export_${survey.title.replace(/\\s+/g, "_")}_${new Date().getTime()}`;
-
-    if (format === 'xlsx' || format === 'access') {
-      const isAccess = format === 'access';
-      if (isAccess) {
-        res.setHeader("Content-Type", "text/csv");
-        res.setHeader("Content-Disposition", `attachment; filename=${filenameBase}.csv`);
-        res.write('\\uFEFF'); // BOM
-      } else {
-        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        res.setHeader("Content-Disposition", `attachment; filename=${filenameBase}.xlsx`);
-      }
-
-      let workbook, worksheet;
-      const headerRow = ['Serial', 'Submission_Date', 'Status', 'Interview_Outcome', 'Agent_Name', 'Duration_Secs'];
-      questions.forEach(q => headerRow.push(q.text.replace(/,/g, '')));
-
-      if (isAccess) {
-        res.write(headerRow.join(',') + '\\n');
-      } else {
-        const ExcelJS = require('exceljs');
-        workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res });
-        worksheet = workbook.addWorksheet('Responses');
-        worksheet.addRow(headerRow).commit();
-      }
-
-      const cursor = Response.find(filter).populate('agentId', 'name email').sort({ completedAt: 1 }).cursor({ batchSize: 1000 });
-      
-      cursor.on('data', (r) => {
-        const row = [
-          isAccess ? `"${(r.serialNumber || 'N/A').replace(/"/g, '""')}"` : (r.serialNumber || 'N/A'),
-          isAccess ? `"${new Date(r.completedAt || r.startedAt).toLocaleString()}"` : new Date(r.completedAt || r.startedAt).toLocaleString(),
-          isAccess ? `"${(r.status || '').replace(/"/g, '""')}"` : r.status,
-          isAccess ? `"${(r.interviewOutcome || '').replace(/"/g, '""')}"` : r.interviewOutcome,
-          isAccess ? `"${(r.agentId?.name || 'Unknown').replace(/"/g, '""')}"` : (r.agentId?.name || 'Unknown'),
-          r.durationSecs || 0
-        ];
-        
-        questions.forEach(q => {
-          const answer = r.answers.find(a => a.questionId === q.id);
-          let val = answer ? answer.value : "";
-          const lowerVal = String(val).toLowerCase().trim();
-          if (lowerVal === "yes" || lowerVal === "نعم") val = 1;
-          else if (lowerVal === "no" || lowerVal === "لا") val = 0;
-          
-          if (isAccess) {
-             const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\\n/g, ' ') : val;
-             row.push(`"${strVal}"`);
-          } else {
-             row.push(val);
-          }
-        });
-        
-        if (isAccess) {
-          res.write(row.join(',') + '\\n');
-        } else {
-          worksheet.addRow(row).commit();
-        }
-      });
-
-      cursor.on('end', () => {
-        if (isAccess) {
-          res.end();
-        } else {
-          worksheet.commit();
-          workbook.commit();
-        }
-      });
-
-      cursor.on('error', (err) => {
-        console.error('Export Cursor Error:', err);
-        res.end();
-      });
-      return;
-    } 
-
-    // For SAV we still fetch via lean, but avoid storing intermediate exportData
-    const responses = await Response.find(filter)
-      .populate('agentId', 'name email')
-      .sort({ completedAt: 1 })
-      .lean();
-    if (format === 'sav') {
-      // SPSS Variable definitions
-      const vars = [
-        { name: 'SERIAL', label: 'Serial Number', type: VariableType.String, width: 16 },
-        { name: 'S_DATE', label: 'Submission Date', type: VariableType.String, width: 32 },
-        { name: 'STATUS', label: 'Completion Status', type: VariableType.String, width: 16 },
-        { name: 'OUTCOME', label: 'Interview Outcome', type: VariableType.String, width: 32 },
-        { name: 'AGENT', label: 'Agent Name', type: VariableType.String, width: 64 },
-        { name: 'DURATION', label: 'Duration (Secs)', type: VariableType.Numeric, width: 8, decimal: 0 }
-      ];
-
-      questions.forEach((q, idx) => {
-        const isNumeric = (q.type === 'number' || q.type === 'rating');
-        const vName = `Q${idx + 1}`;
-        const vLabel = q.text.substring(0, 255);
-        
-        const variable = {
-          name: vName,
-          label: vLabel,
-          type: isNumeric ? VariableType.Numeric : VariableType.String,
-          width: isNumeric ? 8 : 255,
-          decimal: isNumeric ? 0 : 0
-        };
-
-        if (q.options && q.options.length > 0) {
-          variable.valueLabels = q.options.map(opt => ({
-            value: opt.value,
-            label: opt.label || opt.value
-          }));
-        }
-        
-        vars.push(variable);
-      });
-
-      // Map data to variables
-      const records = responses.map(r => {
-        const rec = [
-          r.serialNumber || 'N/A',
-          new Date(r.completedAt || r.startedAt).toISOString(),
-          r.status,
-          r.interviewOutcome,
-          r.agentId?.name || 'Unknown',
-          r.durationSecs || 0
-        ];
-
-        questions.forEach(q => {
-          const answer = r.answers.find(a => a.questionId === q.id || a.questionId === q.questionId);
-          let rawVal = answer?.value ?? "";
-          let val = Array.isArray(rawVal) ? rawVal.join(' | ') : rawVal;
-          
-          // Yes/No to 1/0 conversion
-          const lowerVal = String(val).toLowerCase().trim();
-          if (lowerVal === "yes" || lowerVal === "نعم") val = 1;
-          else if (lowerVal === "no" || lowerVal === "لا") val = 0;
-
-          const expectedNumeric = (q.type === 'number' || q.type === 'rating');
-          if (expectedNumeric) {
-            rec.push(Number(val) || 0);
-          } else {
-            rec.push(String(val));
-          }
-        });
-
-        return rec;
-      });
-
-      const tempFile = path.join(__dirname, 'uploads', `${filenameBase}.sav`);
-      saveToFile(tempFile, records, vars);
-
-      res.download(tempFile, `${filenameBase}.sav`, (err) => {
-        if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
-      });
-      return;
-    }
-
-    res.status(400).json({ error: "Unsupported format" });
-
-  } catch (err) {
-    console.error("Advanced Export Error:", err);
-    res.status(500).json({ error: "Failed to generate advanced export", detail: err.message });
-  }
-});
+app.get("/admin/export-advanced", staffAuth, responseController.exportAdvanced);
 
 // PHONE NUMBERS - ADMIN UPLOAD XLSX (after survey creation)
 app.post('/admin/survey/:id/numbers', [upload.single('xlsx'), adminAuth, validateSurveyId], async (req, res) => {
@@ -1538,31 +1314,132 @@ app.get("/reviews/my-reviews", auth, async (req, res) => {
 // QUALITY: FLAG RESPONSE
 app.post("/reviews/:responseId/flag", staffAuth, async (req, res) => {
   try {
-    const { flagNote } = req.body;
+    const { flagNote, flagCategory } = req.body;
     const responseId = req.params.responseId;
-    
-    const response = await Response.findById(responseId);
-    if (!response) return res.status(404).json({ error: "Response not found" });
 
-    // Check if a flag review already exists for this response
-    let review = await Review.findOne({ responseId, type: 'Flag' });
-    if (review) {
-      review.flagNote = flagNote;
-      review.flagged = true;
-      review.qualityId = req.user.id;
-    } else {
-      review = new Review({
-        type: 'Flag',
-        responseId,
-        agentId: response.agentId,
-        qualityId: req.user.id,
-        flagged: true,
-        flagNote
-      });
+    if (!mongoose.Types.ObjectId.isValid(responseId)) {
+      return res.status(400).json({ error: "Invalid response ID format" });
     }
-    await review.save();
+
+    // Validate flagCategory
+    const validCategories = ['wrong_answer', 'suspicious', 'incomplete', 'coaching', 'other'];
+    if (!flagCategory) {
+      return res.status(400).json({ error: "Flag category is required" });
+    }
+    if (!validCategories.includes(flagCategory)) {
+      return res.status(400).json({ error: "Invalid flag category value" });
+    }
+
+    // Validate flagNote (max 500 characters)
+    let sanitizedNote = flagNote;
+    if (flagNote !== undefined && flagNote !== null) {
+      sanitizedNote = String(flagNote).trim();
+      if (sanitizedNote.length > 500) {
+        return res.status(400).json({ error: "Flag note exceeds maximum length of 500 characters" });
+      }
+    }
+
+    const review = await runTransaction(async (session) => {
+      let response = await Response.findById(responseId).session(session);
+      let agentId;
+      let surveyId;
+      let serialNumber;
+
+      if (response) {
+        agentId = response.agentId;
+        surveyId = response.surveyId;
+        serialNumber = response.serialNumber;
+      } else {
+        const precall = await PrecallCompletion.findById(responseId).session(session);
+        if (!precall) {
+          const err = new Error("Response or Precall not found");
+          err.status = 404;
+          throw err;
+        }
+        agentId = precall.userId;
+        surveyId = precall.surveyId;
+        serialNumber = precall.serialNumber;
+      }
+
+      // Check if a flag review already exists for this response
+      let reviewDoc = await Review.findOne({ responseId, type: 'Flag' }).session(session);
+      if (reviewDoc) {
+        reviewDoc.flagNote = sanitizedNote;
+        reviewDoc.flagCategory = flagCategory;
+        reviewDoc.flagged = true;
+        reviewDoc.qualityId = req.user.id;
+        reviewDoc.surveyId = surveyId;
+        reviewDoc.serialNumber = serialNumber;
+      } else {
+        reviewDoc = new Review({
+          type: 'Flag',
+          responseId,
+          agentId,
+          qualityId: req.user.id,
+          flagged: true,
+          flagNote: sanitizedNote,
+          flagCategory,
+          surveyId,
+          serialNumber
+        });
+      }
+      await reviewDoc.save({ session });
+      return reviewDoc;
+    });
+
+    // Socket broadcast stats-update post-commit
+    const io = req.app.get('io');
+    if (io) io.emit("stats-update");
+
+    // Fire-and-forget email notification to the agent who submitted the response
+    if (review.agentId) {
+      (async () => {
+        try {
+          const agent = await User.findById(review.agentId);
+          if (agent && agent.email) {
+            const CATEGORY_LABELS = {
+              wrong_answer: "Wrong Answer / إجابة خاطئة",
+              suspicious: "Suspicious Response / إجابة مشبوهة",
+              incomplete: "Incomplete Response / إجابة غير مكتملة",
+              coaching: "Suspected Coaching / يُشتبه في التلقين",
+              other: "Other / أخرى"
+            };
+            const categoryLabel = CATEGORY_LABELS[review.flagCategory] || review.flagCategory;
+
+            await sendEmail({
+              to: agent.email,
+              subject: "Response Flagged for Review",
+              text: `Hello ${agent.name || 'Agent'},
+
+A response submitted by you has been flagged for re-review.
+
+Response details:
+- Serial Number: #${review.serialNumber || 'N/A'}
+- Flag Category: ${categoryLabel}
+- Note: ${review.flagNote || 'No additional note provided.'}
+
+Best regards,
+Baseera System Support`
+            });
+          }
+        } catch (mailErr) {
+          console.error("[FLAG EMAIL NOTIFICATION ERROR]", mailErr);
+        }
+      })();
+    }
+
     res.json(review);
-  } catch (err) {
+  } catch (error) {
+    console.error("[FLAG RESPONSE ERROR]", error);
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    if (error.name === "CastError" || error.name === "ValidationError") {
+      return res.status(400).json({ error: error.message });
+    }
+    if (error.code === 11000) {
+      return res.status(409).json({ error: "Conflict: This response has already been flagged or reviewed" });
+    }
     res.status(500).json({ error: "Failed to flag response" });
   }
 });
@@ -1573,11 +1450,119 @@ app.get("/reviews/flagged", staffAuth, async (req, res) => {
     const flags = await Review.find({ type: 'Flag', flagged: true })
       .populate('agentId', 'name')
       .populate('qualityId', 'name')
-      .populate('responseId')
-      .sort({ createdAt: -1 });
-    res.json(flags);
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const responseIds = flags.map(f => f.responseId).filter(Boolean);
+
+    // Find all matching Response documents
+    const responses = await Response.find({ _id: { $in: responseIds } })
+      .populate('surveyId', 'title sections')
+      .populate('agentId', 'name email')
+      .lean();
+
+    const responsesMap = new Map(responses.map(r => [r._id.toString(), r]));
+
+    // Find any missing IDs from PrecallCompletion
+    const foundResponseIds = new Set(responses.map(r => r._id.toString()));
+    const missingIds = responseIds.filter(id => !foundResponseIds.has(id.toString()));
+
+    let precalls = [];
+    if (missingIds.length > 0) {
+      precalls = await PrecallCompletion.find({ _id: { $in: missingIds } })
+        .populate('surveyId', 'title')
+        .populate('userId', 'name email')
+        .lean();
+    }
+    const precallsMap = new Map(precalls.map(p => [p._id.toString(), p]));
+
+    // Map responseId for each flag
+    const populatedFlags = flags.map(f => {
+      if (!f.responseId) return f;
+      const fIdStr = f.responseId.toString();
+
+      let populatedResponse = null;
+      if (responsesMap.has(fIdStr)) {
+        populatedResponse = responsesMap.get(fIdStr);
+      } else if (precallsMap.has(fIdStr)) {
+        const p = precallsMap.get(fIdStr);
+        populatedResponse = {
+          _id: p._id,
+          serialNumber: p.serialNumber,
+          surveyId: p.surveyId,
+          agentId: p.userId, // Map userId to agentId
+          completedAt: p.completedAt,
+          interviewOutcome: p.interviewOutcome || p.outcomeCategory,
+          status: p.outcomeCategory === 'qualified' ? 'partial' : p.outcomeCategory,
+          answers: Object.keys(p.payload || {}).map(k => ({ questionId: k, value: p.payload[k] })),
+          durationSecs: 0,
+          isPrecallOnly: true
+        };
+      }
+
+      return {
+        ...f,
+        responseId: populatedResponse
+      };
+    });
+
+    res.json(populatedFlags);
   } catch (err) {
+    console.error("[GET FLAGGED RESPONSES ERROR]", err);
     res.status(500).json({ error: "Failed to fetch flagged responses" });
+  }
+});
+
+// ADMIN: RESOLVE FLAG RESPONSE
+app.patch("/reviews/:responseId/resolve", adminAuth, async (req, res) => {
+  try {
+    const { responseId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(responseId)) {
+      return res.status(400).json({ error: "Invalid response ID" });
+    }
+
+    const review = await Review.findOne({ responseId, type: 'Flag' });
+    if (!review) {
+      return res.status(404).json({ error: "Flag not found" });
+    }
+
+    if (review.resolved) {
+      return res.status(409).json({ error: "Flag already resolved" });
+    }
+
+    const updatedReview = await runTransaction(async (session) => {
+      const doc = await Review.findOne({ responseId, type: 'Flag' }).session(session);
+      if (!doc) {
+        const err = new Error("Flag not found");
+        err.status = 404;
+        throw err;
+      }
+      if (doc.resolved) {
+        const err = new Error("Flag already resolved");
+        err.status = 409;
+        throw err;
+      }
+      doc.resolved = true;
+      doc.resolvedBy = req.user.id;
+      doc.resolvedAt = new Date();
+      if (doc.type === 'Flag' && !doc.flagCategory) {
+        doc.flagCategory = 'other';
+      }
+      await doc.save({ session, validateBeforeSave: false });
+      return doc;
+    });
+
+    const io = req.app.get('io');
+    if (io) io.emit("stats-update");
+
+    res.json(updatedReview);
+  } catch (error) {
+    console.error("[RESOLVE FLAG ERROR]", error);
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to resolve flag" });
   }
 });
 
@@ -1813,6 +1798,21 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server (with Real-time Support) running on http://localhost:${PORT}`);
+const HOST = process.env.HOST || '0.0.0.0';
+
+server.listen(PORT, HOST, () => {
+  const os = require('os');
+  const nets = os.networkInterfaces();
+  const addresses = [];
+  for (const iface of Object.values(nets)) {
+    for (const net of iface) {
+      if (net.family === 'IPv4' && !net.internal) {
+        addresses.push(net.address);
+      }
+    }
+  }
+  console.log(`\n✅ Server running on:`);
+  console.log(`   Local:   http://localhost:${PORT}`);
+  addresses.forEach(ip => console.log(`   Network: http://${ip}:${PORT}`));
+  console.log('');
 });

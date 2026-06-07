@@ -21,44 +21,37 @@ const encodeValue = (val) => {
   return val;
 };
 
-const parseAnswerValue = (value) => {
-  if (value == null) return { main: "", others: [] };
-
-  if (Array.isArray(value)) {
-    const mainValues = [];
-    const others = [];
-    value.forEach(v => {
-      if (typeof v === 'string' && v.toLowerCase().startsWith('other:')) {
-        others.push(v.substring(6).trim());
-      } else {
-        mainValues.push(v);
-      }
-    });
-
-    let mainStr = mainValues.join(' | ');
-    if (others.length > 0) {
-      if (mainStr) {
-        mainStr += ' | ' + others[0];
-      } else {
-        mainStr = others[0];
-      }
-      return { main: mainStr, others: others.slice(1) };
-    }
-    return { main: mainStr, others: [] };
+function splitOtherValues(answerValue) {
+  if (answerValue == null) {
+    return { baseValue: '', otherValues: [] };
   }
-
-  if (typeof value === 'string') {
-    if (value.startsWith('Other: ')) {
-      return { main: value.substring(7), others: [] };
+  if (!Array.isArray(answerValue)) {
+    let base = answerValue;
+    if (typeof base === 'string') {
+      if (base.startsWith('Other: ')) {
+        base = base.substring(7);
+      } else if (base.startsWith('other:')) {
+        base = base.substring(6);
+      }
+    } else {
+      base = String(base);
     }
-    if (value.startsWith('other:')) {
-      return { main: value.substring(6), others: [] };
-    }
-    return { main: value, others: [] };
+    return { baseValue: base, otherValues: [] };
   }
-
-  return { main: String(value), others: [] };
-};
+  const baseParts = [];
+  const otherValues = [];
+  answerValue.forEach(v => {
+    if (typeof v === 'string' && v.toLowerCase().startsWith('other:')) {
+      otherValues.push(v.substring(6).trim());
+    } else if (v != null) {
+      baseParts.push(String(v));
+    }
+  });
+  return {
+    baseValue: baseParts.join(' | '),
+    otherValues
+  };
+}
 
 exports.submitResponse = async (req, res) => {
   try {
@@ -300,7 +293,7 @@ exports.exportCsv = async (req, res) => {
       { $lookup: { from: 'users', localField: 'agentObjectId', foreignField: '_id', as: 'agent' } },
       { $unwind: { path: '$agent', preserveNullAndEmptyArrays: true } },
       { $sort: { startedAt: -1 } },
-    ]).cursor({ batchSize: 1000 }).exec();
+    ]).cursor({ batchSize: 1000 });
 
     const questions = [];
     survey.sections.forEach(section => {
@@ -317,12 +310,8 @@ exports.exportCsv = async (req, res) => {
     const maxOtherCount = {};
     preScanResponses.forEach(r => {
       (r.answers || []).forEach(a => {
-        let count = 0;
-        if (Array.isArray(a.value)) {
-          count = a.value.filter(v => typeof v === 'string' && v.toLowerCase().startsWith('other:')).length;
-        } else if (typeof a.value === 'string' && (a.value.startsWith('Other: ') || a.value.startsWith('other:'))) {
-          count = 1;
-        }
+        const parsed = splitOtherValues(a.value);
+        const count = parsed.otherValues.length;
         if (count > (maxOtherCount[a.questionId] || 0)) {
           maxOtherCount[a.questionId] = count;
         }
@@ -330,11 +319,11 @@ exports.exportCsv = async (req, res) => {
     });
 
     const headers = ['Submission Date', 'Status', 'Agent Name', 'Agent Email', 'Duration (sec)', 'Outcome Reason'];
-    questions.forEach(q => {
+    questions.forEach((q, idx) => {
       headers.push(q.text.replace(/,/g, ''));
       const max = maxOtherCount[q.id] || 0;
-      for (let i = 2; i <= max; i++) {
-        headers.push(`${q.text.replace(/,/g, '')} (Other ${i})`);
+      for (let i = 1; i <= max; i++) {
+        headers.push(`Q${idx + 1}_other_${i}`);
       }
     });
     res.write('\uFEFF'); // BOM for Excel UTF-8
@@ -349,17 +338,17 @@ exports.exportCsv = async (req, res) => {
         r.durationSecs || 0,
         `"${(r.outcomeReason || '').replace(/"/g, '""')}"`,
       ];
-      questions.forEach(q => {
+      questions.forEach((q, idx) => {
         const answer = (r.answers || []).find(a => a.questionId === q.id);
-        const parsed = parseAnswerValue(answer ? answer.value : null);
+        const parsed = splitOtherValues(answer ? answer.value : null);
         
-        let val = encodeValue(parsed.main);
+        let val = encodeValue(parsed.baseValue);
         const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : val;
         row.push(`"${strVal}"`);
         
         const max = maxOtherCount[q.id] || 0;
-        for (let i = 2; i <= max; i++) {
-          let extraVal = encodeValue(parsed.others[i - 2] || '');
+        for (let i = 1; i <= max; i++) {
+          let extraVal = encodeValue(parsed.otherValues[i - 1] || '');
           const strExtra = typeof extraVal === 'string' ? extraVal.replace(/"/g, '""').replace(/\n/g, ' ') : extraVal;
           row.push(`"${strExtra}"`);
         }
@@ -414,12 +403,8 @@ exports.exportAdvanced = async (req, res) => {
     const maxOtherCount = {};
     preScanResponses.forEach(r => {
       (r.answers || []).forEach(a => {
-        let count = 0;
-        if (Array.isArray(a.value)) {
-          count = a.value.filter(v => typeof v === 'string' && v.toLowerCase().startsWith('other:')).length;
-        } else if (typeof a.value === 'string' && (a.value.startsWith('Other: ') || a.value.startsWith('other:'))) {
-          count = 1;
-        }
+        const parsed = splitOtherValues(a.value);
+        const count = parsed.otherValues.length;
         if (count > (maxOtherCount[a.questionId] || 0)) {
           maxOtherCount[a.questionId] = count;
         }
@@ -434,11 +419,11 @@ exports.exportAdvanced = async (req, res) => {
       res.write('\uFEFF'); // BOM
 
       const headers = ['Serial', 'Submission_Date', 'Status', 'Interview_Outcome', 'Outcome_Reason', 'Agent_Name', 'Duration_Secs'];
-      questions.forEach(q => {
+      questions.forEach((q, idx) => {
         headers.push(q.text.replace(/,/g, ''));
         const max = maxOtherCount[q.id] || 0;
-        for (let i = 2; i <= max; i++) {
-          headers.push(`${q.text.replace(/,/g, '')} (Other ${i})`);
+        for (let i = 1; i <= max; i++) {
+          headers.push(`Q${idx + 1}_other_${i}`);
         }
       });
       res.write(headers.join(',') + '\n');
@@ -455,17 +440,17 @@ exports.exportAdvanced = async (req, res) => {
           `"${(r.agentId?.name || 'Unknown').replace(/"/g, '""')}"`,
           r.durationSecs || 0
         ];
-        questions.forEach(q => {
+        questions.forEach((q, idx) => {
           const answer = (r.answers || []).find(a => a.questionId === q.id);
-          const parsed = parseAnswerValue(answer ? answer.value : null);
+          const parsed = splitOtherValues(answer ? answer.value : null);
           
-          let val = encodeValue(parsed.main);
+          let val = encodeValue(parsed.baseValue);
           const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : val;
           row.push(`"${strVal}"`);
           
           const max = maxOtherCount[q.id] || 0;
-          for (let i = 2; i <= max; i++) {
-            let extraVal = encodeValue(parsed.others[i - 2] || '');
+          for (let i = 1; i <= max; i++) {
+            let extraVal = encodeValue(parsed.otherValues[i - 1] || '');
             const strExtra = typeof extraVal === 'string' ? extraVal.replace(/"/g, '""').replace(/\n/g, ' ') : extraVal;
             row.push(`"${strExtra}"`);
           }
@@ -484,37 +469,61 @@ exports.exportAdvanced = async (req, res) => {
     // For XLSX and SAV, we still must load into memory due to library constraints
     const responses = await Response.find(filter).populate('agentId', 'name email').sort({ completedAt: 1 }).lean();
 
-    const exportData = responses.map(r => {
-      const row = {
-        Serial: r.serialNumber || 'N/A',
-        Submission_Date: new Date(r.completedAt || r.startedAt || Date.now()).toLocaleString(),
-        Status: r.status,
-        Interview_Outcome: r.interviewOutcome,
-        Outcome_Reason: r.outcomeReason,
-        Agent_Name: r.agentId?.name || 'Unknown',
-        Duration_Secs: r.durationSecs || 0,
-      };
-      questions.forEach(q => {
-        const answer = (r.answers || []).find(a => a.questionId === q.id);
-        const parsed = parseAnswerValue(answer ? answer.value : null);
-        row[q.text] = encodeValue(parsed.main);
-        
+    if (format === 'xlsx') {
+      const ExcelJS = require('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Responses');
+
+      const cols = [
+        { header: 'Serial', key: 'Serial', width: 15 },
+        { header: 'Submission Date', key: 'Submission_Date', width: 25 },
+        { header: 'Status', key: 'Status', width: 15 },
+        { header: 'Interview Outcome', key: 'Interview_Outcome', width: 25 },
+        { header: 'Outcome Reason', key: 'Outcome_Reason', width: 30 },
+        { header: 'Agent Name', key: 'Agent_Name', width: 20 },
+        { header: 'Duration (Secs)', key: 'Duration_Secs', width: 15 }
+      ];
+
+      questions.forEach((q, idx) => {
+        cols.push({ header: q.text, key: `Q${idx + 1}`, width: 25 });
         const max = maxOtherCount[q.id] || 0;
-        for (let i = 2; i <= max; i++) {
-          row[`${q.text} (Other ${i})`] = encodeValue(parsed.others[i - 2] || '');
+        for (let i = 1; i <= max; i++) {
+          cols.push({ header: `Q${idx + 1}_other_${i}`, key: `Q${idx + 1}_other_${i}`, width: 25 });
         }
       });
-      return row;
-    });
 
-    if (format === 'xlsx') {
-      const wb = xlsx.utils.book_new();
-      const ws = xlsx.utils.json_to_sheet(exportData);
-      xlsx.utils.book_append_sheet(wb, ws, 'Responses');
-      const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      worksheet.columns = cols;
+      worksheet.getRow(1).font = { bold: true };
+
+      responses.forEach(r => {
+        const row = {
+          Serial: r.serialNumber || 'N/A',
+          Submission_Date: new Date(r.completedAt || r.startedAt || Date.now()).toLocaleString(),
+          Status: r.status,
+          Interview_Outcome: r.interviewOutcome,
+          Outcome_Reason: r.outcomeReason || '',
+          Agent_Name: r.agentId?.name || 'Unknown',
+          Duration_Secs: r.durationSecs || 0
+        };
+
+        questions.forEach((q, idx) => {
+          const answer = (r.answers || []).find(a => a.questionId === q.id);
+          const parsed = splitOtherValues(answer ? answer.value : null);
+          row[`Q${idx + 1}`] = encodeValue(parsed.baseValue);
+
+          const max = maxOtherCount[q.id] || 0;
+          for (let i = 1; i <= max; i++) {
+            row[`Q${idx + 1}_other_${i}`] = encodeValue(parsed.otherValues[i - 1] || '');
+          }
+        });
+
+        worksheet.addRow(row);
+      });
+
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=${filenameBase}.xlsx`);
-      return res.status(200).send(buf);
+      await workbook.xlsx.write(res);
+      return res.end();
     }
 
     if (format === 'sav') {
@@ -541,9 +550,9 @@ exports.exportAdvanced = async (req, res) => {
         });
 
         const max = maxOtherCount[q.id] || 0;
-        for (let i = 2; i <= max; i++) {
+        for (let i = 1; i <= max; i++) {
           vars.push({
-            name: `Q${idx + 1}_OTHER${i}`,
+            name: `Q${idx + 1}_other_${i}`,
             label: `${q.text.substring(0, 240)} (Other ${i})`,
             type: VariableType.String,
             width: 255,
@@ -564,8 +573,8 @@ exports.exportAdvanced = async (req, res) => {
         ];
         questions.forEach(q => {
           const answer = r.answers.find(a => a.questionId === q.id);
-          const parsed = parseAnswerValue(answer ? answer.value : null);
-          const encoded = encodeValue(parsed.main);
+          const parsed = splitOtherValues(answer ? answer.value : null);
+          const encoded = encodeValue(parsed.baseValue);
           
           const isYesNo = q.options?.some(opt => ['Yes', 'No', 'نعم', 'لا'].includes(opt.trim()));
           const isNumeric = q.type === 'number' || q.type === 'rating' || isYesNo;
@@ -577,8 +586,8 @@ exports.exportAdvanced = async (req, res) => {
           }
 
           const max = maxOtherCount[q.id] || 0;
-          for (let i = 2; i <= max; i++) {
-            rec.push(String(encodeValue(parsed.others[i - 2] || '')));
+          for (let i = 1; i <= max; i++) {
+            rec.push(String(encodeValue(parsed.otherValues[i - 1] || '')));
           }
         });
         return rec;

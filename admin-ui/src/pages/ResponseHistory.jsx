@@ -4,10 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { History, Search, ChevronDown, ChevronUp, User, ClipboardList, Clock } from 'lucide-react';
 import { UIContext } from '../context/UIContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+import FlagPopover from '../components/FlagPopover';
 
 import { io } from 'socket.io-client';
 import { SOCKET_BASE } from '../api/client';
-import { Download, X as CloseIcon, Filter, Flag, AlertTriangle } from 'lucide-react';
+import { Download, X as CloseIcon, Filter, Flag, AlertTriangle, Check } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 
@@ -33,7 +34,29 @@ export default function ResponseHistory() {
     format: 'xlsx'
   });
   const [viewFlagged, setViewFlagged] = useState(false);
-  const [flagModal, setFlagModal] = useState({ open: false, responseId: null, note: '' });
+  const [activePopoverResponseId, setActivePopoverResponseId] = useState(null);
+  const [resolveErrorMap, setResolveErrorMap] = useState({});
+
+  const handleResolveFlag = async (responseId, e) => {
+    e.stopPropagation();
+    try {
+      setResolveErrorMap(prev => ({ ...prev, [responseId]: null }));
+      await api.patch(`/reviews/${responseId}/resolve`);
+      setResponses(prev => prev.map(resObj => {
+        if (resObj._id === responseId) {
+          return {
+            ...resObj,
+            resolved: true
+          };
+        }
+        return resObj;
+      }));
+    } catch (err) {
+      console.error("[RESOLVE FLAG ERROR]", err);
+      const errMsg = err.response?.data?.error || "Failed to resolve flag";
+      setResolveErrorMap(prev => ({ ...prev, [responseId]: errMsg }));
+    }
+  };
 
   useEffect(() => {
     if (viewFlagged) {
@@ -89,7 +112,10 @@ export default function ResponseHistory() {
           ...f.responseId,
           flagNote: f.flagNote,
           flaggedBy: f.qualityId?.name,
-          flaggedAt: f.createdAt
+          flaggedAt: f.createdAt,
+          resolved: f.resolved,
+          resolvedBy: f.resolvedBy,
+          resolvedAt: f.resolvedAt
         };
       }).filter(Boolean);
       setResponses(mapped);
@@ -100,17 +126,6 @@ export default function ResponseHistory() {
     }
   };
 
-  const handleFlag = async () => {
-    if (!flagModal.note) return toast.error("Flag note is required");
-    try {
-      await api.post(`/reviews/${flagModal.responseId}/flag`, { flagNote: flagModal.note });
-      toast.success("Response flagged successfully");
-      setFlagModal({ open: false, responseId: null, note: '' });
-      if (viewFlagged) fetchFlagged();
-    } catch (err) {
-      toast.error("Failed to flag response");
-    }
-  };
 
   const handleExport = async (e) => {
     e.preventDefault();
@@ -424,7 +439,7 @@ export default function ResponseHistory() {
                         </span>
                       </td>
                       <td style={{ padding: '1.25rem', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', alignItems: 'center' }}>
                           <button 
                             className="btn-secondary" 
                             style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem' }}
@@ -432,15 +447,86 @@ export default function ResponseHistory() {
                             {expandedId === r._id ? t('closeAnswers') : t('viewAnswers')}
                             {expandedId === r._id ? <ChevronUp size={14} style={{ marginLeft: '0.4rem' }} /> : <ChevronDown size={14} style={{ marginLeft: '0.4rem' }} />}
                           </button>
+
+                          {viewFlagged && (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              {r.resolved ? (
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem',
+                                  padding: '0.25rem 0.75rem',
+                                  borderRadius: '20px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 800,
+                                  textTransform: 'uppercase',
+                                  background: 'hsla(150, 80%, 40%, 0.1)',
+                                  color: 'var(--success)'
+                                }}>
+                                  <Check size={12} strokeWidth={3} style={{ marginRight: language === 'ar' ? '0' : '0.25rem', marginLeft: language === 'ar' ? '0.25rem' : '0' }} />
+                                  {t('resolvedBadge')}
+                                </span>
+                              ) : (
+                                <>
+                                  {user?.role === 'admin' && (
+                                    <button 
+                                      className="btn-secondary" 
+                                      style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem' }}
+                                      onClick={(e) => handleResolveFlag(r._id, e)}
+                                    >
+                                      {t('markAsResolved')}
+                                    </button>
+                                  )}
+                                  {resolveErrorMap[r._id] && (
+                                    <span style={{ color: 'var(--danger)', fontSize: '0.7rem', fontWeight: 600, display: 'block', marginTop: '0.25rem' }}>
+                                      {resolveErrorMap[r._id]}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          )}
                           {(user?.role === 'quality' || user?.role === 'admin') && !viewFlagged && (
-                            <button 
-                              className="btn-secondary danger" 
-                              style={{ padding: '0.4rem' }}
-                              onClick={(e) => { e.stopPropagation(); setFlagModal({ open: true, responseId: r._id, note: "" }); }}
-                              title="Flag for re-review"
-                            >
-                              <Flag size={14} />
-                            </button>
+                            <div style={{ position: 'relative' }}>
+                              <button 
+                                className="btn-secondary" 
+                                style={{ padding: '0.4rem' }}
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  setActivePopoverResponseId(prev => prev === r._id ? null : r._id); 
+                                }}
+                                title={r.flagged ? t('flaggedResponse') : t('flagResponse')}
+                              >
+                                <Flag size={14} color={r.flagged ? "var(--primary)" : "var(--text-secondary)"} fill={r.flagged ? "var(--primary)" : "none"} />
+                              </button>
+                              {activePopoverResponseId === r._id && (
+                                <FlagPopover
+                                  responseId={r._id}
+                                  serialNumber={r.serialNumber || 'N/A'}
+                                  isFlagged={!!r.flagged}
+                                  existingFlagCategory={r.flagCategory}
+                                  existingFlagNote={r.flagNote}
+                                  onFlagSuccess={(updatedReview) => {
+                                    setResponses(prev => prev.map(resObj => {
+                                      if (resObj._id === r._id) {
+                                        return {
+                                          ...resObj,
+                                          flagged: true,
+                                          flagCategory: updatedReview.flagCategory,
+                                          flagNote: updatedReview.flagNote,
+                                          flaggedBy: user?.name,
+                                          flaggedAt: updatedReview.createdAt
+                                        };
+                                      }
+                                      return resObj;
+                                    }));
+                                    setActivePopoverResponseId(null);
+                                    if (viewFlagged) fetchFlagged();
+                                  }}
+                                  onClose={() => setActivePopoverResponseId(null)}
+                                />
+                              )}
+                            </div>
                           )}
                         </div>
                       </td>
@@ -499,29 +585,7 @@ export default function ResponseHistory() {
         )}
       </div>
 
-      <AnimatePresence>
-        {flagModal.open && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="drawer-overlay" onClick={() => setFlagModal({ open: false, responseId: null, note: '' })} />
-            <motion.div initial={{ scale: 0.9, opacity: 0, x: '-50%', y: '-50%' }} animate={{ scale: 1, opacity: 1, x: '-50%', y: '-50%' }} exit={{ scale: 0.9, opacity: 0, x: '-50%', y: '-50%' }} className="glass-card" style={{ position: 'fixed', top: '50%', left: '50%', zIndex: 2001, width: '400px', maxWidth: '90vw' }}>
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--danger)' }}><Flag size={20} /> Flag Response</h3>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Enter the reason for flagging this response for re-review.</p>
-              <textarea 
-                value={flagModal.note} 
-                onChange={e => setFlagModal({ ...flagModal, note: e.target.value })} 
-                className="glass-input" 
-                rows="3" 
-                placeholder="Reason..." 
-                style={{ width: '100%', marginBottom: '1.5rem', padding: '0.75rem' }} 
-              />
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                <button className="btn-secondary" onClick={() => setFlagModal({ open: false, responseId: null, note: '' })}>Cancel</button>
-                <button className="btn-primary" onClick={handleFlag} style={{ background: 'var(--danger)' }}>Flag Response</button>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+
       
       <style>{`
         .hover-row:hover {

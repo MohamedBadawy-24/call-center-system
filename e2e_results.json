@@ -76,8 +76,8 @@
   },
   {
     "id": "2.7",
-    "status": "PASS",
-    "notes": "PUT /survey when active"
+    "status": "FAIL",
+    "notes": "Error 403: {\"error\":\"This campaign cannot be edited while it is active. Set the campaign to inactive first.\"}"
   },
   {
     "id": "2.7-Verify-Fetch",
@@ -196,8 +196,8 @@
   },
   {
     "id": "6.5",
-    "status": "PASS",
-    "notes": "POST response"
+    "status": "FAIL",
+    "notes": "Error 403: {\"error\":\"Not eligible to submit qualified responses for this session\",\"reason\":\"no_precall\"}"
   },
   {
     "id": "6.6",
@@ -381,8 +381,8 @@
   },
   {
     "id": "13.5",
-    "status": "PASS",
-    "notes": "PUT survey clamp constraints"
+    "status": "FAIL",
+    "notes": "Error 403: {\"error\":\"This campaign cannot be edited while it is active. Set the campaign to inactive first.\"}"
   },
   {
     "id": "13.6",

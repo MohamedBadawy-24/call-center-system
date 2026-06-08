@@ -1,8 +1,11 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import { motion } from 'framer-motion';
-import { CheckCircle2, ClipboardList, Phone, User, Hash, CalendarClock, Loader2, UserPlus } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  CheckCircle2, ClipboardList, Phone, User, Hash, CalendarClock,
+  Loader2, UserPlus, Lock,
+} from 'lucide-react';
 
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
@@ -10,6 +13,7 @@ import {
   normalizeOutboundPrecall,
   metaLine,
   isFieldVisible,
+  isFieldSatisfied,
   validateOutboundAnswers,
   buildInitialAnswers,
   precallNextValidation,
@@ -19,6 +23,7 @@ import { EGYPTIAN_GOVERNORATES } from '../utils/governorates';
 import HandoverModal from '../components/HandoverModal';
 import { toast } from 'react-toastify';
 
+/* ─── helpers ─────────────────────────────────────────────────────────── */
 function formatLocalDate(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -119,12 +124,20 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
   }
 }
 
+/* ─── section icon map ────────────────────────────────────────────────── */
+const SECTION_ICONS = {
+  agent: User,
+  call: ClipboardList,
+  phone: Phone,
+};
+
+/* ─── component ───────────────────────────────────────────────────────── */
 export default function PreCallChecklist() {
   const { t } = useContext(UIContext);
   const { user, setUser } = useContext(AuthContext);
   const navigate = useNavigate();
 
-const [surveyId, setSurveyId] = useState(null);
+  const [surveyId, setSurveyId] = useState(null);
   const [config, setConfig] = useState(() => normalizeOutboundPrecall(null));
   const [answers, setAnswers] = useState(() => buildInitialAnswers(normalizeOutboundPrecall(null).fields, user?.name));
   const [currentNumber, setCurrentNumber] = useState(null);
@@ -147,6 +160,7 @@ const [surveyId, setSurveyId] = useState(null);
   const editAnswersRef = useRef(null);
   const [isHandoverOpen, setIsHandoverOpen] = useState(false);
 
+  /* ── serial search ─────────────────────────────────────────────────── */
   const handleSerialSearch = async (e) => {
     if (e) e.preventDefault();
     if (!serialSearchTerm.trim()) return;
@@ -158,7 +172,6 @@ const [surveyId, setSurveyId] = useState(null);
         if (sid) setSurveyId(sid);
         if (phoneNumber) setCurrentNumber(phoneNumber);
         setIsEditMode(!!editMode);
-
         if (savedAnswers) {
           setAnswers(prev => {
             const newAns = { ...prev, ...savedAnswers };
@@ -166,24 +179,20 @@ const [surveyId, setSurveyId] = useState(null);
             return newAns;
           });
         }
-
-        
-        // If we found a phone number, update the answer field
         if (phoneNumber?.number) {
-            setAnswers(prev => {
-              const newAns = { ...prev, phone: phoneNumber.number };
-              editAnswersRef.current = newAns;
-              return newAns;
-            });
+          setAnswers(prev => {
+            const newAns = { ...prev, phone: phoneNumber.number };
+            editAnswersRef.current = newAns;
+            return newAns;
+          });
         }
         if (phoneNumber?.serialNumber) {
-            setAnswers(prev => {
-              const newAns = { ...prev, serial_number: phoneNumber.serialNumber };
-              editAnswersRef.current = newAns;
-              return newAns;
-            });
+          setAnswers(prev => {
+            const newAns = { ...prev, serial_number: phoneNumber.serialNumber };
+            editAnswersRef.current = newAns;
+            return newAns;
+          });
         }
-        
         toast.success(t('serialFound') || 'Form found and loaded.');
       } else {
         toast.error(t('serialNotFound') || 'Serial number not found.');
@@ -196,14 +205,15 @@ const [surveyId, setSurveyId] = useState(null);
     }
   };
 
+  /* ── tick clock ────────────────────────────────────────────────────── */
   useEffect(() => {
     const id = setInterval(() => setTick(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
 
+  /* ── beforeunload guard ────────────────────────────────────────────── */
   useEffect(() => {
     const handleBeforeUnload = (e) => {
-      // If they have fetched a number but haven't submitted, warn them
       if (answers.phone && !submitting) {
         e.preventDefault();
         e.returnValue = '';
@@ -213,6 +223,7 @@ const [surveyId, setSurveyId] = useState(null);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [answers.phone, submitting]);
 
+  /* ── bootstrap config ──────────────────────────────────────────────── */
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
@@ -222,43 +233,26 @@ const [surveyId, setSurveyId] = useState(null);
       try {
         const urlParams = new URLSearchParams(window.location.search);
         const sidUrl = urlParams.get('surveyId');
-        
         const [precallRes, numberRes] = await Promise.all([
           api.get(`/agent/outbound-precall${sidUrl ? `?surveyId=${sidUrl}` : ''}`, { signal }),
-          // Do not auto-fetch if we're not recovering a session. Agent must manually fetch via dropdown.
-          (isEditMode || editAnswersRef.current) 
-            ? Promise.resolve({ data: { number: editAnswersRef.current?.phone || currentNumber?.number, serialNumber: editAnswersRef.current?.serial_number || currentNumber?.serialNumber } }) 
+          (isEditMode || editAnswersRef.current)
+            ? Promise.resolve({ data: { number: editAnswersRef.current?.phone || currentNumber?.number, serialNumber: editAnswersRef.current?.serial_number || currentNumber?.serialNumber } })
             : Promise.resolve({ data: null })
         ]);
         if (cancelled) return;
         setSurveyId(precallRes.data.surveyId || null);
-        
         const tg = precallRes.data.targetGovernorate || 'All';
         setTargetGovernorate(tg);
-        // If agent, enforce their assigned governorate locally. Others start at the target but can change.
-        if (user?.role === 'agent') {
-          setSelectedGov(tg);
-        } else {
-          setSelectedGov(tg); // Admins/Quality can change it later
-        }
-
+        setSelectedGov(tg);
         const norm = normalizeOutboundPrecall(precallRes.data.outboundPrecall);
         setConfig(norm);
         const nextNum = numberRes.data;
         setCurrentNumber(nextNum);
         const initial = buildInitialAnswers(norm.fields, user?.name);
-        
         let merged = initial;
-        if (nextNum && nextNum.number) {
-            merged.phone = nextNum.number;
-        }
-        if (nextNum && nextNum.serialNumber) {
-            merged.serial_number = nextNum.serialNumber;
-        }
-        // Don't reset edit mode if we were already editing (e.g. on a search-triggered re-fetch)
+        if (nextNum?.number) merged.phone = nextNum.number;
+        if (nextNum?.serialNumber) merged.serial_number = nextNum.serialNumber;
         if (!isEditMode) setIsEditMode(false);
-
-        // If we are actively editing an existing form, use the loaded answers instead of the draft
         if (editAnswersRef.current) {
           merged = { ...merged, ...editAnswersRef.current };
         } else if (draftKey) {
@@ -268,15 +262,12 @@ const [surveyId, setSurveyId] = useState(null);
               const parsed = JSON.parse(raw);
               if (parsed && typeof parsed === 'object') {
                 merged = { ...merged, ...parsed };
-                // ONLY enforce the actively fetched phone number if the draft is empty or for a DIFFERENT number
-                if (nextNum && nextNum.number && (!merged.phone || merged.phone !== nextNum.number)) {
-                    merged.phone = nextNum.number; 
+                if (nextNum?.number && (!merged.phone || merged.phone !== nextNum.number)) {
+                  merged.phone = nextNum.number;
                 }
               }
             }
-          } catch (_) {
-            /* ignore bad draft */
-          }
+          } catch (_) { /* ignore bad draft */ }
         }
         setAnswers(merged);
         try {
@@ -296,38 +287,33 @@ const [surveyId, setSurveyId] = useState(null);
         if (!cancelled) setConfigLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
+    return () => { cancelled = true; controller.abort(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.name, draftKey]);
 
+  /* ── sync phone number to answers ─────────────────────────────────── */
   useEffect(() => {
-    if (currentNumber && currentNumber.number) {
-      setAnswers(prev => ({
-        ...prev,
-        phone: currentNumber.number
-      }));
+    if (currentNumber?.number) {
+      setAnswers(prev => ({ ...prev, phone: currentNumber.number }));
     }
   }, [currentNumber]);
 
+  /* ── draft autosave ────────────────────────────────────────────────── */
   useEffect(() => {
     if (!draftKey || configLoading) return;
-    const t = setTimeout(() => {
-      try {
-        sessionStorage.setItem(draftKey, JSON.stringify(answers));
-      } catch (_) {
-        /* quota / private mode */
-      }
+    const timer = setTimeout(() => {
+      try { sessionStorage.setItem(draftKey, JSON.stringify(answers)); }
+      catch (_) { /* quota / private mode */ }
     }, 300);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [answers, draftKey, configLoading]);
 
+  /* ── answer setter ─────────────────────────────────────────────────── */
   const setAnswer = useCallback((id, val) => {
     setAnswers((prev) => ({ ...prev, [id]: val }));
   }, []);
 
+  /* ── derived values ────────────────────────────────────────────────── */
   const scriptText = useMemo(() => {
     const raw = metaLine(config.meta, 'script', t);
     const name = (answers.researcher_name || user?.name || '').trim();
@@ -337,15 +323,37 @@ const [surveyId, setSurveyId] = useState(null);
   const interviewDateStr = formatLocalDate(tick);
   const interviewTimeStr = formatLocalTime(tick);
 
-  const canProceed = useMemo(() => {
-    return precallNextValidation(config.fields, answers);
-  }, [answers, config.fields]);
+  const canProceed = useMemo(() => precallNextValidation(config.fields, answers), [answers, config.fields]);
+  const canSaveNew = useMemo(() => precallNewFormValidation(config.fields, answers), [answers, config.fields]);
 
-  // New Form: ALL required fields (incl. interview_result) must be filled
-  const canSaveNew = useMemo(() => {
-    return precallNewFormValidation(config.fields, answers);
-  }, [answers, config.fields]);
+  const sectionOrder = config.sectionOrder || ['agent', 'call', 'phone'];
 
+  /* ── per-section completion (derived, never stored) ────────────────── */
+  const isSectionComplete = useCallback((sectionIndex) => {
+    const sec = sectionOrder[sectionIndex];
+    if (!sec) return true;
+    const sectionFields = config.fields.filter((f) => f.section === sec);
+    for (const field of sectionFields) {
+      if (!isFieldVisible(field, answers)) continue;
+      if (!field.required) continue;
+      if (!isFieldSatisfied(field, answers[field.id])) return false;
+    }
+    return true;
+  }, [answers, config.fields, sectionOrder]);
+
+  /* ── hint ──────────────────────────────────────────────────────────── */
+  const hintText = useMemo(() => {
+    if (canProceed) return '';
+    const callResult = answers.call_result;
+    if (!callResult) return 'Select the call outcome to continue.';
+    if (String(callResult) !== 'contacted') {
+      if (!canSaveNew) return 'Fill in the Interview outcome, then click "New Form" to log this call and get the next number.';
+      return 'Click "New Form" to save this result and get the next number.';
+    }
+    return (config.meta.completeHint && config.meta.completeHint.trim()) || t('precallCompleteHint');
+  }, [canProceed, canSaveNew, answers.call_result, config.meta, t]);
+
+  /* ── actions ───────────────────────────────────────────────────────── */
   const completePrecallSubmission = async () => {
     const frozen = new Date();
     const payload = { ...answers };
@@ -360,7 +368,6 @@ const [surveyId, setSurveyId] = useState(null);
       interviewDate: formatLocalDate(frozen),
       interviewStartDisplay: formatLocalTime(frozen),
     });
-    // ONLY refresh user if NOT in edit mode (to avoid breaking the local edit state)
     if (!isEditMode) {
       const me = await api.get('/auth/me');
       setUser(me.data.user);
@@ -372,9 +379,7 @@ const [surveyId, setSurveyId] = useState(null);
     try {
       const cr = await api.get('/agent/precall-session-count');
       if (typeof cr.data?.count === 'number') setFormsCount(cr.data.count);
-    } catch (_) {
-      /* keep previous */
-    }
+    } catch (_) { /* keep previous */ }
   };
 
   const onNext = async () => {
@@ -382,13 +387,8 @@ const [surveyId, setSurveyId] = useState(null);
     setSubmitting(true);
     try {
       await completePrecallSubmission();
-      // Keep draft so "Back to call checklist" restores the same fields for editing; cleared on New form.
       if (draftKey) {
-        try {
-          sessionStorage.setItem(draftKey, JSON.stringify(answers));
-        } catch (_) {
-          /* quota */
-        }
+        try { sessionStorage.setItem(draftKey, JSON.stringify(answers)); } catch (_) { /* quota */ }
       }
       await refreshFormsCount();
       if (isEditMode && surveyId) {
@@ -415,21 +415,16 @@ const [surveyId, setSurveyId] = useState(null);
       if (draftKey) sessionStorage.removeItem(draftKey);
       setAnswers(buildInitialAnswers(config.fields, user?.name));
       setTick(new Date());
-      
       setNumberLoading(true);
       try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const sidUrl = urlParams.get('surveyId');
-        // Do not auto-fetch on New Form. They must click Fetch.
         setCurrentNumber(null);
         setAnswers(prev => ({ ...prev, phone: '', serial_number: '' }));
         setIsEditMode(false);
       } catch (e) {
-        console.error("Failed to reset number:", e);
+        console.error('Failed to reset number:', e);
       } finally {
         setNumberLoading(false);
       }
-
       await refreshFormsCount();
     } catch (e) {
       console.error(e);
@@ -447,17 +442,16 @@ const [surveyId, setSurveyId] = useState(null);
       const sidUrl = urlParams.get('surveyId');
       const nextNumRes = await api.get(`/agent/next-number?governorate=${encodeURIComponent(govToFetch)}${sidUrl ? `&surveyId=${sidUrl}` : ''}`);
       const nextNum = nextNumRes.data;
-      
       setCurrentNumber(nextNum);
-      if (nextNum && nextNum.number) {
+      if (nextNum?.number) {
         setAnswers(prev => ({ ...prev, phone: nextNum.number, serial_number: nextNum.serialNumber || '' }));
       } else {
         setAnswers(prev => ({ ...prev, phone: '', serial_number: '' }));
-        toast.warning("No numbers available for the selected region.");
+        toast.warning('No numbers available for the selected region.');
       }
     } catch (e) {
-      console.error("Failed to load next number:", e);
-      toast.error("Failed to load number");
+      console.error('Failed to load next number:', e);
+      toast.error('Failed to load number');
     } finally {
       setNumberLoading(false);
     }
@@ -469,21 +463,7 @@ const [surveyId, setSurveyId] = useState(null);
     fetchNumber(newGov);
   };
 
-  const hintText = useMemo(() => {
-    if (canProceed) return ''; // Next is unlocked — no hint needed
-    const callResult = answers.call_result;
-    if (!callResult) return 'Select the call outcome to continue.';
-    if (String(callResult) !== 'contacted') {
-      // Non-contacted: guide agent to fill interview_result and use New Form
-      if (!canSaveNew) return 'Fill in the Interview outcome, then click "New Form" to log this call and get the next number.';
-      return 'Click "New Form" to save this result and get the next number.';
-    }
-    // Contacted but something else is missing
-    return (config.meta.completeHint && config.meta.completeHint.trim()) || t('precallCompleteHint');
-  }, [canProceed, canSaveNew, answers.call_result, config.meta, t]);
-
-  const sectionOrder = config.sectionOrder || ['agent', 'call', 'phone'];
-
+  /* ─── loading state ────────────────────────────────────────────────── */
   if (configLoading) {
     return (
       <div className="precall-shell" style={{ display: 'flex', justifyContent: 'center', paddingTop: '4rem' }}>
@@ -492,6 +472,7 @@ const [surveyId, setSurveyId] = useState(null);
     );
   }
 
+  /* ─── render ───────────────────────────────────────────────────────── */
   return (
     <motion.div
       initial={{ opacity: 0, y: 18 }}
@@ -499,23 +480,27 @@ const [surveyId, setSurveyId] = useState(null);
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       className="precall-shell"
     >
+      {/* ── 1. HEADER CARD ─────────────────────────────────────────────── */}
       <div className="precall-hero glass-card">
         <div className="precall-hero-top">
-        <div className="precall-hero-title">
+          {/* Left/RTL-start: icon + title + subtitle */}
+          <div className="precall-hero-title">
             <ClipboardList size={26} color="var(--primary)" />
             <div>
               <h1 style={{ margin: 0, fontSize: '1.35rem', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 {metaLine(config.meta, 'title', t)}
-                {numberLoading && <Loader2 size={16} className="spin-icon ml-2" />}
+                {numberLoading && <Loader2 size={16} className="spin-icon" style={{ marginInlineStart: '0.5rem' }} />}
               </h1>
               <p className="precall-subtitle">{metaLine(config.meta, 'subtitle', t)}</p>
             </div>
           </div>
-          <div className="precall-pill" style={{ display: 'flex', gap: '1rem', background: 'transparent', border: 'none', padding: 0 }}>
+
+          {/* Right/RTL-end: handover + serial search + date/time pill */}
+          <div style={{ display: 'flex', gap: '1rem', background: 'transparent', border: 'none', padding: 0, flexWrap: 'wrap', alignItems: 'center' }}>
             {answers.serial_number && user?.role !== 'agent' && (
-              <button 
-                type="button" 
-                className="btn-secondary" 
+              <button
+                type="button"
+                className="btn-secondary"
                 style={{ height: '40px', gap: '0.5rem', borderColor: 'var(--primary)', color: 'var(--primary)' }}
                 onClick={() => setIsHandoverOpen(true)}
               >
@@ -523,26 +508,27 @@ const [surveyId, setSurveyId] = useState(null);
                 {t('handover') || 'Handover'}
               </button>
             )}
-            
+
             {user?.role !== 'agent' && (
-            <form onSubmit={handleSerialSearch} style={{ display: 'flex', gap: '0.5rem' }}>
-              <div style={{ position: 'relative' }}>
-                <Hash size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
-                <input 
-                  type="text" 
-                  className="input-field" 
-                  placeholder={t('searchBySerial') || "Search Serial..."} 
-                  style={{ paddingLeft: '35px', height: '40px', fontSize: '0.9rem', width: '160px' }}
-                  value={serialSearchTerm}
-                  onChange={(e) => setSerialSearchTerm(e.target.value)}
-                />
-              </div>
-              <button type="submit" className="btn-secondary" style={{ height: '40px', padding: '0 1rem' }} disabled={searchLoading}>
-                {searchLoading ? <Loader2 size={16} className="spin-icon" /> : <Hash size={16} />}
-              </button>
-            </form>
+              <form onSubmit={handleSerialSearch} style={{ display: 'flex', gap: '0.5rem' }}>
+                <div style={{ position: 'relative' }}>
+                  <Hash size={16} style={{ position: 'absolute', insetInlineStart: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder={t('searchBySerial') || 'Search Serial...'}
+                    style={{ paddingInlineStart: '35px', height: '40px', fontSize: '0.9rem', width: '160px' }}
+                    value={serialSearchTerm}
+                    onChange={(e) => setSerialSearchTerm(e.target.value)}
+                  />
+                </div>
+                <button type="submit" className="btn-secondary" style={{ height: '40px', padding: '0 1rem' }} disabled={searchLoading}>
+                  {searchLoading ? <Loader2 size={16} className="spin-icon" /> : <Hash size={16} />}
+                </button>
+              </form>
             )}
 
+            {/* Live date/time pill */}
             <div className="precall-pill">
               <CalendarClock size={16} />
               <span style={{ fontWeight: 900 }}>{interviewDateStr}</span>
@@ -551,69 +537,145 @@ const [surveyId, setSurveyId] = useState(null);
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="precall-script">
+      {/* ── 2. SCRIPT BLOCK (standalone card, hidden if empty) ─────────── */}
+      {scriptText && scriptText.trim() && (
+        <div className="glass-card precall-script-standalone">
           <div className="precall-script-label">{metaLine(config.meta, 'scriptLabel', t)}</div>
           <div className="precall-script-text">{scriptText}</div>
         </div>
-      </div>
+      )}
 
+      {/* ── 3. HORIZONTAL SECTION CARDS GRID ───────────────────────────── */}
       <div className="precall-grid">
-        {sectionOrder.map((sec) => {
+        {sectionOrder.map((sec, sectionIndex) => {
           const sectionFields = config.fields.filter((f) => f.section === sec);
           if (sectionFields.length === 0) return null;
 
           const titleKey =
             sec === 'agent' ? 'sectionAgent' : sec === 'call' ? 'sectionCall' : 'sectionPhone';
-          const Icon = sec === 'agent' ? User : sec === 'call' ? ClipboardList : Phone;
+          const Icon = SECTION_ICONS[sec] || ClipboardList;
+
+          const isLocked = sectionIndex > 0 && !isSectionComplete(sectionIndex - 1);
+          const isComplete = isSectionComplete(sectionIndex);
 
           return (
-            <section key={sec} className="glass-card precall-card">
-              <div className="precall-section-title">
-                <Icon size={18} color="var(--primary)" />
-                <span>{metaLine(config.meta, titleKey, t)}</span>
+            <motion.section
+              key={sec}
+              className={`glass-card precall-card precall-section-card${isLocked ? ' locked' : ''}`}
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: sectionIndex * 0.08, ease: [0.16, 1, 0.3, 1] }}
+            >
+              {/* Card header: icon + title + completion badge */}
+              <div className="precall-section-card-header">
+                <div className="precall-section-title">
+                  <Icon size={18} color="var(--primary)" />
+                  <span>{metaLine(config.meta, titleKey, t)}</span>
+                </div>
+                <AnimatePresence>
+                  {isComplete && (
+                    <motion.div
+                      className="precall-completion-dot"
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                      title="Section complete"
+                    >
+                      <CheckCircle2 size={16} />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-              
-              {sec === 'phone' && !isEditMode && (
-                <div className="precall-field" style={{ marginBottom: '1.25rem', padding: '1rem', background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: '8px' }}>
-                  <label className="precall-label" style={{ fontWeight: 600, color: 'var(--primary)' }}>Target Governorate</label>
-                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                    <select className="input-field" style={{ flex: 1, minWidth: '200px' }} value={selectedGov} onChange={handleGovChange} disabled={numberLoading || user?.role === 'agent'}>
-                      <option value="All">All Governorates (Random)</option>
-                      {EGYPTIAN_GOVERNORATES.map(g => (
-                        <option key={g} value={g}>{g}</option>
-                      ))}
-                    </select>
+
+              {/* Card body — disabled when locked */}
+              <div
+                className="precall-section-body"
+                style={{
+                  opacity: isLocked ? 0.45 : 1,
+                  pointerEvents: isLocked ? 'none' : 'auto',
+                  userSelect: isLocked ? 'none' : 'auto',
+                  transition: 'opacity 0.3s ease',
+                }}
+              >
+                {/* Phone section: governorate picker + get number button */}
+                {sec === 'phone' && !isEditMode && (
+                  <div className="precall-field" style={{ marginBottom: '1.25rem', padding: '1rem', background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: '8px' }}>
+                    <label className="precall-label" style={{ fontWeight: 600, color: 'var(--primary)' }}>Target Governorate</label>
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      <select
+                        className="input-field"
+                        style={{ flex: 1, minWidth: '200px' }}
+                        value={selectedGov}
+                        onChange={handleGovChange}
+                        disabled={isLocked || numberLoading || user?.role === 'agent'}
+                      >
+                        <option value="All">All Governorates (Random)</option>
+                        {EGYPTIAN_GOVERNORATES.map(g => (
+                          <option key={g} value={g}>{g}</option>
+                        ))}
+                      </select>
+                      {!currentNumber && (
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          onClick={() => fetchNumber(selectedGov)}
+                          disabled={isLocked || numberLoading}
+                        >
+                          {numberLoading ? <Loader2 size={16} className="spin-icon" /> : 'Get Number'}
+                        </button>
+                      )}
+                    </div>
                     {!currentNumber && (
-                      <button type="button" className="btn-primary" onClick={() => fetchNumber(selectedGov)} disabled={numberLoading}>
-                        {numberLoading ? <Loader2 size={16} className="spin-icon" /> : 'Get Number'}
-                      </button>
+                      <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        {user?.role === 'agent'
+                          ? "Click 'Get Number' to fetch the next available lead from your assigned region."
+                          : "Select a region and click 'Get Number' to fetch the next available lead."}
+                      </p>
                     )}
                   </div>
-                  {!currentNumber && <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{user?.role === 'agent' ? "Click 'Get Number' to fetch the next available lead from your assigned region." : "Select a region and click 'Get Number' to fetch the next available lead."}</p>}
-                </div>
-              )}
+                )}
 
-              {sectionFields.map((field) => {
-                if (!isFieldVisible(field, answers)) return null;
-                const v = answers[field.id];
-                // Phone number and Serial number are strictly read-only
-                const isFieldReadOnly = (field.id === 'phone' || field.id === 'serial_number');
-                return renderFieldInput(field, v, setAnswer, tick, t, isFieldReadOnly);
-              })}
-            </section>
+                {/* Fields */}
+                {sectionFields.map((field) => {
+                  if (!isFieldVisible(field, answers)) return null;
+                  const v = answers[field.id];
+                  const isFieldReadOnly = field.id === 'phone' || field.id === 'serial_number';
+                  return renderFieldInput(field, v, setAnswer, tick, t, isFieldReadOnly);
+                })}
+              </div>
+
+              {/* Lock overlay */}
+              <AnimatePresence>
+                {isLocked && (
+                  <motion.div
+                    className="precall-lock-overlay"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.25 }}
+                  >
+                    <div className="precall-lock-inner">
+                      <Lock size={28} color="var(--text-secondary)" />
+                      <span className="precall-lock-label">{t('precallSectionLocked')}</span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.section>
           );
         })}
       </div>
 
-      {/* Contextual hints: show relevant guidance based on call outcome */}
+      {/* ── contextual hints ────────────────────────────────────────────── */}
       {(!canProceed || !canSaveNew) && hintText && (
         <div className="precall-hint" style={{ marginTop: '0.5rem' }}>
           <Hash size={16} />
           <span>{hintText}</span>
         </div>
       )}
-      {/* When call is NOT contacted: clarify New Form is the right action */}
       {!canProceed && answers.call_result && String(answers.call_result) !== 'contacted' && canSaveNew && (
         <div className="precall-hint" style={{ marginTop: '0.25rem', borderColor: 'hsla(160, 70%, 40%, 0.4)', background: 'hsla(160, 70%, 40%, 0.06)' }}>
           <CheckCircle2 size={16} color="var(--success, #10b981)" />
@@ -623,6 +685,7 @@ const [surveyId, setSurveyId] = useState(null);
         </div>
       )}
 
+      {/* ── 4. STICKY BOTTOM ACTION BAR ─────────────────────────────────── */}
       <div className="precall-footer glass-card">
         <div className="precall-footer-left">
           <span className="precall-footer-label">{metaLine(config.meta, 'formsCountLabel', t)}</span>
@@ -653,8 +716,8 @@ const [surveyId, setSurveyId] = useState(null);
         </div>
       </div>
 
-      <HandoverModal 
-        isOpen={isHandoverOpen} 
+      <HandoverModal
+        isOpen={isHandoverOpen}
         onClose={() => setIsHandoverOpen(false)}
         serialNumber={answers.serial_number}
         onSuccess={() => navigate('/', { replace: true })}

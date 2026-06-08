@@ -182,6 +182,7 @@ export const translations = {
     precallNewForm: "New form",
     precallNewFormNeedComplete:
       "Complete all required fields (including a valid interview outcome) before saving this form and starting a new one.",
+    precallSectionLocked: "Complete the previous section first",
     backToChecklist: "Back to call checklist",
     submitSurvey: "Submit survey",
     surveyInterviewOutcomeTitle: "Interview outcome (end of call)",
@@ -403,6 +404,7 @@ export const translations = {
     precallNewForm: "استمارة جديدة",
     precallNewFormNeedComplete:
       "أكمل كل الحقول المطلوبة (بما فيها نتيجة المقابلة الصحيحة) قبل حفظ هذه الاستمارة وبدء استمارة جديدة.",
+    precallSectionLocked: "أكمل القسم السابق أولاً",
     backToChecklist: "العودة لقائمة ما قبل المكالمة",
     submitSurvey: "إرسال الاستطلاع",
     surveyInterviewOutcomeTitle: "نتيجة المقابلة (نهاية المكالمة)",

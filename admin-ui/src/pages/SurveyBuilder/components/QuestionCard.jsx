@@ -30,65 +30,107 @@ export default function QuestionCard({ question, sIdx, qIdx }) {
 
   const updateQ = (patch) => {
     updateState(prev => {
-      const s = [...prev.sections];
-      const qs = [...s[sIdx].questions];
-      qs[qIdx] = { ...qs[qIdx], ...patch };
-      s[sIdx] = { ...s[sIdx], questions: qs };
-      return { ...prev, sections: s };
+      const newSections = prev.sections.map(sec => {
+        const hasQ = sec.questions.some(q => q.questionId === question.questionId);
+        if (!hasQ) return sec;
+        return {
+          ...sec,
+          questions: sec.questions.map(q => 
+            q.questionId === question.questionId ? { ...q, ...patch } : q
+          )
+        };
+      });
+      return { ...prev, sections: newSections };
     });
   };
 
   const updateChoice = (cIdx, patch) => {
     updateState(prev => {
-      const s = [...prev.sections];
-      const qs = [...s[sIdx].questions];
-      const choices = [...(qs[qIdx].choices || [])];
-      choices[cIdx] = { ...choices[cIdx], ...patch };
-      qs[qIdx] = { ...qs[qIdx], choices };
-      s[sIdx] = { ...s[sIdx], questions: qs };
-      return { ...prev, sections: s };
+      const newSections = prev.sections.map(sec => {
+        const hasQ = sec.questions.some(q => q.questionId === question.questionId);
+        if (!hasQ) return sec;
+        return {
+          ...sec,
+          questions: sec.questions.map(q => {
+            if (q.questionId !== question.questionId) return q;
+            const choices = [...(q.choices || [])];
+            choices[cIdx] = { ...choices[cIdx], ...patch };
+            return { ...q, choices };
+          })
+        };
+      });
+      return { ...prev, sections: newSections };
     });
   };
 
   const addChoice = () => {
     updateState(prev => {
-      const s = [...prev.sections];
-      const qs = [...s[sIdx].questions];
-      const choices = [...(qs[qIdx].choices || []), { text: 'New Option', logic: null }];
-      qs[qIdx] = { ...qs[qIdx], choices };
-      s[sIdx] = { ...s[sIdx], questions: qs };
-      return { ...prev, sections: s };
+      const newSections = prev.sections.map(sec => {
+        const hasQ = sec.questions.some(q => q.questionId === question.questionId);
+        if (!hasQ) return sec;
+        return {
+          ...sec,
+          questions: sec.questions.map(q => {
+            if (q.questionId !== question.questionId) return q;
+            return {
+              ...q,
+              choices: [...(q.choices || []), { text: 'New Option', value: '', logic: null }]
+            };
+          })
+        };
+      });
+      return { ...prev, sections: newSections };
     });
   };
 
   const removeChoice = (cIdx) => {
     updateState(prev => {
-      const s = [...prev.sections];
-      const qs = [...s[sIdx].questions];
-      const choices = qs[qIdx].choices.filter((_, i) => i !== cIdx);
-      qs[qIdx] = { ...qs[qIdx], choices };
-      s[sIdx] = { ...s[sIdx], questions: qs };
-      return { ...prev, sections: s };
+      const newSections = prev.sections.map(sec => {
+        const hasQ = sec.questions.some(q => q.questionId === question.questionId);
+        if (!hasQ) return sec;
+        return {
+          ...sec,
+          questions: sec.questions.map(q => {
+            if (q.questionId !== question.questionId) return q;
+            return {
+              ...q,
+              choices: (q.choices || []).filter((_, i) => i !== cIdx)
+            };
+          })
+        };
+      });
+      return { ...prev, sections: newSections };
     });
   };
 
   const duplicateQ = () => {
     updateState(prev => {
-      const s = [...prev.sections];
-      const newQ = JSON.parse(JSON.stringify(s[sIdx].questions[qIdx]));
-      newQ.questionId = `q_${Date.now()}`;
-      newQ.text = newQ.text + ' (Copy)';
-      s[sIdx].questions.splice(qIdx + 1, 0, newQ);
-      return { ...prev, sections: s };
+      const newSections = prev.sections.map(sec => {
+        const idx = sec.questions.findIndex(q => q.questionId === question.questionId);
+        if (idx === -1) return sec;
+        // Deep-clone the question so choices and nested objects are fully independent
+        const newQ = JSON.parse(JSON.stringify(sec.questions[idx]));
+        newQ.questionId = crypto.randomUUID();
+        newQ.text = newQ.text + ' (Copy)';
+        // Immutable insertion at idx + 1 — no splice/mutation
+        const newQuestions = [
+          ...sec.questions.slice(0, idx + 1),
+          newQ,
+          ...sec.questions.slice(idx + 1),
+        ];
+        return { ...sec, questions: newQuestions };
+      });
+      return { ...prev, sections: newSections };
     });
   };
 
   const deleteQ = () => {
     if (!window.confirm("Are you sure you want to delete this question?")) return;
     updateState(prev => {
-      const s = [...prev.sections];
-      s[sIdx].questions.splice(qIdx, 1);
-      return { ...prev, sections: s };
+      const newSections = prev.sections.map(sec => {
+        return { ...sec, questions: sec.questions.filter(q => q.questionId !== question.questionId) };
+      });
+      return { ...prev, sections: newSections };
     });
   };
 
@@ -186,11 +228,30 @@ export default function QuestionCard({ question, sIdx, qIdx }) {
 
           {(question.type === 'single_choice' || question.type === 'multiple_choice') && (
             <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-              <label className="form-label" style={{ marginBottom: '0.75rem', display: 'block' }}>Choices</label>
+              <label className="form-label" style={{ marginBottom: '0.25rem', display: 'block' }}>Choices</label>
+              <p style={{ margin: '0 0 0.75rem', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Add export codes to each answer (optional)
+              </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {(question.choices || []).map((choice, cIdx) => (
                   <div key={cIdx} style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input className="input-field" value={choice.text} onChange={e => updateChoice(cIdx, { text: e.target.value })} placeholder="Option text" readOnly={!isAdmin} />
+                    <input
+                      className="input-field"
+                      style={{ flex: 1 }}
+                      value={choice.text}
+                      onChange={e => updateChoice(cIdx, { text: e.target.value })}
+                      placeholder="Option text"
+                      readOnly={!isAdmin}
+                    />
+                    <input
+                      className="input-field"
+                      style={{ width: '30%', minWidth: '80px', maxWidth: '140px' }}
+                      value={choice.value ?? ''}
+                      onChange={e => updateChoice(cIdx, { value: e.target.value })}
+                      placeholder="Value (optional)"
+                      readOnly={!isAdmin}
+                      title="Export code — exported instead of label text when set"
+                    />
                     {isAdmin && (
                       <button type="button" className="btn-secondary" style={{ padding: '0.5rem', color: '#ef4444' }} onClick={() => removeChoice(cIdx)}>×</button>
                     )}

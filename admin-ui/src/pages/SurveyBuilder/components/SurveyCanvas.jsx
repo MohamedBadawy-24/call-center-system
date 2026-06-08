@@ -10,32 +10,41 @@ export default function SurveyCanvas() {
 
   const updateSectionTitle = (sIdx, title) => {
     updateState(prev => {
-      const s = [...prev.sections];
-      s[sIdx] = { ...s[sIdx], title };
-      return { ...prev, sections: s };
+      const newSections = prev.sections.map((sec, idx) => 
+        idx === sIdx ? { ...sec, title } : sec
+      );
+      return { ...prev, sections: newSections };
     });
   };
 
   const removeSection = (sIdx) => {
     if (!window.confirm("Are you sure you want to remove this entire section and all its questions?")) return;
-    updateState(prev => ({
-      ...prev,
-      sections: prev.sections.filter((_, i) => i !== sIdx)
-    }));
+    updateState(prev => {
+      const newSections = prev.sections.filter((_, idx) => idx !== sIdx);
+      return { ...prev, sections: newSections };
+    });
   };
 
   const addQuestion = (sIdx) => {
     updateState(prev => {
-      const s = [...prev.sections];
-      s[sIdx].questions.push({
-        questionId: `q_${Date.now()}`,
-        text: 'New Question',
-        script: '',
-        type: 'text',
-        category: 'main',
-        choices: [],
+      const newSections = prev.sections.map((sec, idx) => {
+        if (idx !== sIdx) return sec;
+        return {
+          ...sec,
+          questions: [
+            ...sec.questions,
+            {
+              questionId: crypto.randomUUID(),
+              text: 'New Question',
+              script: '',
+              type: 'text',
+              category: 'main',
+              choices: [],
+            }
+          ]
+        };
       });
-      return { ...prev, sections: s };
+      return { ...prev, sections: newSections };
     });
   };
 

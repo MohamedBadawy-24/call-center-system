@@ -36,12 +36,28 @@ export default function BuilderTab() {
 
     if (activeData.type === 'question' && overData.type === 'question') {
       updateState(prev => {
-        const newSections = [...prev.sections];
-        const sourceSec = newSections[activeData.sIdx];
-        const destSec = newSections[overData.sIdx];
-        
-        const [movedItem] = sourceSec.questions.splice(activeData.qIdx, 1);
-        destSec.questions.splice(overData.qIdx, 0, movedItem);
+        // Immutable drag reorder — no splice/mutation so StrictMode double-invocation is safe
+        const movedItem = prev.sections[activeData.sIdx].questions[activeData.qIdx];
+
+        const newSections = prev.sections.map((sec, si) => {
+          // Remove from source
+          let qs = sec.questions.filter((_, qi) =>
+            !(si === activeData.sIdx && qi === activeData.qIdx)
+          );
+          // Insert at destination
+          if (si === overData.sIdx) {
+            // Adjust dest index if source and dest are in the same section and source came before dest
+            const destIdx = (activeData.sIdx === overData.sIdx && activeData.qIdx < overData.qIdx)
+              ? overData.qIdx - 1
+              : overData.qIdx;
+            qs = [
+              ...qs.slice(0, destIdx),
+              movedItem,
+              ...qs.slice(destIdx),
+            ];
+          }
+          return { ...sec, questions: qs };
+        });
 
         return { ...prev, sections: newSections };
       });

@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { Plus, Trash2, Layers, X, ChevronDown, ChevronRight, GitBranch } from 'lucide-react';
+import { UIContext } from '../context/UIContext';
+import { PRECALL_ACTION_OPTIONS } from '../utils/outboundPrecallConfig';
 
 // ─── Operator definitions ─────────────────────────────────────────────────────
 const OPERATOR_GROUPS = [
@@ -95,7 +97,7 @@ export default function ConditionBuilder({ condition, onChange, availableFields 
         {!readOnly ? (
           <button
             type="button"
-            onClick={() => onChange({ type: 'group', operator: 'AND', conditions: [] })}
+            onClick={() => onChange({ type: 'group', operator: 'AND', action: 'show', conditions: [] })}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
               gap: '0.5rem', padding: '0.65rem 1rem', borderRadius: '8px',
@@ -142,6 +144,7 @@ export default function ConditionBuilder({ condition, onChange, availableFields 
 
 // ─── Group ────────────────────────────────────────────────────────────────────
 function ConditionGroup({ group, onChange, onRemove, availableFields, readOnly, isRoot, depth }) {
+  const { language } = useContext(UIContext) || { language: 'en' };
   const [collapsed, setCollapsed] = useState(false);
   const col = dc(depth);
   const kids = group.conditions || [];
@@ -163,6 +166,32 @@ function ConditionGroup({ group, onChange, onRemove, availableFields, readOnly, 
         padding: '0.5rem 0.75rem',
         borderBottom: collapsed ? 'none' : `1px solid ${col.border}`,
       }}>
+        {isRoot && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginRight: '0.5rem', marginLeft: '0.5rem' }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700 }}>Action:</span>
+            <select
+              value={group.action || 'show'}
+              onChange={(e) => upd({ action: e.target.value })}
+              disabled={readOnly}
+              className="input-field"
+              style={{
+                padding: '0.2rem 0.5rem',
+                fontSize: '0.72rem',
+                height: 'auto',
+                width: 'auto',
+                minWidth: '130px',
+                margin: 0
+              }}
+            >
+              {PRECALL_ACTION_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {language === 'ar' ? opt.labelAr : opt.labelEn}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {!isRoot && (
           <span style={{
             fontSize: '0.62rem', fontWeight: 800, padding: '0.1rem 0.38rem',

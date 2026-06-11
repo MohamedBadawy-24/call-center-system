@@ -8,6 +8,7 @@ const LogicSchema = new mongoose.Schema({
 
 const ChoiceSchema = new mongoose.Schema({
   text: String,
+  value: String, // export code — exported instead of label text when set (optional)
   logic: LogicSchema // Added logical branching per choice
 });
 

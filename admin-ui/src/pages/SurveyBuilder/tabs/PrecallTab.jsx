@@ -289,6 +289,10 @@ export default function PrecallTab() {
                       </div>
                     ))}
                     {isAdmin && <button type="button" className="btn-secondary" style={{ marginTop: '0.25rem' }} onClick={() => addOption(fIdx)}>+ Add option</button>}
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, marginTop: '0.75rem' }}>
+                      <input type="checkbox" checked={!!field.allowOther} onChange={(e) => updateField(fIdx, { allowOther: e.target.checked })} disabled={!isAdmin} />
+                      Allow Other answer / السماح بإجابة أخرى
+                    </label>
                   </div>
                 )}
                 <div style={{ marginTop: '0.75rem', padding: '1rem', border: '1px dashed var(--border-color)', borderRadius: '12px', background: 'rgba(var(--primary-rgb), 0.02)' }}>
@@ -296,8 +300,8 @@ export default function PrecallTab() {
                     <Layers size={16} /> Visibility Logic
                   </div>
                   <ConditionBuilder 
-                    condition={field.visibleWhen} 
-                    onChange={(cond) => updateField(fIdx, { visibleWhen: cond })}
+                    condition={field.logic} 
+                    onChange={(cond) => updateField(fIdx, { logic: cond })}
                     availableFields={otherFieldIds(fIdx)}
                     readOnly={!isAdmin}
                   />

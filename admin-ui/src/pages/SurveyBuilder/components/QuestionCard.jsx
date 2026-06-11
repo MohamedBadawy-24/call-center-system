@@ -5,8 +5,30 @@ import { SurveyBuilderContext } from '../SurveyBuilderContext';
 import ConditionBuilder from '../../../components/ConditionBuilder';
 import { GripVertical, Copy, Trash2, ChevronDown, ChevronUp, Layers } from 'lucide-react';
 
-export default function QuestionCard({ question, sIdx, qIdx }) {
-  const { surveyState, updateState, isAdmin } = useContext(SurveyBuilderContext);
+/*
+ * QuestionCard receives ALL mutation callbacks as props from SurveyCanvas.
+ * It does NOT define any state updaters internally.
+ *
+ * WHY: QuestionCard instances are reused across renders by React's reconciler.
+ * Any function defined inside QuestionCard closes over the props (sIdx, qIdx)
+ * at mount time. When the questions array changes (add/delete/reorder), those
+ * closed-over indices become stale and point to the wrong question.
+ *
+ * By defining all mutators in SurveyCanvas — which re-runs its .map() on every
+ * render — and passing them as props, the indices are always fresh and correct.
+ */
+export default function QuestionCard({
+  question,
+  sIdx,
+  qIdx,
+  updateQ,
+  updateChoice,
+  addChoice,
+  removeChoice,
+  duplicateQ,
+  deleteQ,
+}) {
+  const { surveyState, isAdmin } = useContext(SurveyBuilderContext);
   const [collapsed, setCollapsed] = useState(false);
 
   const {
@@ -16,9 +38,9 @@ export default function QuestionCard({ question, sIdx, qIdx }) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ 
+  } = useSortable({
     id: question.questionId,
-    data: { type: 'question', sIdx, qIdx }
+    data: { type: 'question', sIdx, qIdx },
   });
 
   const style = {
@@ -28,140 +50,34 @@ export default function QuestionCard({ question, sIdx, qIdx }) {
     zIndex: isDragging ? 10 : 1,
   };
 
-  const updateQ = (patch) => {
-    updateState(prev => {
-      const newSections = prev.sections.map(sec => {
-        const hasQ = sec.questions.some(q => q.questionId === question.questionId);
-        if (!hasQ) return sec;
-        return {
-          ...sec,
-          questions: sec.questions.map(q => 
-            q.questionId === question.questionId ? { ...q, ...patch } : q
-          )
-        };
-      });
-      return { ...prev, sections: newSections };
-    });
-  };
-
-  const updateChoice = (cIdx, patch) => {
-    updateState(prev => {
-      const newSections = prev.sections.map(sec => {
-        const hasQ = sec.questions.some(q => q.questionId === question.questionId);
-        if (!hasQ) return sec;
-        return {
-          ...sec,
-          questions: sec.questions.map(q => {
-            if (q.questionId !== question.questionId) return q;
-            const choices = [...(q.choices || [])];
-            choices[cIdx] = { ...choices[cIdx], ...patch };
-            return { ...q, choices };
-          })
-        };
-      });
-      return { ...prev, sections: newSections };
-    });
-  };
-
-  const addChoice = () => {
-    updateState(prev => {
-      const newSections = prev.sections.map(sec => {
-        const hasQ = sec.questions.some(q => q.questionId === question.questionId);
-        if (!hasQ) return sec;
-        return {
-          ...sec,
-          questions: sec.questions.map(q => {
-            if (q.questionId !== question.questionId) return q;
-            return {
-              ...q,
-              choices: [...(q.choices || []), { text: 'New Option', value: '', logic: null }]
-            };
-          })
-        };
-      });
-      return { ...prev, sections: newSections };
-    });
-  };
-
-  const removeChoice = (cIdx) => {
-    updateState(prev => {
-      const newSections = prev.sections.map(sec => {
-        const hasQ = sec.questions.some(q => q.questionId === question.questionId);
-        if (!hasQ) return sec;
-        return {
-          ...sec,
-          questions: sec.questions.map(q => {
-            if (q.questionId !== question.questionId) return q;
-            return {
-              ...q,
-              choices: (q.choices || []).filter((_, i) => i !== cIdx)
-            };
-          })
-        };
-      });
-      return { ...prev, sections: newSections };
-    });
-  };
-
-  const duplicateQ = () => {
-    updateState(prev => {
-      const newSections = prev.sections.map(sec => {
-        const idx = sec.questions.findIndex(q => q.questionId === question.questionId);
-        if (idx === -1) return sec;
-        // Deep-clone the question so choices and nested objects are fully independent
-        const newQ = JSON.parse(JSON.stringify(sec.questions[idx]));
-        newQ.questionId = crypto.randomUUID();
-        newQ.text = newQ.text + ' (Copy)';
-        // Immutable insertion at idx + 1 — no splice/mutation
-        const newQuestions = [
-          ...sec.questions.slice(0, idx + 1),
-          newQ,
-          ...sec.questions.slice(idx + 1),
-        ];
-        return { ...sec, questions: newQuestions };
-      });
-      return { ...prev, sections: newSections };
-    });
-  };
-
-  const deleteQ = () => {
-    if (!window.confirm("Are you sure you want to delete this question?")) return;
-    updateState(prev => {
-      const newSections = prev.sections.map(sec => {
-        return { ...sec, questions: sec.questions.filter(q => q.questionId !== question.questionId) };
-      });
-      return { ...prev, sections: newSections };
-    });
-  };
-
-  const allAvailableFieldsForLogic = surveyState.sections.flatMap(sec => 
+  const allAvailableFieldsForLogic = surveyState.sections.flatMap(sec =>
     sec.questions.map(q => ({
       id: q.questionId,
       label: q.text || q.questionId,
       type: q.type,
-      options: (q.choices || []).map(c => ({ value: c.text, label: c.text }))
+      options: (q.choices || []).map(c => ({ value: c.text, label: c.text })),
     }))
   ).filter(f => f.id !== question.questionId); // Prevent self-reference
 
   return (
-    <div 
-      ref={setNodeRef} 
-      style={{ 
-        ...style, 
-        background: 'var(--surface)', 
-        border: '1px solid var(--border-color)', 
-        borderRadius: '8px', 
-        display: 'flex', 
+    <div
+      ref={setNodeRef}
+      style={{
+        ...style,
+        background: 'var(--surface)',
+        border: '1px solid var(--border-color)',
+        borderRadius: '8px',
+        display: 'flex',
         flexDirection: 'column',
-        boxShadow: isDragging ? 'var(--shadow-lg)' : 'none'
+        boxShadow: isDragging ? 'var(--shadow-lg)' : 'none',
       }}
-      id={`q-${question.questionId}`}
+      id={`q-${sIdx}-${qIdx}`}
     >
       <div style={{ display: 'flex', alignItems: 'center', padding: '0.75rem', borderBottom: collapsed ? 'none' : '1px solid var(--border-color)', background: 'rgba(0,0,0,0.01)' }}>
         <div {...attributes} {...listeners} style={{ cursor: 'grab', padding: '0.25rem', color: 'var(--text-secondary)' }}>
           <GripVertical size={16} />
         </div>
-        
+
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '1rem', marginLeft: '0.5rem' }}>
           <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--primary)' }}>Q{qIdx + 1}</span>
           <div style={{ flex: 1, fontWeight: 600, fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -277,33 +193,33 @@ export default function QuestionCard({ question, sIdx, qIdx }) {
                   </div>
                 </div>
               )}
-              
+
               {question.type === 'multiple_choice' && (
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
                   <div style={{ flex: 1 }}>
                     <label className="form-label" style={{ fontSize: '0.8rem' }}>Min Selections</label>
-                    <input 
-                      type="number" 
-                      className="input-field" 
-                      min="0" 
-                      max={(question.choices || []).length + (question.allowOther ? 1 : 0)} 
-                      value={question.minSelections || ''} 
-                      onChange={e => updateQ({ minSelections: e.target.value ? Number(e.target.value) : undefined })} 
-                      readOnly={!isAdmin} 
-                      placeholder="e.g. 1" 
+                    <input
+                      type="number"
+                      className="input-field"
+                      min="0"
+                      max={(question.choices || []).length + (question.allowOther ? 1 : 0)}
+                      value={question.minSelections || ''}
+                      onChange={e => updateQ({ minSelections: e.target.value ? Number(e.target.value) : undefined })}
+                      readOnly={!isAdmin}
+                      placeholder="e.g. 1"
                     />
                   </div>
                   <div style={{ flex: 1 }}>
                     <label className="form-label" style={{ fontSize: '0.8rem' }}>Max Selections</label>
-                    <input 
-                      type="number" 
-                      className="input-field" 
-                      min="1" 
-                      max={(question.choices || []).length + (question.allowOther ? 1 : 0)} 
-                      value={question.maxSelections || ''} 
-                      onChange={e => updateQ({ maxSelections: e.target.value ? Number(e.target.value) : undefined })} 
-                      readOnly={!isAdmin} 
-                      placeholder="e.g. 3" 
+                    <input
+                      type="number"
+                      className="input-field"
+                      min="1"
+                      max={(question.choices || []).length + (question.allowOther ? 1 : 0)}
+                      value={question.maxSelections || ''}
+                      onChange={e => updateQ({ maxSelections: e.target.value ? Number(e.target.value) : undefined })}
+                      readOnly={!isAdmin}
+                      placeholder="e.g. 3"
                     />
                   </div>
                 </div>
@@ -315,8 +231,8 @@ export default function QuestionCard({ question, sIdx, qIdx }) {
             <div style={{ fontWeight: 800, fontSize: '0.85rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
               <Layers size={16} /> Advanced Display Logic
             </div>
-            <ConditionBuilder 
-              condition={question.visibility} 
+            <ConditionBuilder
+              condition={question.visibility}
               onChange={cond => updateQ({ visibility: cond })}
               availableFields={allAvailableFieldsForLogic}
               readOnly={!isAdmin}

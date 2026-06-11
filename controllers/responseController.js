@@ -53,6 +53,47 @@ function splitOtherValues(answerValue) {
   };
 }
 
+/**
+ * Build a lookup map from survey sections:
+ *   { [questionId]: { [choiceText]: choiceValue } }
+ * Only questions with at least one non-empty choice.value are included.
+ * Called once per export, before iterating responses.
+ */
+function buildChoiceValueMap(survey) {
+  const map = {};
+  for (const section of (survey.sections || [])) {
+    for (const question of (section.questions || [])) {
+      if (!question.choices?.length) continue;
+      const inner = {};
+      let hasAny = false;
+      for (const choice of question.choices) {
+        if (choice.value && choice.value.trim()) {
+          inner[choice.text] = choice.value.trim();
+          hasAny = true;
+        }
+      }
+      if (hasAny) {
+        const qid = question.questionId || (question._id ? question._id.toString() : null);
+        if (qid) map[qid] = inner;
+      }
+    }
+  }
+  return map;
+}
+
+/**
+ * Resolve an answer cell through the choice-value map.
+ * - Non-string answers (numbers, arrays) pass through unchanged.
+ * - "other:"-prefixed strings pass through unchanged.
+ * - If the raw text has a matching choice.value, that value is returned.
+ * - Otherwise the raw answer is returned (backward-compatible fallback).
+ */
+function resolveAnswerValue(questionId, rawAnswer, choiceValueMap) {
+  if (typeof rawAnswer !== 'string') return rawAnswer;
+  if (rawAnswer.startsWith('other:')) return rawAnswer;
+  return choiceValueMap[questionId]?.[rawAnswer] ?? rawAnswer;
+}
+
 exports.submitResponse = async (req, res) => {
   try {
     const isStaff = req.user.role === 'admin' || req.user.role === 'quality';
@@ -303,6 +344,9 @@ exports.exportCsv = async (req, res) => {
       });
     });
 
+    // Build choice-value lookup map once — Step 9
+    const choiceValueMap = buildChoiceValueMap(survey);
+
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename=export_${survey.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.csv`);
 
@@ -340,7 +384,12 @@ exports.exportCsv = async (req, res) => {
       ];
       questions.forEach((q, idx) => {
         const answer = (r.answers || []).find(a => a.questionId === q.id);
-        const parsed = splitOtherValues(answer ? answer.value : null);
+        const rawValue = answer ? answer.value : null;
+        // Apply choice-value lookup before splitOtherValues (baseValue is text; resolve it)
+        const resolvedBase = typeof rawValue === 'string' && !rawValue.startsWith('other:')
+          ? resolveAnswerValue(q.id, rawValue, choiceValueMap)
+          : rawValue;
+        const parsed = splitOtherValues(resolvedBase);
         
         let val = encodeValue(parsed.baseValue);
         const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : val;
@@ -399,6 +448,9 @@ exports.exportAdvanced = async (req, res) => {
       });
     });
 
+    // Build choice-value lookup map once — Step 9
+    const choiceValueMap = buildChoiceValueMap(survey);
+
     const preScanResponses = await Response.find(filter, 'answers').lean();
     const maxOtherCount = {};
     preScanResponses.forEach(r => {
@@ -442,7 +494,11 @@ exports.exportAdvanced = async (req, res) => {
         ];
         questions.forEach((q, idx) => {
           const answer = (r.answers || []).find(a => a.questionId === q.id);
-          const parsed = splitOtherValues(answer ? answer.value : null);
+          const rawValue = answer ? answer.value : null;
+          const resolvedBase = typeof rawValue === 'string' && !rawValue.startsWith('other:')
+            ? resolveAnswerValue(q.id, rawValue, choiceValueMap)
+            : rawValue;
+          const parsed = splitOtherValues(resolvedBase);
           
           let val = encodeValue(parsed.baseValue);
           const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : val;
@@ -508,7 +564,11 @@ exports.exportAdvanced = async (req, res) => {
 
         questions.forEach((q, idx) => {
           const answer = (r.answers || []).find(a => a.questionId === q.id);
-          const parsed = splitOtherValues(answer ? answer.value : null);
+          const rawValue = answer ? answer.value : null;
+          const resolvedBase = typeof rawValue === 'string' && !rawValue.startsWith('other:')
+            ? resolveAnswerValue(q.id, rawValue, choiceValueMap)
+            : rawValue;
+          const parsed = splitOtherValues(resolvedBase);
           row[`Q${idx + 1}`] = encodeValue(parsed.baseValue);
 
           const max = maxOtherCount[q.id] || 0;
@@ -573,7 +633,11 @@ exports.exportAdvanced = async (req, res) => {
         ];
         questions.forEach(q => {
           const answer = r.answers.find(a => a.questionId === q.id);
-          const parsed = splitOtherValues(answer ? answer.value : null);
+          const rawValue = answer ? answer.value : null;
+          const resolvedBase = typeof rawValue === 'string' && !rawValue.startsWith('other:')
+            ? resolveAnswerValue(q.id, rawValue, choiceValueMap)
+            : rawValue;
+          const parsed = splitOtherValues(resolvedBase);
           const encoded = encodeValue(parsed.baseValue);
           
           const isYesNo = q.options?.some(opt => ['Yes', 'No', 'نعم', 'لا'].includes(opt.trim()));

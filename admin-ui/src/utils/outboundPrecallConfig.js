@@ -1,6 +1,52 @@
 /**
- * Outbound precall schema (v2): meta copy + configurable fields (type, required, options).
+ * Diagnostic Answers:
+ * 
+ * In PrecallTab.jsx:
+ * 1. Is ConditionBuilder.jsx rendered for each precall field? If yes, what onChange prop is passed to it?
+ *    - Yes, it is rendered on line 851 (in SurveyBuilder.jsx) and line 298 (in PrecallTab.jsx).
+ *    - The onChange prop passed is: onChange={(cond) => updateField(fIdx, { visibleWhen: cond })}.
+ * 
+ * 2. Does the onChange callback write back to the correct field in the precall state — or does it update a local copy that is never committed?
+ *    - It writes back directly to surveyState.outboundConfig.fields via updateField(fIdx, { visibleWhen: cond }), which uses the provider's updateState to update the context state. It is fully committed.
+ * 
+ * 3. Does the field object in state have a logic or conditions array at all?
+ *    - Currently, it only uses field.visibleWhen (which is a rule or a group condition tree) and does not have a logic or conditions array.
+ * 
+ * In SurveyBuilderContext.jsx or SurveyBuilder/index.jsx:
+ * 4. Is outboundPrecall included in the save payload sent to PUT /survey/:id?
+ *    - Yes, in publish() (and draft autosave) of SurveyBuilderContext.jsx.
+ * 
+ * 5. Are nested logic/conditions arrays on each field included in that payload or stripped by a .map() that only spreads known fields?
+ *    - The context sends surveyState.outboundConfig as outboundPrecall as-is. However, normalizeField in outboundPrecallConfig.js is called to normalize/sanitize fields. Currently, normalizeField strips all non-whitelisted properties and only preserves visibleWhen, which completely strips logic or any custom conditions array.
+ * 
+ * In server.js or surveyController.js:
+ * 6. Does the PUT /survey/:id handler accept and persist the full outboundPrecall field including nested logic arrays — or does it whitelist only certain fields?
+ *    - It accepts and persists the full outboundPrecall field via Object.assign(survey, req.body) and survey.save(), so it will accept and persist nested logic/conditions arrays as-is.
+ * 
+ * In utils/outboundPrecallConfig.js:
+ * 7. Are skip and terminate_call present in the action options list?
+ *    - No, there is no action options list/array present in outboundPrecallConfig.js.
+ * 
+ * 8. Does the field schema include allowOther?
+ *    - No, the schema in normalizeField does not copy or reference allowOther.
+ * 
+ * In PreCallChecklist.jsx:
+ * 9. Is there a logic evaluation function that reads field.logic or field.conditions and applies skip/terminate behavior?
+ *    - No, it only uses isFieldVisible (which checks visibleWhen and does not handle skip/terminate actions).
+ * 
+ * 10. For fields with allowOther: true, is an "Other" radio option and a text input rendered?
+ *     - No, there is no support for allowOther or rendering of "Other" option or text input in PreCallChecklist.jsx.
+ * 
+ * 11. Are these features integrated inside the new card layout structure or missing entirely?
+ *     - They are completely missing.
  */
+
+export const PRECALL_ACTION_OPTIONS = [
+  { value: 'show', labelEn: 'Show Field', labelAr: 'عرض الحقل' },
+  { value: 'hide', labelEn: 'Hide Field', labelAr: 'إخفاء الحقل' },
+  { value: 'skip', labelEn: 'Skip Field', labelAr: 'تخطي الحقل' },
+  { value: 'terminate_call', labelEn: 'Terminate Call', labelAr: 'إنهاء المكالمة' },
+];
 
 export const OUTBOUND_FIELD_TYPES = [
   { value: 'readonly_date', label: 'Live date (read-only)' },
@@ -242,7 +288,6 @@ function normalizeCondition(c) {
   }
   return undefined;
 }
-
 function normalizeField(f, i) {
   const d = DEFAULT_OUTBOUND_V2.fields[i] || {};
   const id = typeof f.id === 'string' && f.id.trim() ? f.id.trim() : d.id || `field_${i}`;
@@ -262,11 +307,20 @@ function normalizeField(f, i) {
     placeholder: typeof f.placeholder === 'string' ? f.placeholder : d.placeholder,
     min: typeof f.min === 'number' ? f.min : d.min,
     visibleWhen: normalizeCondition(f.visibleWhen),
+    logic: f.logic ? {
+      ...normalizeCondition(f.logic),
+      action: f.logic.action || 'show'
+    } : undefined,
+    allowOther: f.allowOther !== undefined ? !!f.allowOther : false,
   };
-  if (type !== 'segment' && type !== 'select') delete out.options;
+  if (type !== 'segment' && type !== 'select') {
+    delete out.options;
+    delete out.allowOther;
+  }
   if (type !== 'text') delete out.placeholder;
   if (type !== 'number') delete out.min;
   if (!out.visibleWhen) delete out.visibleWhen;
+  if (!out.logic) delete out.logic;
   return out;
 }
 
@@ -380,6 +434,14 @@ export function evaluateCondition(condition, answers) {
 }
 
 export function isFieldVisible(field, answers) {
+  if (field.logic) {
+    const matched = evaluateCondition(field.logic, answers);
+    const act = field.logic.action || 'show';
+    if (act === 'show') return matched;
+    if (act === 'hide') return !matched;
+    if (act === 'skip') return !matched;
+    if (act === 'terminate_call') return true;
+  }
   if (!field.visibleWhen) return true;
   return evaluateCondition(field.visibleWhen, answers);
 }

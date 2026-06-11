@@ -1,11 +1,8 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  CheckCircle2, ClipboardList, Phone, User, Hash, CalendarClock,
-  Loader2, UserPlus, Lock,
-} from 'lucide-react';
+import { motion } from 'framer-motion';
+import { CheckCircle2, ClipboardList, Phone, User, Hash, CalendarClock, Loader2, UserPlus, Check, AlertTriangle } from 'lucide-react';
 
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
@@ -14,16 +11,73 @@ import {
   metaLine,
   isFieldVisible,
   isFieldSatisfied,
-  validateOutboundAnswers,
   buildInitialAnswers,
   precallNextValidation,
   precallNewFormValidation,
+  evaluateCondition,
 } from '../utils/outboundPrecallConfig';
 import { EGYPTIAN_GOVERNORATES } from '../utils/governorates';
 import HandoverModal from '../components/HandoverModal';
 import { toast } from 'react-toastify';
 
-/* ─── helpers ─────────────────────────────────────────────────────────── */
+/*
+ * ─── STRUCTURE MAP (Step 1 audit) ────────────────────────────────────────────
+ *
+ * SECTIONS (from sectionOrder: ['agent', 'call', 'phone'])
+ * ─────────────────────────────────────────────────────────
+ * Section 0 — 'agent'  (titleKey: precallSectionAgent)
+ *   Fields: researcher_name (text, req), researcher_code (text, req),
+ *           serial_number (number, req), interview_date (readonly_date),
+ *           interview_time (readonly_time), is_egyptian (segment, req),
+ *           nationality (text, conditional on is_egyptian==no),
+ *           age_years (number, req)
+ *
+ * Section 1 — 'call'   (titleKey: precallSectionCall)
+ *   Fields: phone_type (segment, req), call_result (select, req),
+ *           interview_result (select, req),
+ *           outcome_reason (text, conditional on interview_result in partial/refused/postponed)
+ *
+ * Section 2 — 'phone'  (titleKey: precallSectionPhone)
+ *   Fields: phone (text, req) + governorate picker + fetch-number button (custom UI)
+ *
+ * STATE VARIABLES (existing)
+ * ─────────────────────────
+ * - answers         : object keyed by field.id — all field values
+ * - config          : normalizedPrecall (fields, meta, sectionOrder)
+ * - currentNumber   : { number, serialNumber } | null
+ * - selectedGov     : governorate filter string
+ * - isEditMode      : boolean — editing an existing submission
+ * - canProceed      : bool memo — gating "Next" button
+ * - canSaveNew      : bool memo — gating "New Form" button
+ *
+ * NEW STATE VARIABLES
+ * ──────────────────────
+ * - showErrors          : bool — set true when agent clicks Next with validation failures
+ *
+ * COMPUTED (render-derived)
+ * ──────────────────────────
+ * - sectionStates       : { [secKey]: 'filled' | 'partially-filled' | 'empty' } — drives progress bar
+ *
+ * SUBMIT HANDLERS (unchanged locations)
+ * ───────────────────────────────────────
+ * - onNext()        : calls completePrecallSubmission() → navigates to survey
+ * - onNewForm()     : calls completePrecallSubmission() → resets form → fetches next number
+ *
+ * LOGIC EVALUATION (unchanged)
+ * ─────────────────────────────
+ * - isFieldVisible(field, answers) — skip/hide logic via visibleWhen conditions
+ * - isFieldSatisfied(field, value) — per-field validation
+ * - validateOutboundAnswers(fields, answers) — full-form validation
+ * - precallNextValidation / precallNewFormValidation — button gate memos
+ *
+ * FULL-WIDTH FIELDS (span both grid columns)
+ * ────────────────────────────────────────────
+ * segment types with ≥3 options, select fields, conditional text fields,
+ * interview_date, interview_time (readonly), serial_number (prominent)
+ * → determined by `isFullWidthField(field)` helper below
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
 function formatLocalDate(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -35,9 +89,24 @@ function formatLocalTime(d) {
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false) {
+/** Decide whether a field should span both grid columns. */
+function isFullWidthField(field) {
+  if (field.type === 'readonly_date' || field.type === 'readonly_time') return false;
+  if (field.type === 'select') return true;
+  if (field.type === 'segment' && (field.options || []).length >= 3) return true;
+  // Fields that are conditionally visible (notes/reason, or logic-gated) go full width too
+  if (field.visibleWhen || field.logic) return true;
+  return false;
+}
+
+function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false, errorText = null) {
   const isReadOnly = forceReadOnly || field.id === 'phone';
   const label = field.label || field.id;
+  const hasError = !!errorText;
+
+  // Helper: is the current value the "Other" free-text mode?
+  const isOtherSelected = typeof value === 'string' && value.startsWith('other:');
+  const otherText = isOtherSelected ? value.slice(6) : '';
 
   switch (field.type) {
     case 'readonly_date':
@@ -59,12 +128,17 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
         <div className="precall-field" key={field.id}>
           <label className="precall-label">{label}</label>
           <input
-            className="input-field"
+            className={`input-field ${hasError ? 'has-error' : ''}`}
             value={value ?? ''}
             onChange={(e) => onChange(field.id, e.target.value)}
             placeholder={field.placeholder || ''}
             readOnly={isReadOnly}
           />
+          {errorText && (
+            <span style={{ color: 'var(--danger)', fontSize: '0.8rem', marginTop: '0.25rem', display: 'block' }}>
+              {errorText}
+            </span>
+          )}
         </div>
       );
     case 'number':
@@ -72,16 +146,23 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
         <div className="precall-field" key={field.id}>
           <label className="precall-label">{label}</label>
           <input
-            className="input-field"
+            className={`input-field ${hasError ? 'has-error' : ''}`}
             type="number"
             min={field.min != null ? field.min : undefined}
             value={value ?? ''}
             onChange={(e) => onChange(field.id, e.target.value)}
             readOnly={isReadOnly}
           />
+          {errorText && (
+            <span style={{ color: 'var(--danger)', fontSize: '0.8rem', marginTop: '0.25rem', display: 'block' }}>
+              {errorText}
+            </span>
+          )}
         </div>
       );
-    case 'segment':
+    case 'segment': {
+      const segOtherActive = isOtherSelected;
+      const segValue = segOtherActive ? '__other__' : String(value ?? '');
       return (
         <div className="precall-field" key={field.id}>
           <label className="precall-label">{label}</label>
@@ -90,24 +171,58 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
               <button
                 key={opt.value}
                 type="button"
-                className={`precall-seg-btn ${String(value) === String(opt.value) ? 'active' : ''}`}
+                className={`precall-seg-btn ${segValue === String(opt.value) ? 'active' : ''} ${hasError ? 'has-error' : ''}`}
                 onClick={() => !isReadOnly && onChange(field.id, opt.value)}
                 disabled={isReadOnly}
               >
                 {opt.label || opt.value}
               </button>
             ))}
+            {field.allowOther && (
+              <button
+                type="button"
+                className={`precall-seg-btn ${segOtherActive ? 'active' : ''} ${hasError ? 'has-error' : ''}`}
+                onClick={() => !isReadOnly && onChange(field.id, segOtherActive ? '' : 'other:')}
+                disabled={isReadOnly}
+              >
+                {t('other') || 'Other'}
+              </button>
+            )}
           </div>
+          {segOtherActive && (
+            <input
+              className={`input-field ${hasError ? 'has-error' : ''}`}
+              style={{ marginTop: '0.5rem' }}
+              placeholder={t('otherPlaceholder') || 'Please specify…'}
+              value={otherText}
+              onChange={(e) => !isReadOnly && onChange(field.id, `other:${e.target.value}`)}
+              readOnly={isReadOnly}
+              autoFocus
+            />
+          )}
+          {errorText && (
+            <span style={{ color: 'var(--danger)', fontSize: '0.8rem', marginTop: '0.25rem', display: 'block' }}>
+              {errorText}
+            </span>
+          )}
         </div>
       );
-    case 'select':
+    }
+    case 'select': {
+      const selValue = isOtherSelected ? '__other__' : (value ?? '');
       return (
         <div className="precall-field" key={field.id}>
           <label className="precall-label">{label}</label>
           <select
-            className="input-field"
-            value={value ?? ''}
-            onChange={(e) => onChange(field.id, e.target.value)}
+            className={`input-field ${hasError ? 'has-error' : ''}`}
+            value={selValue}
+            onChange={(e) => {
+              if (e.target.value === '__other__') {
+                onChange(field.id, 'other:');
+              } else {
+                onChange(field.id, e.target.value);
+              }
+            }}
             disabled={isReadOnly}
           >
             <option value="">{t('precallSelectPlaceholder')}</option>
@@ -116,22 +231,34 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
                 {opt.label || opt.value}
               </option>
             ))}
+            {field.allowOther && (
+              <option value="__other__">{t('other') || 'Other'}</option>
+            )}
           </select>
+          {isOtherSelected && (
+            <input
+              className={`input-field ${hasError ? 'has-error' : ''}`}
+              style={{ marginTop: '0.5rem' }}
+              placeholder={t('otherPlaceholder') || 'Please specify…'}
+              value={otherText}
+              onChange={(e) => !isReadOnly && onChange(field.id, `other:${e.target.value}`)}
+              readOnly={isReadOnly}
+              autoFocus
+            />
+          )}
+          {errorText && (
+            <span style={{ color: 'var(--danger)', fontSize: '0.8rem', marginTop: '0.25rem', display: 'block' }}>
+              {errorText}
+            </span>
+          )}
         </div>
       );
+    }
     default:
       return null;
   }
 }
 
-/* ─── section icon map ────────────────────────────────────────────────── */
-const SECTION_ICONS = {
-  agent: User,
-  call: ClipboardList,
-  phone: Phone,
-};
-
-/* ─── component ───────────────────────────────────────────────────────── */
 export default function PreCallChecklist() {
   const { t } = useContext(UIContext);
   const { user, setUser } = useContext(AuthContext);
@@ -144,6 +271,24 @@ export default function PreCallChecklist() {
   const [numberLoading, setNumberLoading] = useState(false);
   const [configLoading, setConfigLoading] = useState(true);
   const [formsCount, setFormsCount] = useState(null);
+
+  const [showErrors, setShowErrors] = useState(false);
+
+  // ── Terminate-call detection ──────────────────────────────────────────────
+  // Derived: which fields have logic.action=terminate_call AND whose condition
+  // is currently matched (meaning the call must be stopped).
+  const terminateCallField = useMemo(() => {
+    if (!config?.fields) return null;
+    for (const f of config.fields) {
+      if (f.logic && f.logic.action === 'terminate_call') {
+        const matched = evaluateCondition(f.logic, answers);
+        if (matched) return f;
+      }
+    }
+    return null;
+  }, [config.fields, answers]);
+
+  const isTerminated = !!terminateCallField;
 
   const draftKey = useMemo(() => {
     if (!user?.id) return null;
@@ -160,7 +305,6 @@ export default function PreCallChecklist() {
   const editAnswersRef = useRef(null);
   const [isHandoverOpen, setIsHandoverOpen] = useState(false);
 
-  /* ── serial search ─────────────────────────────────────────────────── */
   const handleSerialSearch = async (e) => {
     if (e) e.preventDefault();
     if (!serialSearchTerm.trim()) return;
@@ -172,6 +316,8 @@ export default function PreCallChecklist() {
         if (sid) setSurveyId(sid);
         if (phoneNumber) setCurrentNumber(phoneNumber);
         setIsEditMode(!!editMode);
+        setShowErrors(false);
+
         if (savedAnswers) {
           setAnswers(prev => {
             const newAns = { ...prev, ...savedAnswers };
@@ -179,6 +325,7 @@ export default function PreCallChecklist() {
             return newAns;
           });
         }
+
         if (phoneNumber?.number) {
           setAnswers(prev => {
             const newAns = { ...prev, phone: phoneNumber.number };
@@ -193,6 +340,7 @@ export default function PreCallChecklist() {
             return newAns;
           });
         }
+
         toast.success(t('serialFound') || 'Form found and loaded.');
       } else {
         toast.error(t('serialNotFound') || 'Serial number not found.');
@@ -205,13 +353,11 @@ export default function PreCallChecklist() {
     }
   };
 
-  /* ── tick clock ────────────────────────────────────────────────────── */
   useEffect(() => {
     const id = setInterval(() => setTick(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
 
-  /* ── beforeunload guard ────────────────────────────────────────────── */
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (answers.phone && !submitting) {
@@ -223,7 +369,6 @@ export default function PreCallChecklist() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [answers.phone, submitting]);
 
-  /* ── bootstrap config ──────────────────────────────────────────────── */
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
@@ -233,6 +378,7 @@ export default function PreCallChecklist() {
       try {
         const urlParams = new URLSearchParams(window.location.search);
         const sidUrl = urlParams.get('surveyId');
+
         const [precallRes, numberRes] = await Promise.all([
           api.get(`/agent/outbound-precall${sidUrl ? `?surveyId=${sidUrl}` : ''}`, { signal }),
           (isEditMode || editAnswersRef.current)
@@ -241,18 +387,22 @@ export default function PreCallChecklist() {
         ]);
         if (cancelled) return;
         setSurveyId(precallRes.data.surveyId || null);
+
         const tg = precallRes.data.targetGovernorate || 'All';
         setTargetGovernorate(tg);
         setSelectedGov(tg);
+
         const norm = normalizeOutboundPrecall(precallRes.data.outboundPrecall);
         setConfig(norm);
         const nextNum = numberRes.data;
         setCurrentNumber(nextNum);
         const initial = buildInitialAnswers(norm.fields, user?.name);
+
         let merged = initial;
-        if (nextNum?.number) merged.phone = nextNum.number;
-        if (nextNum?.serialNumber) merged.serial_number = nextNum.serialNumber;
+        if (nextNum && nextNum.number) merged.phone = nextNum.number;
+        if (nextNum && nextNum.serialNumber) merged.serial_number = nextNum.serialNumber;
         if (!isEditMode) setIsEditMode(false);
+
         if (editAnswersRef.current) {
           merged = { ...merged, ...editAnswersRef.current };
         } else if (draftKey) {
@@ -262,7 +412,7 @@ export default function PreCallChecklist() {
               const parsed = JSON.parse(raw);
               if (parsed && typeof parsed === 'object') {
                 merged = { ...merged, ...parsed };
-                if (nextNum?.number && (!merged.phone || merged.phone !== nextNum.number)) {
+                if (nextNum && nextNum.number && (!merged.phone || merged.phone !== nextNum.number)) {
                   merged.phone = nextNum.number;
                 }
               }
@@ -287,33 +437,59 @@ export default function PreCallChecklist() {
         if (!cancelled) setConfigLoading(false);
       }
     })();
-    return () => { cancelled = true; controller.abort(); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.name, draftKey]);
 
-  /* ── sync phone number to answers ─────────────────────────────────── */
   useEffect(() => {
-    if (currentNumber?.number) {
+    if (currentNumber && currentNumber.number) {
       setAnswers(prev => ({ ...prev, phone: currentNumber.number }));
     }
   }, [currentNumber]);
 
-  /* ── draft autosave ────────────────────────────────────────────────── */
   useEffect(() => {
     if (!draftKey || configLoading) return;
     const timer = setTimeout(() => {
-      try { sessionStorage.setItem(draftKey, JSON.stringify(answers)); }
-      catch (_) { /* quota / private mode */ }
+      try {
+        sessionStorage.setItem(draftKey, JSON.stringify(answers));
+      } catch (_) { /* quota / private mode */ }
     }, 300);
     return () => clearTimeout(timer);
   }, [answers, draftKey, configLoading]);
 
-  /* ── answer setter ─────────────────────────────────────────────────── */
   const setAnswer = useCallback((id, val) => {
     setAnswers((prev) => ({ ...prev, [id]: val }));
   }, []);
 
-  /* ── derived values ────────────────────────────────────────────────── */
+  // ── Auto-clear skipped/hidden fields ────────────────────────────────────
+  // When a field's logic action causes it to be hidden/skipped, clear its
+  // value so stale data is never submitted.
+  useEffect(() => {
+    if (!config?.fields) return;
+    let changed = false;
+    const updates = {};
+    for (const f of config.fields) {
+      if (!f.logic) continue;
+      const act = f.logic.action;
+      if (act !== 'skip' && act !== 'hide') continue;
+      const matched = evaluateCondition(f.logic, answers);
+      // For 'skip' and 'hide': field is hidden when condition matches
+      if (matched && answers[f.id] !== undefined && answers[f.id] !== '') {
+        updates[f.id] = '';
+        changed = true;
+      }
+    }
+    if (changed) {
+      setAnswers((prev) => ({ ...prev, ...updates }));
+    }
+    // We intentionally only re-run when answers change (not listing config.fields
+    // as it is stable for a session).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answers]);
+
   const scriptText = useMemo(() => {
     const raw = metaLine(config.meta, 'script', t);
     const name = (answers.researcher_name || user?.name || '').trim();
@@ -323,37 +499,14 @@ export default function PreCallChecklist() {
   const interviewDateStr = formatLocalDate(tick);
   const interviewTimeStr = formatLocalTime(tick);
 
-  const canProceed = useMemo(() => precallNextValidation(config.fields, answers), [answers, config.fields]);
-  const canSaveNew = useMemo(() => precallNewFormValidation(config.fields, answers), [answers, config.fields]);
+  const canProceed = useMemo(() => {
+    return precallNextValidation(config.fields, answers);
+  }, [answers, config.fields]);
 
-  const sectionOrder = config.sectionOrder || ['agent', 'call', 'phone'];
+  const canSaveNew = useMemo(() => {
+    return precallNewFormValidation(config.fields, answers);
+  }, [answers, config.fields]);
 
-  /* ── per-section completion (derived, never stored) ────────────────── */
-  const isSectionComplete = useCallback((sectionIndex) => {
-    const sec = sectionOrder[sectionIndex];
-    if (!sec) return true;
-    const sectionFields = config.fields.filter((f) => f.section === sec);
-    for (const field of sectionFields) {
-      if (!isFieldVisible(field, answers)) continue;
-      if (!field.required) continue;
-      if (!isFieldSatisfied(field, answers[field.id])) return false;
-    }
-    return true;
-  }, [answers, config.fields, sectionOrder]);
-
-  /* ── hint ──────────────────────────────────────────────────────────── */
-  const hintText = useMemo(() => {
-    if (canProceed) return '';
-    const callResult = answers.call_result;
-    if (!callResult) return 'Select the call outcome to continue.';
-    if (String(callResult) !== 'contacted') {
-      if (!canSaveNew) return 'Fill in the Interview outcome, then click "New Form" to log this call and get the next number.';
-      return 'Click "New Form" to save this result and get the next number.';
-    }
-    return (config.meta.completeHint && config.meta.completeHint.trim()) || t('precallCompleteHint');
-  }, [canProceed, canSaveNew, answers.call_result, config.meta, t]);
-
-  /* ── actions ───────────────────────────────────────────────────────── */
   const completePrecallSubmission = async () => {
     const frozen = new Date();
     const payload = { ...answers };
@@ -383,7 +536,16 @@ export default function PreCallChecklist() {
   };
 
   const onNext = async () => {
-    if (!user?.id || !canProceed) return;
+    if (!user?.id) return;
+    if (isTerminated) {
+      toast.error(t('precallTerminateCallBlock') || 'This call must be terminated. Please use "New Form" to log the result.');
+      return;
+    }
+    if (!canProceed) {
+      setShowErrors(true);
+      toast.warning(t('precallCompleteHint') || 'Please fill in all required fields.');
+      return;
+    }
     setSubmitting(true);
     try {
       await completePrecallSubmission();
@@ -415,6 +577,10 @@ export default function PreCallChecklist() {
       if (draftKey) sessionStorage.removeItem(draftKey);
       setAnswers(buildInitialAnswers(config.fields, user?.name));
       setTick(new Date());
+
+      // Clear error highlights on reset
+      setShowErrors(false);
+
       setNumberLoading(true);
       try {
         setCurrentNumber(null);
@@ -425,6 +591,7 @@ export default function PreCallChecklist() {
       } finally {
         setNumberLoading(false);
       }
+
       await refreshFormsCount();
     } catch (e) {
       console.error(e);
@@ -442,8 +609,9 @@ export default function PreCallChecklist() {
       const sidUrl = urlParams.get('surveyId');
       const nextNumRes = await api.get(`/agent/next-number?governorate=${encodeURIComponent(govToFetch)}${sidUrl ? `&surveyId=${sidUrl}` : ''}`);
       const nextNum = nextNumRes.data;
+
       setCurrentNumber(nextNum);
-      if (nextNum?.number) {
+      if (nextNum && nextNum.number) {
         setAnswers(prev => ({ ...prev, phone: nextNum.number, serial_number: nextNum.serialNumber || '' }));
       } else {
         setAnswers(prev => ({ ...prev, phone: '', serial_number: '' }));
@@ -463,7 +631,70 @@ export default function PreCallChecklist() {
     fetchNumber(newGov);
   };
 
-  /* ─── loading state ────────────────────────────────────────────────── */
+  const hintText = useMemo(() => {
+    if (canProceed) return '';
+    const callResult = answers.call_result;
+    if (!callResult) return 'Select the call outcome to continue.';
+    if (String(callResult) !== 'contacted') {
+      if (!canSaveNew) return 'Fill in the Interview outcome, then click "New Form" to log this call and get the next number.';
+      return 'Click "New Form" to save this result and get the next number.';
+    }
+    return (config.meta.completeHint && config.meta.completeHint.trim()) || t('precallCompleteHint');
+  }, [canProceed, canSaveNew, answers.call_result, config.meta, t]);
+
+  const sectionOrder = config.sectionOrder || ['agent', 'call', 'phone'];
+  const totalSections = sectionOrder.length;
+
+  const sectionStates = useMemo(() => {
+    const states = {};
+    sectionOrder.forEach((secKey) => {
+      const secFields = config.fields.filter(
+        (f) => f.section === secKey && isFieldVisible(f, answers)
+      );
+      const requiredFields = secFields.filter((f) => f.required);
+      if (requiredFields.length === 0) {
+        states[secKey] = 'filled';
+        return;
+      }
+      const filledCount = requiredFields.filter((f) => {
+        const val = answers[f.id];
+        return val !== undefined && val !== null && val !== '';
+      }).length;
+
+      if (filledCount === requiredFields.length) {
+        states[secKey] = 'filled';
+      } else if (filledCount > 0) {
+        states[secKey] = 'partially-filled';
+      } else {
+        states[secKey] = 'empty';
+      }
+    });
+    return states;
+  }, [config.fields, answers, sectionOrder]);
+
+  const getFieldError = useCallback((field) => {
+    if (!showErrors) return null;
+    if (!isFieldVisible(field, answers)) return null;
+    if (!field.required) return null;
+
+    // For contacted call, interview_result is not validated for Next
+    if (String(answers.call_result) === 'contacted' && field.id === 'interview_result') {
+      return null;
+    }
+
+    if (!isFieldSatisfied(field, answers[field.id])) {
+      return t('fieldRequired') || 'This field is required';
+    }
+
+    return null;
+  }, [showErrors, answers, t]);
+
+  const getSectionTitle = useCallback((sec) => {
+    const titleKey =
+      sec === 'agent' ? 'sectionAgent' : sec === 'call' ? 'sectionCall' : 'sectionPhone';
+    return metaLine(config.meta, titleKey, t);
+  }, [config.meta, t]);
+
   if (configLoading) {
     return (
       <div className="precall-shell" style={{ display: 'flex', justifyContent: 'center', paddingTop: '4rem' }}>
@@ -472,7 +703,6 @@ export default function PreCallChecklist() {
     );
   }
 
-  /* ─── render ───────────────────────────────────────────────────────── */
   return (
     <motion.div
       initial={{ opacity: 0, y: 18 }}
@@ -480,23 +710,20 @@ export default function PreCallChecklist() {
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       className="precall-shell"
     >
-      {/* ── 1. HEADER CARD ─────────────────────────────────────────────── */}
+      {/* ── Hero header ── */}
       <div className="precall-hero glass-card">
         <div className="precall-hero-top">
-          {/* Left/RTL-start: icon + title + subtitle */}
           <div className="precall-hero-title">
             <ClipboardList size={26} color="var(--primary)" />
             <div>
               <h1 style={{ margin: 0, fontSize: '1.35rem', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 {metaLine(config.meta, 'title', t)}
-                {numberLoading && <Loader2 size={16} className="spin-icon" style={{ marginInlineStart: '0.5rem' }} />}
+                {numberLoading && <Loader2 size={16} className="spin-icon ml-2" />}
               </h1>
               <p className="precall-subtitle">{metaLine(config.meta, 'subtitle', t)}</p>
             </div>
           </div>
-
-          {/* Right/RTL-end: handover + serial search + date/time pill */}
-          <div style={{ display: 'flex', gap: '1rem', background: 'transparent', border: 'none', padding: 0, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="precall-pill" style={{ display: 'flex', gap: '1rem', background: 'transparent', border: 'none', padding: 0 }}>
             {answers.serial_number && user?.role !== 'agent' && (
               <button
                 type="button"
@@ -512,12 +739,12 @@ export default function PreCallChecklist() {
             {user?.role !== 'agent' && (
               <form onSubmit={handleSerialSearch} style={{ display: 'flex', gap: '0.5rem' }}>
                 <div style={{ position: 'relative' }}>
-                  <Hash size={16} style={{ position: 'absolute', insetInlineStart: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
+                  <Hash size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
                   <input
                     type="text"
                     className="input-field"
                     placeholder={t('searchBySerial') || 'Search Serial...'}
-                    style={{ paddingInlineStart: '35px', height: '40px', fontSize: '0.9rem', width: '160px' }}
+                    style={{ paddingLeft: '35px', height: '40px', fontSize: '0.9rem', width: '160px' }}
                     value={serialSearchTerm}
                     onChange={(e) => setSerialSearchTerm(e.target.value)}
                   />
@@ -528,7 +755,6 @@ export default function PreCallChecklist() {
               </form>
             )}
 
-            {/* Live date/time pill */}
             <div className="precall-pill">
               <CalendarClock size={16} />
               <span style={{ fontWeight: 900 }}>{interviewDateStr}</span>
@@ -537,139 +763,161 @@ export default function PreCallChecklist() {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* ── 2. SCRIPT BLOCK (standalone card, hidden if empty) ─────────── */}
-      {scriptText && scriptText.trim() && (
-        <div className="glass-card precall-script-standalone">
+        <div className="precall-script">
           <div className="precall-script-label">{metaLine(config.meta, 'scriptLabel', t)}</div>
           <div className="precall-script-text">{scriptText}</div>
         </div>
+      </div>
+
+      {/* ── Horizontal progress bar ── */}
+      <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="precall-progress-bar">
+          {sectionOrder.map((sec, idx) => {
+            const stepState = sectionStates[sec]; // filled, partially-filled, empty
+            const isFilled = stepState === 'filled';
+
+            return (
+              <React.Fragment key={sec}>
+                <div className="precall-step">
+                  <div className={`precall-step-circle ${stepState}`}>
+                    {isFilled ? <Check size={16} strokeWidth={3} /> : idx + 1}
+                  </div>
+                  <span className={`precall-step-label ${isFilled ? 'filled' : ''}`}>
+                    {getSectionTitle(sec)}
+                  </span>
+                </div>
+                {idx < sectionOrder.length - 1 && (
+                  <div className={`precall-step-connector ${isFilled ? 'done' : 'pending'}`} />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Terminate-call banner ── */}
+      {isTerminated && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+          className="glass-card"
+          style={{
+            border: '1.5px solid var(--danger)',
+            background: 'hsla(0, 75%, 50%, 0.08)',
+            padding: '1.1rem 1.4rem',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '0.8rem',
+          }}
+        >
+          <AlertTriangle size={20} color="var(--danger)" style={{ flexShrink: 0, marginTop: '2px' }} />
+          <div>
+            <div style={{ fontWeight: 700, color: 'var(--danger)', marginBottom: '0.2rem', fontSize: '0.95rem' }}>
+              {t('precallTerminateCallTitle') || 'Call must be terminated'}
+            </div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              {t('precallTerminateCallDesc') || 'The respondent does not meet the eligibility criteria for this survey. Please end the call politely and use \'New Form\' to log the result.'}
+            </div>
+          </div>
+        </motion.div>
       )}
 
-      {/* ── 3. HORIZONTAL SECTION CARDS GRID ───────────────────────────── */}
-      <div className="precall-grid">
-        {sectionOrder.map((sec, sectionIndex) => {
+      {/* ── Section cards stack ── */}
+      <div className="precall-sections-stack">
+        {sectionOrder.map((sec, idx) => {
           const sectionFields = config.fields.filter((f) => f.section === sec);
-          if (sectionFields.length === 0) return null;
+          if (sectionFields.length === 0 && sec !== 'phone') return null;
 
-          const titleKey =
-            sec === 'agent' ? 'sectionAgent' : sec === 'call' ? 'sectionCall' : 'sectionPhone';
-          const Icon = SECTION_ICONS[sec] || ClipboardList;
-
-          const isLocked = sectionIndex > 0 && !isSectionComplete(sectionIndex - 1);
-          const isComplete = isSectionComplete(sectionIndex);
+          const sectionTitle = getSectionTitle(sec);
+          const SectionIcon = sec === 'agent' ? User : sec === 'call' ? ClipboardList : Phone;
 
           return (
-            <motion.section
+            <div
               key={sec}
-              className={`glass-card precall-card precall-section-card${isLocked ? ' locked' : ''}`}
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: sectionIndex * 0.08, ease: [0.16, 1, 0.3, 1] }}
+              className="precall-card-wrap"
             >
-              {/* Card header: icon + title + completion badge */}
-              <div className="precall-section-card-header">
-                <div className="precall-section-title">
-                  <Icon size={18} color="var(--primary)" />
-                  <span>{metaLine(config.meta, titleKey, t)}</span>
-                </div>
-                <AnimatePresence>
-                  {isComplete && (
-                    <motion.div
-                      className="precall-completion-dot"
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-                      title="Section complete"
-                    >
-                      <CheckCircle2 size={16} />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* Card body — disabled when locked */}
-              <div
-                className="precall-section-body"
-                style={{
-                  opacity: isLocked ? 0.45 : 1,
-                  pointerEvents: isLocked ? 'none' : 'auto',
-                  userSelect: isLocked ? 'none' : 'auto',
-                  transition: 'opacity 0.3s ease',
-                }}
-              >
-                {/* Phone section: governorate picker + get number button */}
-                {sec === 'phone' && !isEditMode && (
-                  <div className="precall-field" style={{ marginBottom: '1.25rem', padding: '1rem', background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: '8px' }}>
-                    <label className="precall-label" style={{ fontWeight: 600, color: 'var(--primary)' }}>Target Governorate</label>
-                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                      <select
-                        className="input-field"
-                        style={{ flex: 1, minWidth: '200px' }}
-                        value={selectedGov}
-                        onChange={handleGovChange}
-                        disabled={isLocked || numberLoading || user?.role === 'agent'}
-                      >
-                        <option value="All">All Governorates (Random)</option>
-                        {EGYPTIAN_GOVERNORATES.map(g => (
-                          <option key={g} value={g}>{g}</option>
-                        ))}
-                      </select>
-                      {!currentNumber && (
-                        <button
-                          type="button"
-                          className="btn-primary"
-                          onClick={() => fetchNumber(selectedGov)}
-                          disabled={isLocked || numberLoading}
-                        >
-                          {numberLoading ? <Loader2 size={16} className="spin-icon" /> : 'Get Number'}
-                        </button>
-                      )}
-                    </div>
-                    {!currentNumber && (
-                      <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                        {user?.role === 'agent'
-                          ? "Click 'Get Number' to fetch the next available lead from your assigned region."
-                          : "Select a region and click 'Get Number' to fetch the next available lead."}
-                      </p>
-                    )}
+              <div className="glass-card" style={{ padding: 0 }}>
+                {/* Card header */}
+                <div className="precall-card-header">
+                  <div className="precall-card-badge">
+                    {idx + 1}
                   </div>
-                )}
+                  <SectionIcon size={16} color="var(--text-secondary)" />
+                  <span className="precall-card-header-title">{sectionTitle}</span>
+                </div>
 
-                {/* Fields */}
-                {sectionFields.map((field) => {
-                  if (!isFieldVisible(field, answers)) return null;
-                  const v = answers[field.id];
-                  const isFieldReadOnly = field.id === 'phone' || field.id === 'serial_number';
-                  return renderFieldInput(field, v, setAnswer, tick, t, isFieldReadOnly);
-                })}
-              </div>
-
-              {/* Lock overlay */}
-              <AnimatePresence>
-                {isLocked && (
-                  <motion.div
-                    className="precall-lock-overlay"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.25 }}
-                  >
-                    <div className="precall-lock-inner">
-                      <Lock size={28} color="var(--text-secondary)" />
-                      <span className="precall-lock-label">{t('precallSectionLocked')}</span>
+                {/* Card body */}
+                <div className="precall-card-body">
+                  {/* ── Phone section: governorate picker + fetch button ── */}
+                  {sec === 'phone' && !isEditMode && (
+                    <div className="precall-fields-grid" style={{ marginBottom: '1rem' }}>
+                      <div className="precall-field precall-field-full"
+                        style={{ padding: '1rem', background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: '8px' }}>
+                        <label className="precall-label" style={{ fontWeight: 600, color: 'var(--primary)' }}>Target Governorate</label>
+                        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                          <select
+                            className="input-field"
+                            style={{ flex: 1, minWidth: '200px' }}
+                            value={selectedGov}
+                            onChange={handleGovChange}
+                            disabled={numberLoading || user?.role === 'agent'}
+                          >
+                            <option value="All">All Governorates (Random)</option>
+                            {EGYPTIAN_GOVERNORATES.map(g => (
+                              <option key={g} value={g}>{g}</option>
+                            ))}
+                          </select>
+                          {!currentNumber && (
+                            <button
+                              type="button"
+                              className="btn-primary"
+                              onClick={() => fetchNumber(selectedGov)}
+                              disabled={numberLoading}
+                            >
+                              {numberLoading ? <Loader2 size={16} className="spin-icon" /> : 'Get Number'}
+                            </button>
+                          )}
+                        </div>
+                        {!currentNumber && (
+                          <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            {user?.role === 'agent'
+                              ? "Click 'Get Number' to fetch the next available lead from your assigned region."
+                              : "Select a region and click 'Get Number' to fetch the next available lead."}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.section>
+                  )}
+
+                  {/* Fields grid */}
+                  <div className="precall-fields-grid">
+                    {sectionFields.map((field) => {
+                      if (!isFieldVisible(field, answers)) return null;
+                      const v = answers[field.id];
+                      const isFieldReadOnly = (field.id === 'phone' || field.id === 'serial_number');
+                      const fullWidth = isFullWidthField(field);
+                      const errorText = getFieldError(field);
+
+                      return (
+                        <div
+                          key={field.id}
+                          className={fullWidth ? 'precall-field-full' : ''}
+                        >
+                          {renderFieldInput(field, v, setAnswer, tick, t, isFieldReadOnly, errorText)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
           );
         })}
       </div>
 
-      {/* ── contextual hints ────────────────────────────────────────────── */}
+      {/* ── Contextual hints ── */}
       {(!canProceed || !canSaveNew) && hintText && (
         <div className="precall-hint" style={{ marginTop: '0.5rem' }}>
           <Hash size={16} />
@@ -677,15 +925,15 @@ export default function PreCallChecklist() {
         </div>
       )}
       {!canProceed && answers.call_result && String(answers.call_result) !== 'contacted' && canSaveNew && (
-        <div className="precall-hint" style={{ marginTop: '0.25rem', borderColor: 'hsla(160, 70%, 40%, 0.4)', background: 'hsla(160, 70%, 40%, 0.06)' }}>
-          <CheckCircle2 size={16} color="var(--success, #10b981)" />
-          <span style={{ color: 'var(--success, #10b981)' }}>
+        <div className="precall-hint" style={{ marginTop: '0.25rem', borderColor: 'hsla(150, 70%, 40%, 0.4)', background: 'hsla(150, 70%, 40%, 0.06)' }}>
+          <CheckCircle2 size={16} color="var(--success)" />
+          <span style={{ color: 'var(--success)' }}>
             All required info is logged. Click <strong>New Form</strong> to save and get the next number.
           </span>
         </div>
       )}
 
-      {/* ── 4. STICKY BOTTOM ACTION BAR ─────────────────────────────────── */}
+      {/* ── Sticky footer ── */}
       <div className="precall-footer glass-card">
         <div className="precall-footer-left">
           <span className="precall-footer-label">{metaLine(config.meta, 'formsCountLabel', t)}</span>
@@ -705,10 +953,10 @@ export default function PreCallChecklist() {
           <button
             type="button"
             className="btn-primary"
-            disabled={!canProceed || submitting}
+            disabled={submitting}
             onClick={onNext}
             style={{ minWidth: '160px' }}
-            title={!canProceed ? 'Call outcome must be "Contacted" and all fields (except Interview outcome) must be filled' : 'Proceed to the survey questionnaire'}
+            title="Proceed to the survey questionnaire"
           >
             {submitting ? <Loader2 size={18} className="spin-icon" /> : <CheckCircle2 size={18} />}
             {isEditMode ? (t('editForm') || 'Edit Form') : t('next')}

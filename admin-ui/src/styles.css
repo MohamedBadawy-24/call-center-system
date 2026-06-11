@@ -793,12 +793,12 @@ td:last-child { border-right: var(--glass-border); border-radius: 0 var(--radius
 
 .precall-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   gap: 1.25rem;
   align-items: start;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 980px) {
   .precall-grid {
     grid-template-columns: 1fr;
   }
@@ -945,119 +945,185 @@ td:last-child { border-right: var(--glass-border); border-radius: 0 var(--radius
   animation: precall-spin 0.8s linear infinite;
 }
 
-/* ── Precall standalone script card ──────────────────────────────────── */
-.precall-script-standalone {
-  padding: 1.15rem 1.35rem;
-}
-
-.precall-script-standalone .precall-script-label {
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  margin-bottom: 0.55rem;
-  text-align: end;
-}
-
-.precall-script-standalone .precall-script-text {
-  font-size: 1.02rem;
-  font-weight: 750;
-  line-height: 1.65;
-  color: var(--text-primary);
-}
-
-/* ── Precall section card ─────────────────────────────────────────────── */
-.precall-section-card {
-  position: relative;
-  overflow: hidden;
-  padding: 1.15rem 1.2rem;
-}
-
-/* Suppress the glass-card lift on locked cards */
-.precall-section-card.locked {
-  cursor: default;
-}
-.precall-section-card.locked:hover {
-  transform: none;
-  box-shadow: var(--card-shadow);
-  border-color: var(--glass-border);
-}
-
-/* Card header row: section title + completion badge */
-.precall-section-card-header {
+/* ── Precall Progress Bar ── */
+.precall-progress-bar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  padding-bottom: 0.85rem;
-  border-bottom: 1px solid var(--border-color);
+  align-items: flex-start;
+  gap: 0;
+  padding: 1.25rem 1.5rem 1rem;
 }
 
-/* Remove the bottom border from .precall-section-title when inside the header */
-.precall-section-card-header .precall-section-title {
-  margin-bottom: 0;
-  padding-bottom: 0;
-  border-bottom: none;
-}
-
-/* Completion indicator dot/badge */
-.precall-completion-dot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: hsla(150, 80%, 40%, 0.12);
-  color: var(--success, hsl(150, 80%, 40%));
-  flex-shrink: 0;
-}
-
-/* Lock overlay — absolute, covers entire card */
-.precall-lock-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: hsla(220, 40%, 97%, 0.55);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
-  border-radius: inherit;
-}
-
-[data-theme='dark'] .precall-lock-overlay {
-  background: hsla(220, 40%, 4%, 0.55);
-}
-
-.precall-lock-inner {
+.precall-step {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.6rem;
-  padding: 1.25rem 1.5rem;
-  border-radius: var(--radius-md);
-  background: var(--card-bg);
-  border: var(--glass-border);
-  box-shadow: var(--card-shadow);
-  text-align: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
 }
 
-.precall-lock-label {
-  font-size: 0.82rem;
+.precall-step-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-weight: 800;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.precall-step-circle.filled {
+  background: var(--success);
+  color: white;
+  border: 2px solid var(--success);
+  box-shadow: 0 4px 12px hsla(150, 80%, 40%, 0.35);
+}
+
+.precall-step-circle.partially-filled {
+  background: var(--card-bg);
+  color: var(--warning);
+  border: 2px solid var(--warning);
+  box-shadow: 0 0 0 4px hsla(40, 95%, 55%, 0.15);
+}
+
+.precall-step-circle.empty {
+  background: var(--input-bg);
   color: var(--text-secondary);
-  letter-spacing: -0.01em;
+  border: 1.5px solid var(--border-color);
 }
 
-/* Section body transition */
-.precall-section-body {
-  transition: opacity 0.3s ease;
+.precall-step-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-align: center;
+  max-width: 80px;
+  line-height: 1.3;
+  white-space: nowrap;
 }
 
+.precall-step-label.filled {
+  color: var(--text-primary);
+  font-weight: 800;
+}
+
+.precall-step-connector {
+  flex: 1;
+  height: 2px;
+  margin-top: 17px; /* vertically center with circles */
+  border-radius: 2px;
+  transition: background 0.4s ease;
+}
+
+.precall-step-connector.done {
+  background: var(--success);
+}
+
+.precall-step-connector.pending {
+  background: var(--border-color);
+}
+
+/* ── Precall Section Cards ── */
+.precall-card-wrap {
+  border-radius: var(--radius-md);
+  transition: opacity 0.35s ease, border-color 0.3s ease;
+}
+
+/* Cards use standard glass-card properties with standard lift/borders */
+
+.precall-card-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+}
+
+/* Card header */
+.precall-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.2rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Card header always uses standard bottom border color */
+
+.precall-card-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+  background: var(--input-bg);
+  color: var(--text-secondary);
+  border: 1.5px solid var(--border-color);
+}
+
+.input-field.has-error,
+.precall-seg-btn.has-error {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important;
+}
+
+.precall-card-header-title {
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+  flex: 1;
+}
+
+
+/* Card body */
+.precall-card-body {
+  padding: 1rem 1.2rem;
+}
+
+/* 2-column field grid */
+.precall-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  align-items: start;
+}
+
+.precall-field-full {
+  grid-column: span 2;
+}
+
+
+/* Vertical section stack (replaces precall-grid horizontal grid) */
+.precall-sections-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ── Responsive ── */
+@media (max-width: 767px) {
+  .precall-fields-grid {
+    grid-template-columns: 1fr;
+  }
+  .precall-field-full {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 480px) {
+  .precall-step-label {
+    display: none;
+  }
+  .precall-progress-bar {
+    padding: 1rem 0.75rem 0.75rem;
+  }
+}
 /* Redesigned Survey Layout */
 .survey-layout {
   display: flex;

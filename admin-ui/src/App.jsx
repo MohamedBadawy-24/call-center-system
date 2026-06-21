@@ -1,5 +1,5 @@
 import React, { useContext, useState, useEffect, useRef } from 'react';
-import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sun, Moon, Globe, LogOut, LayoutDashboard, User as UserIcon, Settings, X, ChevronDown, CheckCircle, PauseCircle, CircleOff, Monitor, AlertCircle, Loader, Activity, BookOpen, MessageSquare, History } from 'lucide-react';
 
@@ -13,7 +13,10 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ProfileSettings from './pages/ProfileSettings';
 import ProfileRequests from './pages/ProfileRequests';
-import LiveMonitoring from './pages/LiveMonitoring';
+import LiveMonitorAudit from './pages/LiveMonitorAudit';
+import OtherAnswersCoding from './pages/OtherAnswersCoding';
+import AuditPreCallChecklist from './pages/AuditPreCallChecklist';
+import AuditTakeSurvey from './pages/AuditTakeSurvey';
 import UserManagement from './pages/UserManagement';
 import Analytics from './pages/Analytics';
 import Feedbacks from './pages/Feedbacks';
@@ -21,7 +24,6 @@ import SopUpdates from './pages/SopUpdates';
 import ResponseHistory from './pages/ResponseHistory';
 import QualityAgentStats from './pages/QualityAgentStats';
 import QualityDropOff from './pages/QualityDropOff';
-import ShadowReview from './pages/ShadowReview';
 import PrivateRoute from './components/PrivateRoute';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import { UIProvider, UIContext } from './context/UIContext';
@@ -259,7 +261,7 @@ const NavBar = () => {
           </Link>
           
           {user && (
-            <div className="nav-links">
+            <div className="nav-links desktop-nav-links">
               <Link to="/" className={!isAdminOrQualityPath && location.pathname !== '/profile' ? "active" : ""}>
                 <LayoutDashboard size={18} style={{ verticalAlign: 'middle', marginRight: '6px' }} />
                 {t('agentPortal')}
@@ -354,6 +356,18 @@ const NavBar = () => {
               </div>
 
               <div className="drawer-content">
+                <div className="mobile-nav-links" style={{ display: 'none', flexDirection: 'column', gap: '0.25rem', marginBottom: '1.25rem' }}>
+                  <span className="drawer-section-label">{t('navigation') || 'Navigation'}</span>
+                  <Link to="/" className="drawer-item" onClick={() => setDrawerOpen(false)}>
+                    <LayoutDashboard size={18} /> {t('agentPortal')}
+                  </Link>
+                  {isStaff && (
+                    <Link to="/admin" className="drawer-item" onClick={() => setDrawerOpen(false)}>
+                      <Settings size={18} /> {user.role === 'quality' ? "Performance" : t('adminDashboard')}
+                    </Link>
+                  )}
+                </div>
+
                 <span className="drawer-section-label">{t('accountSettings')}</span>
                 <Link to="/profile" className="drawer-item" onClick={() => setDrawerOpen(false)}>
                   <UserIcon size={18} /> {t('myProfile')}
@@ -375,8 +389,8 @@ const NavBar = () => {
 
                 {isStaff && (
                   <>
-                    <Link to="/admin/live" className="drawer-item" onClick={() => setDrawerOpen(false)}>
-                      <Monitor size={18} /> {t('liveMonitor')}
+                    <Link to="/quality/monitor" className="drawer-item" onClick={() => setDrawerOpen(false)}>
+                      <Monitor size={18} /> {t('liveMonitorAudit') || 'Live Monitor & Audit'}
                     </Link>
                     <Link to="/admin/analytics" className="drawer-item" onClick={() => setDrawerOpen(false)}>
                       <Activity size={18} /> {t('historicalAnalytics') || 'Analytics'}
@@ -396,8 +410,8 @@ const NavBar = () => {
                     <Link to="/quality/drop-off" className="drawer-item" onClick={() => setDrawerOpen(false)}>
                       <History size={18} /> {t('dropOffReport') || 'Drop-Off Report'}
                     </Link>
-                    <Link to="/quality/shadow-review" className="drawer-item" onClick={() => setDrawerOpen(false)}>
-                      <Monitor size={18} /> {t('liveAudit') || 'Live Audit'}
+                    <Link to="/quality/other-coding" className="drawer-item" onClick={() => setDrawerOpen(false)}>
+                      <BookOpen size={18} /> {t('otherAnswersCoding') || 'Other Answers Coding'}
                     </Link>
                   </div>
                 )}
@@ -477,14 +491,18 @@ const AnimatedRoutes = () => {
         
         {/* Support both Admin and Quality roles for common stats dashboard and Live Monitor */}
         <Route path="/admin" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><AdminDashboard /></PageWrapper></PrivateRoute>} />
-        <Route path="/admin/live" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><LiveMonitoring /></PageWrapper></PrivateRoute>} />
+        <Route path="/admin/live" element={<Navigate to="/quality/monitor" replace />} />
         <Route path="/admin/analytics" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><Analytics /></PageWrapper></PrivateRoute>} />
         <Route path="/admin/feedbacks" element={<PrivateRoute reqRole={['admin', 'quality', 'agent']}><PageWrapper><Feedbacks /></PageWrapper></PrivateRoute>} />
         <Route path="/admin/responses" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><ResponseHistory /></PageWrapper></PrivateRoute>} />
 
+        <Route path="/quality/monitor" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><LiveMonitorAudit /></PageWrapper></PrivateRoute>} />
+        <Route path="/quality/other-coding" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><OtherAnswersCoding /></PageWrapper></PrivateRoute>} />
         <Route path="/quality/agent-stats" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><QualityAgentStats /></PageWrapper></PrivateRoute>} />
         <Route path="/quality/drop-off" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><QualityDropOff /></PageWrapper></PrivateRoute>} />
-        <Route path="/quality/shadow-review" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><ShadowReview /></PageWrapper></PrivateRoute>} />
+        <Route path="/quality/shadow-review" element={<Navigate to="/quality/monitor" replace />} />
+        <Route path="/quality/audit-precall/:agentId" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><AuditPreCallChecklist /></PageWrapper></PrivateRoute>} />
+        <Route path="/quality/audit-survey/:surveyId/:agentId/:serialNumber" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><AuditTakeSurvey /></PageWrapper></PrivateRoute>} />
         
         {/* Strictly Admin routes */}
         <Route path="/admin/requests" element={<PrivateRoute reqRole="admin"><PageWrapper><ProfileRequests /></PageWrapper></PrivateRoute>} />

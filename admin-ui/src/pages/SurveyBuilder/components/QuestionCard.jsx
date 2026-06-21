@@ -2,6 +2,7 @@ import React, { useContext, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SurveyBuilderContext } from '../SurveyBuilderContext';
+import { UIContext } from '../../../context/UIContext';
 import ConditionBuilder from '../../../components/ConditionBuilder';
 import { GripVertical, Copy, Trash2, ChevronDown, ChevronUp, Layers } from 'lucide-react';
 
@@ -29,6 +30,8 @@ export default function QuestionCard({
   deleteQ,
 }) {
   const { surveyState, isAdmin } = useContext(SurveyBuilderContext);
+  const { language } = useContext(UIContext);
+  const isRtl = language === 'ar';
   const [collapsed, setCollapsed] = useState(false);
 
   const {
@@ -136,6 +139,20 @@ export default function QuestionCard({
             <label className="form-label">Question Text (Agent reads this)</label>
             <input className="input-field" value={question.text} onChange={e => updateQ({ text: e.target.value })} readOnly={!isAdmin} />
           </div>
+
+          {question.type !== 'info' && (
+            <div style={{ display: 'flex', alignItems: 'center', marginTop: '-0.25rem', marginBottom: '0.25rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, fontSize: '0.9rem', cursor: isAdmin ? 'pointer' : 'default' }}>
+                <input 
+                  type="checkbox" 
+                  checked={!!question.optional} 
+                  onChange={() => updateQ({ optional: !question.optional })} 
+                  disabled={!isAdmin} 
+                />
+                {isRtl ? "اختياري (يمكن للوكيل تخطيه)" : "Optional (agent can skip)"}
+              </label>
+            </div>
+          )}
 
           <div>
             <label className="form-label">Internal Script / Instruction (Optional)</label>

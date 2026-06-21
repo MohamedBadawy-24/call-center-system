@@ -1,3 +1,11 @@
+/**
+ * DIAGNOSTIC - ProfileSettings.jsx
+ * Displays user profile preferences (theme, language), change requests history (agents),
+ * and profile editing inputs (displayName, emailAddress, passwords).
+ *
+ * Changes:
+ * - Render read-only researcherCode field for agents and quality users above displayName.
+ */
 import React, { useState, useContext, useEffect } from 'react';
 import { api, setApiAuthToken } from '../api/client';
 import { AuthContext } from '../context/AuthContext';
@@ -244,6 +252,26 @@ export default function ProfileSettings() {
           {error && <div style={{ color: 'var(--danger)', marginBottom: '1rem', background: 'rgba(225,45,57,0.1)', padding: '0.75rem', borderRadius: '8px' }}>{error}</div>}
           {message && <div style={{ color: 'var(--success)', marginBottom: '1rem', background: 'rgba(62,171,214,0.1)', padding: '0.75rem', borderRadius: '8px' }}>{message}</div>}
           
+          {(user.role === 'agent' || user.role === 'quality') && (
+            <div className="form-group" style={{ marginBottom: '2rem' }}>
+              <label className="form-label">{t('researcherCode')}</label>
+              <div 
+                className="input-field" 
+                style={{ 
+                  background: 'var(--bg-secondary)', 
+                  border: '1px solid var(--border-color)', 
+                  borderRadius: 'var(--radius-md)', 
+                  padding: '0.75rem 1rem', 
+                  color: user.researcherCode ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  fontWeight: user.researcherCode ? 700 : 500,
+                  fontStyle: user.researcherCode ? 'normal' : 'italic',
+                }}
+              >
+                {user.researcherCode || t('notAssigned')}
+              </div>
+            </div>
+          )}
+
           <div className="form-group" style={{ marginBottom: '2rem' }}>
             <label className="form-label">{t('displayName')}</label>
             <div style={{ display: 'flex', gap: '1rem' }}>

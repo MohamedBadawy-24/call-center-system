@@ -12,7 +12,7 @@ const XLSX = require('xlsx');
 const getCtx = require('./ctx');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-const MONGO_URI = 'mongodb://127.0.0.1:27017/call-center';
+const mongoUri = process.env.MONGO_URI_TEST || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/call-center';
 
 let ctx, adminToken, surveyId;
 
@@ -24,7 +24,7 @@ beforeAll(async () => {
   surveyId   = ctx.surveyId;
 
   if (mongoose.connection.readyState === 0) {
-    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 10000 });
+    await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 10000 });
   }
 
   // Seed a response with "other:" prefixed values
@@ -139,7 +139,15 @@ describe('GET /admin/export-advanced?format=csv', () => {
 // ── SAV Export ────────────────────────────────────────────────────────────────
 
 describe('GET /admin/export-advanced?format=sav', () => {
-  it('returns 200 and a binary SAV file starting with SPSS magic bytes', async () => {
+  it('returns 200 and a binary SAV file starting with SPSS magic bytes and cleans up the temp file', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const uploadsDir = path.join(__dirname, '..', 'uploads');
+
+    // Track .sav files in uploads directory
+    const getSavFiles = () => fs.readdirSync(uploadsDir).filter(f => f.endsWith('.sav'));
+    const savBefore = getSavFiles();
+
     const res = await axios.get(
       `${BASE_URL}/admin/export-advanced?surveyId=${surveyId}&format=sav`,
       { ...auth(adminToken), responseType: 'arraybuffer' }
@@ -150,6 +158,12 @@ describe('GET /admin/export-advanced?format=sav', () => {
       const magic = buf.slice(0, 4).toString('ascii');
       expect(['$FL2', '$FL3']).toContain(magic);
     }
+
+    // Give callback a brief moment to unlink the file
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    const savAfter = getSavFiles();
+    expect(savAfter.length).toBeLessThanOrEqual(savBefore.length);
   });
 });
 

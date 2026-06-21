@@ -1,3 +1,13 @@
+/**
+ * DIAGNOSTIC - authController.js
+ * register(): extracts name, email, password, role from req.body and creates User.
+ * updateProfile(): extracts name, email, oldPassword, password, updates profile.
+ * Other functions: login, getMe, forgotPassword, resetPassword, etc.
+ *
+ * Changes:
+ * - register(): Support researcherCode field in req.body.
+ * - updateProfile(): Strip researcherCode from body.
+ */
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
@@ -36,7 +46,7 @@ exports.hasUsers = async (req, res) => {
 
 exports.register = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, researcherCode } = req.body;
     const userCount = await User.countDocuments();
     let finalRole = role || 'agent';
 
@@ -59,7 +69,13 @@ exports.register = async (req, res) => {
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
-    await User.create({ name, email, password: hashedPassword, role: finalRole });
+    await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      role: finalRole,
+      researcherCode: researcherCode ? String(researcherCode).trim() : null
+    });
     res.json({ message: 'User registered successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -85,6 +101,7 @@ exports.login = async (req, res) => {
       id: user._id,
       name: user.name,
       role: user.role,
+      researcherCode: user.researcherCode,
     };
 
     if (user.role !== 'admin') {
@@ -140,6 +157,7 @@ exports.getMe = async (req, res) => {
         id: user._id.toString(),
         name: user.name,
         role: user.role,
+        researcherCode: user.researcherCode,
         currentStatus: user.currentStatus,
         statusStartedAt: user.statusStartedAt,
         precallCompletedForActiveSession,
@@ -213,6 +231,7 @@ exports.resetPassword = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
+    delete req.body.researcherCode; // Safety guard: profile updates cannot modify researcherCode
     const { name, email, oldPassword, password } = req.body;
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });

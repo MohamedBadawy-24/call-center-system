@@ -16,14 +16,13 @@ const handleValidationErrors = (req, res, next) => {
 const validateRegister = [
   body('name').trim().isLength({ min: 2 }).escape().withMessage('Name must be at least 2 characters'),
   body('email').isEmail().normalizeEmail().withMessage('Valid email required'),
-  body('password').isStrongPassword({
-    minLength: 8,
-    minLowercase: 1,
-    minUppercase: 0,
-    minNumbers: 1,
-    minSymbols: 1,
-    symbols: '@-_.'
-  }).withMessage('Password: 8+ chars, 1 letter, 1 number, 1 (@-_. )'),
+  body('password').custom((value) => {
+    const regex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@_\-.])[a-zA-Z\d@_\-.]{8,}$/;
+    if (!regex.test(value)) {
+      throw new Error('Password: 8+ chars, 1 letter, 1 number, 1 (@-_. )');
+    }
+    return true;
+  }),
   body('role').optional().isIn(['agent', 'admin', 'quality']),
   handleValidationErrors
 ];

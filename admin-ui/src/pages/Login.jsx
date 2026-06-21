@@ -96,6 +96,7 @@ export default function Login() {
               <Mail size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
               <input 
                 type="email" 
+                data-testid="baseera-email-input"
                 className="input-field" 
                 style={{ paddingLeft: '3rem' }}
                 placeholder="name@company.com"
@@ -117,6 +118,7 @@ export default function Login() {
               <Lock size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
               <input 
                 type="password" 
+                data-testid="baseera-password-input"
                 className="input-field" 
                 style={{ paddingLeft: '3rem' }}
                 placeholder="••••••••"
@@ -129,6 +131,7 @@ export default function Login() {
 
           <button 
             type="submit" 
+            data-testid="baseera-login-button"
             className="btn-primary" 
             style={{ width: '100%', padding: '1rem', marginBottom: !hasUsers ? '1rem' : '0' }}
             disabled={isLoading}

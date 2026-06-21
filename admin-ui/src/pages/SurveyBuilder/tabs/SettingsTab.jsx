@@ -131,6 +131,21 @@ export default function SettingsTab() {
             ))}
           </select>
         </div>
+        <div style={{ width: '200px' }}>
+          <label className="form-label">Survey Layout Mode</label>
+          <select className="input-field" value={surveyState.layoutMode || 'single'} onChange={e => updateState({ layoutMode: e.target.value })} disabled={!isAdmin}>
+            <option value="single">Single Question Per Screen</option>
+            <option value="multi">Multiple Questions (Page-by-Section)</option>
+          </select>
+        </div>
+        <div style={{ width: '220px' }}>
+          <label className="form-label">Number Assignment Mode</label>
+          <select className="input-field" value={surveyState.numberAssignmentMode || 'queue_only'} onChange={e => updateState({ numberAssignmentMode: e.target.value })} disabled={!isAdmin}>
+            <option value="queue_only">Queue Only</option>
+            <option value="queue_then_manual">Queue then Manual</option>
+            <option value="manual_allowed">Manual Allowed</option>
+          </select>
+        </div>
         <div>
           <label className="form-label" style={{ display: 'block', marginBottom: '0.5rem' }}>Campaign Status</label>
           <button 

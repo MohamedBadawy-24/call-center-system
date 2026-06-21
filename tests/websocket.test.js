@@ -25,7 +25,7 @@ const { io: ioClient } = require('socket.io-client');
 const getCtx = require('./ctx');
 
 const BASE_URL   = process.env.BASE_URL || 'http://localhost:3000';
-const MONGO_URI  = 'mongodb://127.0.0.1:27017/call-center';
+const mongoUri   = process.env.MONGO_URI_TEST || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/call-center';
 const EVENT_WAIT = 2500; // ms to wait for a socket event
 
 let ctx, adminToken, agentBId, surveyId;
@@ -56,8 +56,20 @@ beforeAll(async () => {
   surveyId   = ctx.surveyId;
 
   if (mongoose.connection.readyState === 0) {
-    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 10000 });
+    await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 10000 });
   }
+
+  // Seed a response so flag test can run
+  await mongoose.connection.db.collection('responses').insertOne({
+    surveyId:        new mongoose.Types.ObjectId(surveyId),
+    agentId:         ctx.agentAId,
+    serialNumber:    `WS-RESP-${Date.now()}`,
+    status:          'completed',
+    interviewOutcome:'completed',
+    answers:         [],
+    durationSecs:    10,
+    completedAt:     new Date(),
+  });
 
   // Connect a socket authenticated as admin
   await new Promise((resolve, reject) => {
@@ -74,6 +86,12 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (socket && socket.connected) socket.disconnect();
+  // Clear the seeded response
+  if (mongoose.connection.readyState === 1) {
+    await mongoose.connection.db.collection('responses').deleteMany({
+      serialNumber: { $regex: /^WS-RESP-/ }
+    }).catch(() => {});
+  }
 });
 
 // ── Passing: POST /reviews emits stats-update ──────────────────────────────────
@@ -125,7 +143,7 @@ it('[B5] POST /reviews/:responseId/flag → stats-update received within 2.5 s',
   if (!first) { console.warn('No response available to flag — skipping'); return; }
 
   const received = await awaitEvent('stats-update', () =>
-    axios.post(`${BASE_URL}/reviews/${first._id}/flag`, { flagNote: 'ws-test' }, auth(adminToken))
+    axios.post(`${BASE_URL}/reviews/${first._id}/flag`, { flagNote: 'ws-test', flagCategory: 'wrong_answer' }, auth(adminToken))
   );
   // Currently no socket emit — B5 bug
   expect(received).toBe(true);

@@ -1,3 +1,12 @@
+/**
+ * DIAGNOSTIC - Register.jsx
+ * Admin account creation form. Supports inputting Name, Email, Password, and Role.
+ * Submits to POST /auth/register.
+ *
+ * Changes:
+ * - Add researcherCode state and input field.
+ * - Submit researcherCode in handleSubmit payload.
+ */
 import React, { useState, useContext } from 'react';
 import { api } from '../api/client';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -39,6 +48,7 @@ export default function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [researcherCode, setResearcherCode] = useState('');
   const [role, setRole] = useState('agent');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -52,15 +62,16 @@ export default function Register() {
     try {
       setError('');
       setMessage('');
-      await api.post('/auth/register', { name, email, password, role });
+      await api.post('/auth/register', { name, email, password, role, researcherCode });
       setMessage(`${name} has been added as a ${selectedRole.label}.`);
-      setName(''); setEmail(''); setPassword(''); setRole('agent');
+      setName(''); setEmail(''); setPassword(''); setResearcherCode(''); setRole('agent');
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed');
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <motion.div
@@ -148,6 +159,20 @@ export default function Register() {
                 onChange={e => setPassword(e.target.value)}
               />
             </div>
+
+            {/* Researcher Code (Feature 3) */}
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Shield size={14} color="var(--primary)" /> {t('researcherCode')}
+              </label>
+              <input
+                className="input-field"
+                value={researcherCode}
+                placeholder={language === 'ar' ? 'مثال: RES-001' : 'e.g. RES-001'}
+                onChange={e => setResearcherCode(e.target.value)}
+              />
+            </div>
+
 
             {/* Role Selector */}
             <div className="form-group" style={{ margin: 0 }}>

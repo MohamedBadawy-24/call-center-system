@@ -31,8 +31,13 @@ const ResponseSchema = new mongoose.Schema({
   answers: [AnswerSchema],
   durationSecs: { type: Number, default: 0 },
   serialNumber: { type: String, unique: true, sparse: true },
+  numberSource: { type: String, enum: ['queue', 'manual'], default: 'queue' },
   startedAt: { type: Date, default: Date.now },
   completedAt: { type: Date },
+  isOfflineSync: { type: Boolean, default: false },
+  syncedAt: { type: Date },
+  offlineStartedAt: { type: Date },
+  offlineCompletedAt: { type: Date },
 });
 
 ResponseSchema.index({ agentId: 1, startedAt: -1 });

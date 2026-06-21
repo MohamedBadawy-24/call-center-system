@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const { saveToFile, VariableType } = require('sav-writer');
 const { getSurveyEligibilityState, categorizeInterviewOutcome } = require('../services/precallService');
+const { getNextSerialNumber } = require('../services/serialService');
 const { runTransaction } = require('../utils/runTransaction');
 
 const encodeValue = (val) => {
@@ -126,6 +127,7 @@ exports.submitResponse = async (req, res) => {
         : null;
 
     const response = await runTransaction(async (session) => {
+      const isOfflineSync = !!req.body.isOfflineSync;
       const elig = await getSurveyEligibilityState(
         user,
         req.body.surveyId,
@@ -134,7 +136,7 @@ exports.submitResponse = async (req, res) => {
       );
 
       const qualifiedOutcomes = ['completed', 'partial'];
-      if (qualifiedOutcomes.includes(interviewOutcome) && !elig.canStartSurvey) {
+      if (qualifiedOutcomes.includes(interviewOutcome) && !isOfflineSync && !elig.canStartSurvey) {
         const err = new Error('Not eligible to submit qualified responses for this session');
         err.status = 403;
         err.reason = elig.reason;
@@ -148,10 +150,18 @@ exports.submitResponse = async (req, res) => {
       else if (category === 'disqualified' || disqualified) status = 'disqualified';
 
       const now = new Date();
-      const serialNumber =
-        elig.precallSerialNumber && String(elig.precallSerialNumber).trim() !== ''
-          ? String(elig.precallSerialNumber).trim()
-          : null;
+      const serialNumber = isOfflineSync
+        ? precallSerialFromBody
+        : (elig.precallSerialNumber && String(elig.precallSerialNumber).trim() !== ''
+            ? String(elig.precallSerialNumber).trim()
+            : null);
+
+      const numberSource = req.body.numberSource || (serialNumber && serialNumber.startsWith('OFFLINE-MANUAL') ? 'manual' : 'queue');
+
+      let finalSerial = serialNumber;
+      if (finalSerial && finalSerial.startsWith('OFFLINE-')) {
+        finalSerial = await getNextSerialNumber('survey_numbers');
+      }
 
       const responseData = {
         surveyId: req.body.surveyId,
@@ -161,15 +171,21 @@ exports.submitResponse = async (req, res) => {
         interviewOutcome,
         outcomeCategory: category,
         status,
-        sessionStatusStartedAt: user.statusStartedAt,
-        completedAt: now,
+        numberSource,
+        sessionStatusStartedAt: isOfflineSync ? undefined : user.statusStartedAt,
+        startedAt: req.body.startedAt ? new Date(req.body.startedAt) : now,
+        completedAt: req.body.completedAt ? new Date(req.body.completedAt) : now,
         outcomeReason: req.body.outcomeReason || '',
+        isOfflineSync,
+        syncedAt: isOfflineSync ? now : undefined,
+        offlineStartedAt: isOfflineSync && req.body.startedAt ? new Date(req.body.startedAt) : undefined,
+        offlineCompletedAt: isOfflineSync && req.body.completedAt ? new Date(req.body.completedAt) : undefined,
       };
-      if (serialNumber) responseData.serialNumber = serialNumber;
+      if (finalSerial) responseData.serialNumber = finalSerial;
 
       let saved;
-      if (serialNumber) {
-        const responseFilter = { serialNumber };
+      if (finalSerial) {
+        const responseFilter = { serialNumber: finalSerial };
         if (!isStaff) responseFilter.agentId = user._id;
 
         saved = await Response.findOneAndUpdate(
@@ -178,7 +194,7 @@ exports.submitResponse = async (req, res) => {
           { upsert: true, returnDocument: 'after', session }
         );
 
-        const precallFilter = { serialNumber };
+        const precallFilter = { serialNumber: finalSerial };
         if (!isStaff) precallFilter.userId = user._id;
 
         await PrecallCompletion.findOneAndUpdate(
@@ -191,6 +207,8 @@ exports.submitResponse = async (req, res) => {
               disqualified: disqualified || false,
               'payload.interview_result': interviewOutcome,
               'payload.outcome_reason': req.body.outcomeReason || '',
+              isOfflineSync,
+              syncedAt: isOfflineSync ? now : undefined,
             },
           },
           { session }
@@ -205,15 +223,41 @@ exports.submitResponse = async (req, res) => {
         phoneFinalStatus = 'completed';
       }
 
-      const phoneFilter = serialNumber
-        ? { serialNumber }
-        : { agentId: user._id, surveyId: new mongoose.Types.ObjectId(String(req.body.surveyId)) };
+      let phoneDoc = finalSerial ? await PhoneNumber.findOne({ serialNumber: finalSerial }).session(session) : null;
+      if (!phoneDoc && finalSerial) {
+        const phoneAnswer = req.body.answers?.find(a => a.questionId === 'phone')?.value || req.body.phone;
+        if (phoneAnswer) {
+          [phoneDoc] = await PhoneNumber.create([{
+            surveyId: req.body.surveyId,
+            number: String(phoneAnswer).trim(),
+            agentId: user._id,
+            status: phoneFinalStatus,
+            serialNumber: finalSerial,
+            numberSource: numberSource,
+            assignedAt: req.body.startedAt ? new Date(req.body.startedAt) : now,
+            calledAt: now,
+            outcomeReason: `Contacted | ${interviewOutcome}`
+          }], { session });
+        }
+      }
 
-      await PhoneNumber.findOneAndUpdate(
-        phoneFilter,
-        { $set: { status: phoneFinalStatus, calledAt: now, outcomeReason: `Contacted | ${interviewOutcome}` } },
-        { sort: { assignedAt: -1 }, session }
-      );
+      if (phoneDoc) {
+        phoneDoc.status = phoneFinalStatus;
+        phoneDoc.calledAt = now;
+        phoneDoc.outcomeReason = `Contacted | ${interviewOutcome}`;
+        phoneDoc.numberSource = numberSource;
+        await phoneDoc.save({ session });
+      } else {
+        const phoneFilter = finalSerial
+          ? { serialNumber: finalSerial }
+          : { agentId: user._id, surveyId: new mongoose.Types.ObjectId(String(req.body.surveyId)) };
+
+        await PhoneNumber.findOneAndUpdate(
+          phoneFilter,
+          { $set: { status: phoneFinalStatus, calledAt: now, outcomeReason: `Contacted | ${interviewOutcome}`, numberSource } },
+          { sort: { assignedAt: -1 }, session }
+        );
+      }
 
       if (interviewOutcome === 'postponed' && serialNumber) {
         let sid;
@@ -362,7 +406,7 @@ exports.exportCsv = async (req, res) => {
       });
     });
 
-    const headers = ['Submission Date', 'Status', 'Agent Name', 'Agent Email', 'Duration (sec)', 'Outcome Reason'];
+    const headers = ['Submission Date', 'Status', 'Agent Name', 'Agent Email', 'Duration (sec)', 'Outcome Reason', 'Number Source'];
     questions.forEach((q, idx) => {
       headers.push(q.text.replace(/,/g, ''));
       const max = maxOtherCount[q.id] || 0;
@@ -381,6 +425,7 @@ exports.exportCsv = async (req, res) => {
         r.agent ? `"${(r.agent.email || '').replace(/"/g, '""')}"` : 'Unknown',
         r.durationSecs || 0,
         `"${(r.outcomeReason || '').replace(/"/g, '""')}"`,
+        `"${r.numberSource || 'queue'}"`,
       ];
       questions.forEach((q, idx) => {
         const answer = (r.answers || []).find(a => a.questionId === q.id);
@@ -470,7 +515,7 @@ exports.exportAdvanced = async (req, res) => {
       res.setHeader('Content-Disposition', `attachment; filename=${filenameBase}.csv`);
       res.write('\uFEFF'); // BOM
 
-      const headers = ['Serial', 'Submission_Date', 'Status', 'Interview_Outcome', 'Outcome_Reason', 'Agent_Name', 'Duration_Secs'];
+      const headers = ['Serial', 'Submission_Date', 'Status', 'Interview_Outcome', 'Outcome_Reason', 'Agent_Name', 'Duration_Secs', 'Number_Source'];
       questions.forEach((q, idx) => {
         headers.push(q.text.replace(/,/g, ''));
         const max = maxOtherCount[q.id] || 0;
@@ -490,7 +535,8 @@ exports.exportAdvanced = async (req, res) => {
           `"${(r.interviewOutcome || '').replace(/"/g, '""')}"`,
           `"${(r.outcomeReason || '').replace(/"/g, '""')}"`,
           `"${(r.agentId?.name || 'Unknown').replace(/"/g, '""')}"`,
-          r.durationSecs || 0
+          r.durationSecs || 0,
+          `"${r.numberSource || 'queue'}"`
         ];
         questions.forEach((q, idx) => {
           const answer = (r.answers || []).find(a => a.questionId === q.id);
@@ -537,7 +583,8 @@ exports.exportAdvanced = async (req, res) => {
         { header: 'Interview Outcome', key: 'Interview_Outcome', width: 25 },
         { header: 'Outcome Reason', key: 'Outcome_Reason', width: 30 },
         { header: 'Agent Name', key: 'Agent_Name', width: 20 },
-        { header: 'Duration (Secs)', key: 'Duration_Secs', width: 15 }
+        { header: 'Duration (Secs)', key: 'Duration_Secs', width: 15 },
+        { header: 'Number Source', key: 'Number_Source', width: 15 }
       ];
 
       questions.forEach((q, idx) => {
@@ -559,7 +606,8 @@ exports.exportAdvanced = async (req, res) => {
           Interview_Outcome: r.interviewOutcome,
           Outcome_Reason: r.outcomeReason || '',
           Agent_Name: r.agentId?.name || 'Unknown',
-          Duration_Secs: r.durationSecs || 0
+          Duration_Secs: r.durationSecs || 0,
+          Number_Source: r.numberSource || 'queue'
         };
 
         questions.forEach((q, idx) => {
@@ -595,6 +643,7 @@ exports.exportAdvanced = async (req, res) => {
         { name: 'REASON', label: 'Outcome Reason', type: VariableType.String, width: 128 },
         { name: 'AGENT', label: 'Agent Name', type: VariableType.String, width: 64 },
         { name: 'DURATION', label: 'Duration (Secs)', type: VariableType.Numeric, width: 8, decimal: 0 },
+        { name: 'SOURCE', label: 'Number Source', type: VariableType.String, width: 16 },
       ];
       questions.forEach((q, idx) => {
         // Check if the question type is naturally numeric OR if its options suggest it's a Yes/No question
@@ -630,6 +679,7 @@ exports.exportAdvanced = async (req, res) => {
           r.outcomeReason || '',
           r.agentId?.name || 'Unknown',
           r.durationSecs || 0,
+          r.numberSource || 'queue',
         ];
         questions.forEach(q => {
           const answer = r.answers.find(a => a.questionId === q.id);

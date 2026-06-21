@@ -23,6 +23,7 @@ export function SurveyBuilderProvider({ children, surveyId }) {
     goal: 0,
     targetGovernorate: 'All',
     governorateGoals: [],
+    layoutMode: 'single',
     outboundConfig: getDefaultOutboundClone(),
     customizeOutbound: false,
     sections: [{ title: 'Main Section', questions: [] }]
@@ -52,6 +53,7 @@ export function SurveyBuilderProvider({ children, surveyId }) {
           : root.sections?.length > 0 ? root.sections : [{ title: 'Main Section', questions: [] }];
         const outboundPrecall = draft?.outboundPrecall ?? root.outboundPrecall;
         const title = draft?.title ?? root.title ?? '';
+        const layoutMode = draft?.layoutMode ?? root.layoutMode ?? 'single';
 
         setSurveyState({
           title,
@@ -59,6 +61,7 @@ export function SurveyBuilderProvider({ children, surveyId }) {
           goal: root.goal || 0,
           targetGovernorate: root.targetGovernorate || 'All',
           governorateGoals: root.governorateGoals || [],
+          layoutMode,
           outboundConfig: normalizeOutboundPrecall(outboundPrecall),
           customizeOutbound: hasStoredOutboundCustom(outboundPrecall),
           sections,
@@ -111,6 +114,7 @@ export function SurveyBuilderProvider({ children, surveyId }) {
         title: surveyState.title,
         sections: surveyState.sections,
         outboundPrecall: surveyState.customizeOutbound ? surveyState.outboundConfig : null,
+        layoutMode: surveyState.layoutMode,
       };
       api.put(`/survey/${surveyId}/autosave`, draftPayload)
          .then(() => setHasDraft(true))
@@ -129,6 +133,7 @@ export function SurveyBuilderProvider({ children, surveyId }) {
         targetGovernorate: surveyState.targetGovernorate,
         introScript: '',
         sections: surveyState.sections,
+        layoutMode: surveyState.layoutMode,
         governorateGoals: surveyState.governorateGoals,
         outboundPrecall: surveyState.customizeOutbound ? surveyState.outboundConfig : null,
       };

@@ -14,7 +14,7 @@
     "start": "node server.js",
     "lint": "eslint . --fix",
     "lint:fix": "eslint . --fix",
-    "test": "jest --runInBand --forceExit --testTimeout=30000 --detectOpenHandles",
+    "test": "jest --runInBand --forceExit",
     "test:auth": "jest --runInBand --forceExit tests/auth.test.js",
     "test:workflow": "jest --runInBand --forceExit tests/agent-workflow.test.js",
     "test:draft": "jest --runInBand --forceExit tests/draft.test.js",
@@ -28,30 +28,23 @@
     "db:migrate": "node scripts/migrate-indexes.js",
     "db:seed": "node scripts/seed-admin.js"
   },
-  "jest": {
-    "testEnvironment": "node",
-    "testMatch": [
-      "<rootDir>/tests/**/*.test.js"
-    ],
-    "globalSetup":    "./tests/globalSetup.js",
-    "globalTeardown": "./tests/globalTeardown.js",
-    "testTimeout": 30000,
-    "verbose": true
-  },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^25.9.3",
     "axios": "^1.16.1",
     "eslint": "^9.18.0",
-    "jest": "^30.4.2",
+    "jest": "^29.7.0",
+    "mongodb-memory-server": "^11.2.0",
     "nodemon": "^3.1.2",
     "socket.io-client": "^4.8.3",
-    "xlsx": "^0.18.5"
+    "typescript": "^6.0.3"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "csv-parser": "^3.2.0",
     "dotenv": "^17.4.1",
-    "exceljs": "^4.4.0",
+    "exceljs": "^3.4.0",
     "express": "^5.2.1",
     "express-rate-limit": "^7.5.0",
     "express-validator": "^7.3.2",
@@ -62,6 +55,7 @@
     "multer": "^2.1.1",
     "nodemailer": "^8.0.5",
     "sav-writer": "^1.0.0",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "xlsx": "^0.18.5"
   }
 }

@@ -1,3 +1,14 @@
+/**
+ * DIAGNOSTIC - precallService.js
+ * Functions:
+ * - categorizeInterviewOutcome(): maps outcome to category and disqualified flag.
+ * - parseRespondentAgeYears(): reads age from payload.
+ * - computePrecallCompletedForSession(): returns true if agent completed precall.
+ * - getSurveyEligibilityState(): checks active status, session, and age gate.
+ *
+ * Changes:
+ * - Add Quality/Admin bypass checks to computePrecallCompletedForSession() and getSurveyEligibilityState().
+ */
 const mongoose = require('mongoose');
 const PrecallCompletion = require('../models/PrecallCompletion');
 const Response = require('../models/Response');
@@ -59,6 +70,7 @@ async function getLatestPrecallForSession(userId, statusStartedAt, surveyId, ses
  * their last survey submission in the current active session.
  */
 async function computePrecallCompletedForSession(user) {
+  if (user && (user.role === 'quality' || user.role === 'admin')) return true;
   if (user.role !== 'agent' || user.currentStatus !== 'active') return true;
   const uid = user._id;
   const ss = user.statusStartedAt;
@@ -86,13 +98,31 @@ async function getSurveyEligibilityState(user, surveyId, serialParam = null, ses
 
   // Admin and Quality can always walk through the survey.
   const isStaff = user && (user.role === 'admin' || user.role === 'quality');
-  if (isStaff && !serialParamTrimmed) {
+  if (isStaff) {
+    let lastPrecall = null;
+    if (serialParamTrimmed) {
+      let pcQ = PrecallCompletion.findOne({ serialNumber: serialParamTrimmed }).lean();
+      if (session) pcQ = pcQ.session(session);
+      lastPrecall = await pcQ;
+    }
+    let existingAnswers = {};
+    let existingResponse = null;
+    if (serialParamTrimmed) {
+      let respQ = Response.findOne({ serialNumber: serialParamTrimmed }).lean();
+      if (session) respQ = respQ.session(session);
+      existingResponse = await respQ;
+      if (existingResponse) {
+        existingAnswers = existingResponse.answers.reduce((acc, a) => ({ ...acc, [a.questionId]: a.value }), {});
+      }
+    }
     return {
       canStartSurvey: true,
       reason: '',
-      precallSerialNumber: '',
-      payload: {},
-      existingAnswers: {},
+      precallSerialNumber: serialParamTrimmed || '',
+      payload: lastPrecall ? (lastPrecall.payload || {}) : {},
+      existingAnswers,
+      interviewOutcome: existingResponse ? existingResponse.interviewOutcome : '',
+      outcomeReason: existingResponse ? existingResponse.outcomeReason : '',
     };
   }
 

@@ -1,3 +1,12 @@
+/**
+ * DIAGNOSTIC - User.js
+ * Current fields: name, email, password, role, resetCode, resetCodeExpires,
+ * emailVerificationCode, emailVerificationExpires, currentStatus, currentBreakReason,
+ * statusStartedAt, lastSeenSopAt, lastSeenFeedbackAt, precallCompletedForActiveSession,
+ * suspended, suspendedReason, createdAt.
+ *
+ * Changes: Add researcherCode (String, default: null, trim: true) to support Feature 3.
+ */
 const mongoose = require("mongoose");
 
 /**
@@ -7,6 +16,7 @@ const mongoose = require("mongoose");
  */
 const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
+  researcherCode: { type: String, default: null, trim: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   role: { type: String, enum: ['agent', 'admin', 'quality'], default: 'agent' },

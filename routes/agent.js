@@ -31,6 +31,7 @@ router.get('/outbound-precall', auth, async (req, res) => {
       outboundPrecall: survey.outboundPrecall || null,
       surveyTitle: survey.title || null,
       targetGovernorate: survey.targetGovernorate || 'All',
+      numberAssignmentMode: survey.numberAssignmentMode || 'queue_only',
     });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -65,6 +66,7 @@ router.get('/draft/:serialNumber', auth, agentController.getDraft);
 router.post('/draft', auth, agentController.saveDraft);
 router.post('/handover', auth, agentController.handoverCall);
 router.get('/next-number', agentActiveAuth, agentController.getNextNumber);
+router.post('/assign-manual-number', agentActiveAuth, agentController.assignManualNumber);
 router.post('/mark-number/:id', [auth, agentActiveAuth], agentController.markNumberCalled);
 router.get('/pending-serials', auth, agentController.getPendingSerials);
 router.get('/handover-candidates', auth, agentController.listHandoverCandidates);

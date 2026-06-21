@@ -25,6 +25,10 @@ const PrecallCompletionSchema = new mongoose.Schema({
   disqualified: { type: Boolean, default: false },
   under18NotQualified: { type: Boolean, default: false },
   serialNumber: { type: String, unique: true, sparse: true },
+  isOfflineSync: { type: Boolean, default: false },
+  syncedAt: { type: Date },
+  offlineStartedAt: { type: Date },
+  offlineCompletedAt: { type: Date },
 });
 
 PrecallCompletionSchema.index({ userId: 1, statusStartedAt: 1, completedAt: -1 });

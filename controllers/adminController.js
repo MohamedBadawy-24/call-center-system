@@ -1,3 +1,14 @@
+/**
+ * DIAGNOSTIC - adminController.js
+ * listProfileRequests(): lists profile requests.
+ * resolveProfileRequest(): approves or rejects name/email updates.
+ * listUsers(): lists users with basic fields.
+ * deleteUser(): deletes user and associated data.
+ *
+ * Changes:
+ * - listUsers(): Add researcherCode to fields query.
+ * - updateResearcherCode(): New PATCH controller to update researcherCode.
+ */
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const ProfileRequest = require('../models/ProfileRequest');
@@ -66,7 +77,7 @@ exports.listUsers = async (req, res) => {
   try {
     const users = await User.find(
       {},
-      'name email role currentStatus statusStartedAt suspended createdAt'
+      'name email role currentStatus statusStartedAt suspended researcherCode createdAt'
     ).sort({ createdAt: -1 });
     res.json(users);
   } catch (err) {
@@ -109,6 +120,39 @@ exports.deleteUser = async (req, res) => {
     res.json({ message: 'User deleted successfully' });
   } catch (err) {
     console.error('Delete user error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+exports.updateResearcherCode = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let { researcherCode } = req.body;
+    
+    if (researcherCode !== undefined && researcherCode !== null) {
+      researcherCode = String(researcherCode).trim();
+      if (researcherCode.length > 50) {
+        return res.status(400).json({ error: 'Researcher code exceeds maximum length of 50 characters' });
+      }
+      if (/[",]/.test(researcherCode)) {
+        return res.status(400).json({ error: 'Researcher code cannot contain commas or double quotes' });
+      }
+    } else {
+      researcherCode = null;
+    }
+
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.researcherCode = researcherCode;
+    await user.save();
+
+    const io = req.app.get('io');
+    if (io) io.emit('stats-update');
+
+    res.json(user);
+  } catch (err) {
+    console.error('Update researcher code error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 };

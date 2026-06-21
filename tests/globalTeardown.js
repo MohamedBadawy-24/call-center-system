@@ -1,58 +1,45 @@
-/**
- * Jest globalTeardown — runs ONCE after all test suites.
- * Removes all documents created during the test run.
- */
-const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env.test') });
-
-const mongoose = require('mongoose');
 const fs = require('fs');
-
-const CTX_FILE = '/tmp/jest-shared-ctx.json';
+const mongoose = require('mongoose');
 
 module.exports = async function () {
-  if (!fs.existsSync(CTX_FILE)) return;
+  console.log('\n[TEST TEARDOWN] Starting global teardown...');
 
-  let ctx;
-  try { ctx = JSON.parse(fs.readFileSync(CTX_FILE, 'utf8')); }
-  catch { return; }
-
-  const MONGO_URI = ctx.MONGO_URI || 'mongodb://127.0.0.1:27017/call-center';
-
-  try {
-    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 10000 });
-    const db = mongoose.connection.db;
-
-    // Test phone numbers
-    await db.collection('phonenumbers').deleteMany({ number: /^0100000/ }).catch(() => {});
-
-    // Everything attached to the test campaign
-    if (ctx.surveyId) {
-      const sid = new mongoose.Types.ObjectId(ctx.surveyId);
-      await db.collection('responses').deleteMany({ surveyId: sid }).catch(() => {});
-      await db.collection('precallcompletions').deleteMany({ surveyId: sid }).catch(() => {});
-      await db.collection('drafts').deleteMany({ surveyId: sid }).catch(() => {});
-      await db.collection('surveys').deleteOne({ _id: sid }).catch(() => {});
-    }
-
-    // Handover / draft test artefacts
-    await db.collection('precallcompletions').deleteMany({ serialNumber: /^HANDOVER-/ }).catch(() => {});
-    await db.collection('phonenumbers').deleteMany({ serialNumber: /^HANDOVER-/ }).catch(() => {});
-    await db.collection('drafts').deleteMany({ serialNumber: /^(HANDOVER-|DRAFT-TEST-|SUBMIT-DRAFT-)/ }).catch(() => {});
-
-    // Export-seeded responses
-    await db.collection('responses').deleteMany({ serialNumber: /^EXPORT-OTHER-/ }).catch(() => {});
-
-    // Upload prefix phones
-    await db.collection('phonenumbers').deleteMany({ number: /^0199/ }).catch(() => {});
-
-    // Test users (everything that uses @test.invalid domain)
-    await db.collection('users').deleteMany({ email: /@test\.invalid$/ }).catch(() => {});
-
+  // 1. Disconnect mongoose
+  if (mongoose.connection.readyState !== 0) {
     await mongoose.disconnect();
-  } catch (err) {
-    console.error('Teardown error:', err.message);
+    console.log('[TEST TEARDOWN] Mongoose disconnected.');
   }
 
-  fs.unlinkSync(CTX_FILE);
+  // 2. Close backend server & Socket.io
+  const server = global.__SERVER__;
+  if (server) {
+    // If Socket.io instance is running, close it
+    const appModule = require('../server.js');
+    if (appModule.io) {
+      await new Promise(resolve => appModule.io.close(resolve));
+      console.log('[TEST TEARDOWN] Socket.io closed.');
+    }
+    await new Promise(resolve => server.close(resolve));
+    console.log('[TEST TEARDOWN] Express server closed.');
+  }
+
+  // 3. Stop the MongoDB Memory Replica Set
+  const replSet = global.__MONGOD__;
+  if (replSet) {
+    await replSet.stop();
+    console.log('[TEST TEARDOWN] Mongo Memory replica set stopped.');
+  }
+
+  // 4. Delete the shared context file if it exists
+  const CTX_FILE = '/tmp/jest-shared-ctx.json';
+  if (fs.existsSync(CTX_FILE)) {
+    try {
+      fs.unlinkSync(CTX_FILE);
+      console.log('[TEST TEARDOWN] Shared context file removed.');
+    } catch (err) {
+      console.error('[TEST TEARDOWN] Failed to remove shared context file:', err.message);
+    }
+  }
+
+  console.log('[TEST TEARDOWN] complete');
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useMemo } from 'react';
+import React, { useState, useEffect, useContext, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { AuthContext } from '../context/AuthContext';
@@ -6,14 +6,42 @@ import { UIContext } from '../context/UIContext';
 import { toast } from 'react-toastify';
 import { INTERVIEW_OUTCOME_OPTIONS, evaluateCondition } from '../utils/outboundPrecallConfig';
 import HandoverModal from '../components/HandoverModal';
-import { UserPlus, Menu, ChevronLeft, ChevronRight, Save, PhoneOff, AlertTriangle } from 'lucide-react';
+import { UserPlus, Menu, ChevronLeft, ChevronRight, Save, PhoneOff, AlertTriangle, ChevronDown } from 'lucide-react';
 import SectionedSurveyView from '../components/SectionedSurveyView';
+import { offlineDb } from '../utils/offlineDb';
+
+class DebugErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, info) {
+    console.error("SURVEY CRASH:", error);
+    console.error("COMPONENT STACK:", info.componentStack);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: '2rem', color: 'red', fontFamily: 'monospace' }}>
+          <h2>Survey Render Error (debug only)</h2>
+          <pre>{this.state.error?.message}</pre>
+          <pre>{this.state.error?.stack}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function TakeSurvey({ mockSurvey }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user, setUser } = useContext(AuthContext);
-  const { t } = useContext(UIContext);
+  const { t, language, isOnline } = useContext(UIContext);
+  const isRtl = language === 'ar';
   const [survey, setSurvey] = useState(null);
 
   const [questions, setQuestions] = useState([]);
@@ -24,6 +52,7 @@ export default function TakeSurvey({ mockSurvey }) {
   const [fieldErrors, setFieldErrors] = useState({});
   const [startTime, setStartTime] = useState(null);
   const [currentIdx, setCurrentIdx] = useState(0);
+  const [currentSectionIdx, setCurrentSectionIdx] = useState(0);
   const [precallSerialNumber, setPrecallSerialNumber] = useState('');
   const [eligibility, setEligibility] = useState({ checked: false, canStart: false, reason: '' });
   const [eligLoading, setEligLoading] = useState(true);
@@ -32,6 +61,26 @@ export default function TakeSurvey({ mockSurvey }) {
   const [showEndCallConfirm, setShowEndCallConfirm] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
   const [defaultOpenSectionIdx, setDefaultOpenSectionIdx] = useState(0);
+  const [openSections, setOpenSections] = useState({});
+
+  const [interactedQuestions, setInteractedQuestions] = useState(new Set());
+  // Ref mirrors the Set synchronously so canProceedFromQuestion never reads a
+  // stale closure value when called inside a setTimeout (e.g. auto-advance on
+  // single-choice click).
+  const interactedRef = useRef(new Set());
+  const [showInteractionError, setShowInteractionError] = useState(false);
+
+  const markInteracted = (questionId) => {
+    // Write to the ref immediately — visible to all closures right now.
+    interactedRef.current.add(questionId);
+    // Also update state so the UI re-renders when needed.
+    setInteractedQuestions(prev => {
+      const next = new Set(prev);
+      next.add(questionId);
+      return next;
+    });
+    setShowInteractionError(false);
+  };
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -60,21 +109,42 @@ export default function TakeSurvey({ mockSurvey }) {
     }
 
     if (id) {
-      api
-        .get(`/survey/${id}`)
-        .then((res) => {
-          setSurvey(res.data);
+      const loadSurvey = async () => {
+        let surveyData = null;
+        if (isOnline) {
+          try {
+            const res = await api.get(`/survey/${id}`);
+            surveyData = res.data;
+            await offlineDb.saveSurveyDef(surveyData);
+          } catch (err) {
+            console.error("Network survey fetch failed, checking offline cache...", err);
+          }
+        }
+
+        if (!surveyData) {
+          surveyData = await offlineDb.getSurveyDef(id);
+          if (surveyData) {
+            toast.info(t('loadedSurveyFromCache') || 'Loaded survey structure from local offline cache.');
+          }
+        }
+
+        if (surveyData) {
+          setSurvey(surveyData);
           let allQ = [];
-          if (res.data.sections) {
-            res.data.sections.forEach((sec) => {
+          if (surveyData.sections) {
+            surveyData.sections.forEach((sec) => {
               allQ = allQ.concat(sec.questions);
             });
-          } else if (res.data.questions) {
-            allQ = res.data.questions;
+          } else if (surveyData.questions) {
+            allQ = surveyData.questions;
           }
           setQuestions(allQ);
-        })
-        .catch(console.error);
+        } else {
+          toast.error(t('surveyLoadFailed') || 'Failed to load survey structure.');
+        }
+      };
+
+      loadSurvey();
     }
   }, [id, mockSurvey]);
 
@@ -89,15 +159,35 @@ export default function TakeSurvey({ mockSurvey }) {
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const serialParam = urlParams.get('serial');
-      const res = await api.get(`/agent/survey-eligibility?surveyId=${id}${serialParam ? `&serial=${serialParam}` : ''}`);
-      const data = res.data;
-      setEligibility({
-        checked: true,
-        canStart: data.canStartSurvey,
-        reason: data.reason || '',
-      });
-      setPrecallSerialNumber(data.precallSerialNumber || '');
-      return data;
+
+      if (isOnline) {
+        const res = await api.get(`/agent/survey-eligibility?surveyId=${id}${serialParam ? `&serial=${serialParam}` : ''}`);
+        const data = res.data;
+        setEligibility({
+          checked: true,
+          canStart: data.canStartSurvey,
+          reason: data.reason || '',
+        });
+        setPrecallSerialNumber(data.precallSerialNumber || '');
+        return data;
+      } else {
+        if (serialParam) {
+          const offlinePrecalls = await offlineDb.getOfflinePrecalls();
+          const offlinePrecall = offlinePrecalls.find(p => p.serialNumber === serialParam);
+          if (offlinePrecall || serialParam.startsWith('OFFLINE-') || serialParam) {
+            const data = { canStartSurvey: true, precallSerialNumber: serialParam, payload: offlinePrecall?.payload || {} };
+            setEligibility({
+              checked: true,
+              canStart: true,
+              reason: '',
+            });
+            setPrecallSerialNumber(serialParam);
+            return data;
+          }
+        }
+        setEligibility({ checked: true, canStart: false, reason: 'offline_no_serial' });
+        return { canStartSurvey: false, reason: 'offline_no_serial' };
+      }
     } catch (e) {
       console.error(e);
       setEligibility({ checked: true, canStart: false, reason: 'error' });
@@ -112,15 +202,26 @@ export default function TakeSurvey({ mockSurvey }) {
       refreshEligibility().then(async (data) => {
         if (data?.canStartSurvey && data?.precallSerialNumber) {
           try {
-            const draftRes = await api.get(`/agent/draft/${data.precallSerialNumber}`);
-            if (draftRes.data && draftRes.data.answers && Object.keys(draftRes.data.answers).length > 0) {
-              handleStartCall(data, draftRes.data);
+            let draftData = null;
+            if (isOnline) {
+              try {
+                const draftRes = await api.get(`/agent/draft/${data.precallSerialNumber}`);
+                draftData = draftRes.data;
+              } catch (e) {
+                console.error("Network draft fetch failed, trying localIndexedDB...");
+              }
+            }
+            if (!draftData) {
+              draftData = await offlineDb.getLocalDraft(data.precallSerialNumber);
+            }
+            if (draftData && draftData.answers && Object.keys(draftData.answers).length > 0) {
+              handleStartCall(data, draftData);
             }
           } catch(e) {}
         }
       });
     }
-  }, [user?.role, user?.currentStatus, user?.precallCompletedForActiveSession]);
+  }, [user?.role, user?.currentStatus, user?.precallCompletedForActiveSession, isOnline]);
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {
@@ -154,18 +255,26 @@ export default function TakeSurvey({ mockSurvey }) {
         answers: cleanedAnswers,
         otherValues,
         currentIdx,
+        currentSectionIdx: survey?.layoutMode === 'multi' ? currentSectionIdx : undefined,
       };
       
-      // Update local storage / session storage if needed, or rely on autosave
       const timeoutId = setTimeout(() => {
-        api.post('/agent/draft', draftData)
-          .then(() => setLastSaved(new Date()))
-          .catch(() => { /* ignore */ });
+        if (isOnline) {
+          api.post('/agent/draft', draftData)
+            .then(() => setLastSaved(new Date()))
+            .catch(async () => {
+              await offlineDb.saveLocalDraft(draftData);
+              setLastSaved(new Date());
+            });
+        } else {
+          offlineDb.saveLocalDraft(draftData)
+            .then(() => setLastSaved(new Date()));
+        }
       }, 1000);
       
       return () => clearTimeout(timeoutId);
     }
-  }, [answers, currentIdx, phase, user?.id, id, precallSerialNumber]);
+  }, [answers, currentIdx, currentSectionIdx, phase, user?.id, id, precallSerialNumber, isOnline, survey?.layoutMode]);
 
   const handleStartCall = async (preloadedData = null, preloadedDraft = null) => {
     if (questions.length === 0) {
@@ -195,23 +304,41 @@ export default function TakeSurvey({ mockSurvey }) {
     
     let draftAnswers = {};
     let draftIdx = null;
+    let draftSecIdx = null;
 
     if (preloadedDraft) {
       draftAnswers = preloadedDraft.answers || {};
       draftIdx = preloadedDraft.currentIdx;
+      draftSecIdx = preloadedDraft.currentSectionIdx;
     } else if (data?.precallSerialNumber) {
       try {
-        const draftRes = await api.get(`/agent/draft/${data.precallSerialNumber}`);
-        if (draftRes.data && draftRes.data.answers) {
-          draftAnswers = draftRes.data.answers;
-          if (draftRes.data.otherValues) setOtherValues(draftRes.data.otherValues);
-          draftIdx = draftRes.data.currentIdx;
+        let draftResData = null;
+        if (isOnline) {
+          try {
+            const draftRes = await api.get(`/agent/draft/${data.precallSerialNumber}`);
+            draftResData = draftRes.data;
+          } catch (_) {}
+        }
+        if (!draftResData) {
+          draftResData = await offlineDb.getLocalDraft(data.precallSerialNumber);
+        }
+        if (draftResData && draftResData.answers) {
+          draftAnswers = draftResData.answers;
+          if (draftResData.otherValues) setOtherValues(draftResData.otherValues);
+          draftIdx = draftResData.currentIdx;
+          draftSecIdx = draftResData.currentSectionIdx;
         }
       } catch (_) { /* ignore */ }
     }
 
     const mergedAnswers = { ...initialAnswers, ...draftAnswers };
     setAnswers(mergedAnswers);
+
+    if (draftAnswers) {
+      const preloaded = new Set(Object.keys(draftAnswers).filter(k => draftAnswers[k] !== '' && draftAnswers[k] !== null));
+      interactedRef.current = preloaded;
+      setInteractedQuestions(preloaded);
+    }
 
     const firstIdx = findNextVisibleIdx(0, mergedAnswers);
     if (firstIdx === -1) {
@@ -220,8 +347,28 @@ export default function TakeSurvey({ mockSurvey }) {
       setPhase('questions');
       if (typeof draftIdx === 'number' && draftIdx < (questions?.length || 0)) {
         setCurrentIdx(draftIdx);
+        if (typeof draftSecIdx === 'number') {
+          setCurrentSectionIdx(draftSecIdx);
+        } else if (survey?.sections) {
+          const qId = questions[draftIdx]?.questionId || String(questions[draftIdx]?._id);
+          const secIdx = survey.sections.findIndex(sec =>
+            (sec.questions || []).some(q => (q.questionId || String(q._id)) === qId)
+          );
+          if (secIdx !== -1) {
+            setCurrentSectionIdx(secIdx);
+          }
+        }
       } else {
         setCurrentIdx(firstIdx);
+        if (survey?.sections) {
+          const qId = questions[firstIdx]?.questionId || String(questions[firstIdx]?._id);
+          const secIdx = survey.sections.findIndex(sec =>
+            (sec.questions || []).some(q => (q.questionId || String(q._id)) === qId)
+          );
+          if (secIdx !== -1) {
+            setCurrentSectionIdx(secIdx);
+          }
+        }
       }
     }
   };
@@ -297,24 +444,49 @@ export default function TakeSurvey({ mockSurvey }) {
       outcomeReason: finalReason,
       precallSerialNumber: precallSerialNumber || '',
     };
-    try {
-      await api.post('/response', payload);
-      
-      // Clear the pre-call checklist draft for this survey
+    const offlinePayload = {
+      ...payload,
+      isOfflineSync: true,
+      offlineStartedAt: startTime ? new Date(startTime) : new Date(),
+      offlineCompletedAt: new Date(),
+    };
+
+    if (isOnline) {
+      try {
+        await api.post('/response', payload);
+        if (user?.id) {
+          const draftKey = `precallDraft:${user.id}:${survey._id || 'default'}`;
+          sessionStorage.removeItem(draftKey);
+        }
+        await offlineDb.deleteLocalDraft(precallSerialNumber);
+        
+        try {
+          const me = await api.get('/auth/me');
+          setUser(me.data.user);
+          localStorage.setItem('user', JSON.stringify(me.data.user));
+        } catch (_) {}
+        toast.success(t('surveySubmittedSuccess') || 'Survey submitted successfully!');
+        navigate(`/agent/precall?surveyId=${survey._id}`, { replace: true });
+      } catch (err) {
+        console.error(err);
+        await offlineDb.saveOfflineResponse(offlinePayload);
+        await offlineDb.deleteLocalDraft(precallSerialNumber);
+        if (user?.id) {
+          const draftKey = `precallDraft:${user.id}:${survey._id || 'default'}`;
+          sessionStorage.removeItem(draftKey);
+        }
+        toast.info(t('surveySavedOffline') || 'Survey response saved offline. It will be synced when online.');
+        navigate(`/agent/precall?surveyId=${survey._id}`, { replace: true });
+      }
+    } else {
+      await offlineDb.saveOfflineResponse(offlinePayload);
+      await offlineDb.deleteLocalDraft(precallSerialNumber);
       if (user?.id) {
         const draftKey = `precallDraft:${user.id}:${survey._id || 'default'}`;
         sessionStorage.removeItem(draftKey);
       }
-
-      // Drafts are handled by the backend automatically. We don't need to manually clear them here.
-
-      const me = await api.get('/auth/me');
-      setUser(me.data.user);
-      localStorage.setItem('user', JSON.stringify(me.data.user));
+      toast.info(t('surveySavedOffline') || 'Survey response saved offline. It will be synced when online.');
       navigate(`/agent/precall?surveyId=${survey._id}`, { replace: true });
-    } catch (err) {
-      console.error(err);
-      toast.error(err.response?.data?.error || 'Error saving response');
     }
   };
 
@@ -377,63 +549,115 @@ export default function TakeSurvey({ mockSurvey }) {
     }
   };
 
-  const handleNextQuestion = (choiceLogic = null, providedAnswers = answers) => {
-    const q = questions[currentIdx];
-    const qId = q.questionId || `q_${currentIdx}`;
+  const getQuestionValidationError = (q, providedAnswers = answers) => {
+    const qId = q.questionId || String(q._id);
     const val = providedAnswers[qId];
 
-    // Validations
+    // Check if question is required
+    if (q.required) {
+      if (val === undefined || val === null || val === '') {
+        return t('questionRequired') || 'This question requires an answer';
+      }
+      if (typeof val === 'string' && val.trim() === '') {
+        return t('questionRequired') || 'This question requires an answer';
+      }
+      if (Array.isArray(val) && val.length === 0) {
+        return t('questionRequired') || 'This question requires an answer';
+      }
+    }
+
+    // Min selections check for multiple_choice
     if (q.type === 'multiple_choice') {
       const arr = Array.isArray(val) ? val : [];
       const validArr = arr.filter(v => !(typeof v === 'string' && v.startsWith('other:') && v.substring(6).trim() === ''));
       if (q.minSelections && validArr.length < q.minSelections) {
-        toast.error(`Please select at least ${q.minSelections} options.`);
-        return;
+        return (t('selectAtLeastN') || 'Please select at least {n} options').replace('{n}', q.minSelections);
       }
       if (q.maxSelections && validArr.length > q.maxSelections) {
-        toast.error(`Please select at most ${q.maxSelections} options.`);
-        return;
-      }
-      const hasOther = q.allowMultipleOther 
-        ? arr.some(v => typeof v === 'string' && v.startsWith('other:'))
-        : arr.includes('Other');
-
-      if (hasOther) {
-        if (q.allowMultipleOther) {
-          const validOthers = arr.filter(v => typeof v === 'string' && v.startsWith('other:') && v.substring(6).trim() !== '');
-          if (validOthers.length === 0) {
-            setFieldErrors({ ...fieldErrors, [qId]: true });
-            return;
-          }
-        } else if (!(otherValues[qId] || '').trim()) {
-          toast.error('Please specify the "Other" option.');
-          return;
-        }
-      }
-    } else if (q.allowMultipleOther ? (Array.isArray(val) && val.some(v => typeof v === 'string' && v.startsWith('other:'))) : val === 'Other') {
-      if (q.allowMultipleOther) {
-        const validOthers = val.filter(v => typeof v === 'string' && v.startsWith('other:') && v.substring(6).trim() !== '');
-        if (validOthers.length === 0) {
-          setFieldErrors({ ...fieldErrors, [qId]: true });
-          return;
-        }
-      } else if (!(otherValues[qId] || '').trim()) {
-        toast.error('Please specify the "Other" option.');
-        return;
+        return `Please select at most ${q.maxSelections} options.`;
       }
     }
 
-    if (choiceLogic && choiceLogic.action) {
-      if (choiceLogic.action === 'terminate') {
+    // Custom Other input validation
+    const hasOtherSelected = q.allowMultipleOther
+      ? (Array.isArray(val) && val.some(v => typeof v === 'string' && v.startsWith('other:')))
+      : (q.type === 'multiple_choice' ? (Array.isArray(val) && val.includes('Other')) : val === 'Other');
+
+    if (hasOtherSelected) {
+      if (q.allowMultipleOther) {
+        const arr = Array.isArray(val) ? val : [];
+        const validOthers = arr.filter(v => typeof v === 'string' && v.startsWith('other:') && v.substring(6).trim() !== '');
+        if (validOthers.length === 0) {
+          return t('otherAnswerRequired') || 'Please specify the other answer';
+        }
+      } else {
+        if (!(otherValues[qId] || '').trim()) {
+          return t('otherAnswerRequired') || 'Please specify the other answer';
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const canProceedFromQuestion = (question) => {
+    const qId = question.questionId || String(question._id);
+    // Exception 1: hidden by branching logic — never reached, but guard anyway
+    if (!visibleQuestions[qId]) return true;
+
+    // Exception 2: info/display type — always passable
+    if (question.type === 'info') return true;
+
+    // Exception 3: explicitly marked optional in builder
+    if (question.optional === true) return true;
+
+    // Read from the ref (not the state) to avoid stale-closure bugs when called
+    // inside setTimeout callbacks (e.g. auto-advance after single-choice click).
+    return interactedRef.current.has(qId);
+  };
+
+  const proceedToNext = (choiceLogic = null, providedAnswers = answers) => {
+    const currentQ = questions[currentIdx];
+    const qId = currentQ.questionId || String(currentQ._id);
+
+    // Validate only the current question (existing logic)
+    if (visibleQuestions[qId] !== false) {
+      const err = getQuestionValidationError(currentQ, providedAnswers);
+      if (err) {
+        setFieldErrors(prev => ({ ...prev, [qId]: err }));
+        return; // BLOCK ADVANCING
+      }
+    }
+
+    setFieldErrors(prev => {
+      const next = { ...prev };
+      delete next[qId];
+      return next;
+    });
+
+    const val = providedAnswers[qId];
+    let activeChoiceLogic = choiceLogic;
+    if (!activeChoiceLogic && currentQ.type === 'single_choice' && currentQ.choices) {
+      const selectedChoice = currentQ.choices.find(c => c.text === val);
+      if (selectedChoice?.logic) {
+        activeChoiceLogic = selectedChoice.logic;
+      }
+    }
+
+    if (activeChoiceLogic && activeChoiceLogic.action) {
+      if (activeChoiceLogic.action === 'terminate') {
         goToInterviewStep();
         return;
       }
-      if (choiceLogic.action === 'skip' && choiceLogic.skipToQuestionId) {
-        const targetIdx = questions.findIndex((qst) => qst.questionId === choiceLogic.skipToQuestionId);
+      if (activeChoiceLogic.action === 'skip' && activeChoiceLogic.skipToQuestionId) {
+        const targetIdx = questions.findIndex((qst) => qst.questionId === activeChoiceLogic.skipToQuestionId);
         if (targetIdx !== -1) {
           const nextIdx = findNextVisibleIdx(targetIdx, providedAnswers);
-          if (nextIdx !== -1) setCurrentIdx(nextIdx);
-          else goToInterviewStep();
+          if (nextIdx !== -1) {
+            setCurrentIdx(nextIdx);
+          } else {
+            goToInterviewStep();
+          }
           return;
         }
       }
@@ -446,6 +670,28 @@ export default function TakeSurvey({ mockSurvey }) {
       goToInterviewStep();
     }
   };
+
+  const handleNextQuestion = (choiceLogic = null, providedAnswers = answers) => {
+    const currentQ = questions[currentIdx];
+    if (!currentQ) return;
+
+    // Step 8: Quality and admin bypass
+    if (user?.role === 'quality' || user?.role === 'admin') {
+      proceedToNext(choiceLogic, providedAnswers);
+      return;
+    }
+
+    // Step 4: Validate interaction
+    if (canProceedFromQuestion(currentQ)) {
+      proceedToNext(choiceLogic, providedAnswers);
+    } else {
+      setShowInteractionError(true);
+    }
+  };
+
+  useEffect(() => {
+    setShowInteractionError(false);
+  }, [currentIdx]);
   const handlePrevious = () => {
     let prevIdx = currentIdx - 1;
     while (prevIdx >= 0) {
@@ -469,14 +715,297 @@ export default function TakeSurvey({ mockSurvey }) {
     const handleKeyDown = (e) => {
       if (phase !== 'questions') return;
       if (e.ctrlKey || e.metaKey) {
-        if (e.key === 'ArrowLeft') handlePrevious();
-        if (e.key === 'ArrowRight') handleNextQuestion();
+        if (e.key === 'ArrowLeft') {
+          if (survey?.layoutMode === 'multi') {
+            handlePreviousSection();
+          } else {
+            handlePrevious();
+          }
+        }
+        if (e.key === 'ArrowRight') {
+          if (survey?.layoutMode === 'multi') {
+            proceedToNextSection();
+          } else {
+            handleNextQuestion();
+          }
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIdx, phase, answers, questions]);
+  }, [currentIdx, currentSectionIdx, phase, answers, questions, survey?.layoutMode]);
 
+
+  // ─── Hooks must be above ALL early returns (Rules of Hooks) ──────────────
+  const visibleQuestions = useMemo(() => {
+    const map = {};
+    questions.forEach(q => {
+      const qId = q.questionId || String(q._id);
+      if (!q.visibility) {
+        map[qId] = true;
+      } else {
+        try {
+          map[qId] = evaluateCondition(q.visibility, answers || {});
+        } catch (e) {
+          map[qId] = true;
+        }
+      }
+    });
+    return map;
+  }, [questions, answers]);
+
+  const isSectionVisible = useCallback((secIdx, currentAnswers = answers) => {
+    if (!survey?.sections || !survey.sections[secIdx]) return false;
+    const sec = survey.sections[secIdx];
+    return (sec.questions || []).some(q => {
+      const qId = q.questionId || String(q._id);
+      if (!q.visibility) return true;
+      try {
+        return evaluateCondition(q.visibility, currentAnswers);
+      } catch (e) {
+        return true;
+      }
+    });
+  }, [survey, answers]);
+
+  const visibleSectionIndices = useMemo(() => {
+    const list = [];
+    if (!survey?.sections) return list;
+    survey.sections.forEach((_, idx) => {
+      if (isSectionVisible(idx, answers)) {
+        list.push(idx);
+      }
+    });
+    return list;
+  }, [survey, answers, isSectionVisible]);
+
+  const pageStats = useMemo(() => {
+    if (!survey?.sections) return { X: 1, Y: 1 };
+    const visibleSecs = survey.sections.map((_, idx) => idx).filter(idx => isSectionVisible(idx, answers));
+    const Y = visibleSecs.length;
+    const currentPos = visibleSecs.indexOf(currentSectionIdx);
+    const X = currentPos !== -1 ? currentPos + 1 : 1;
+    return { X, Y };
+  }, [survey, currentSectionIdx, answers, isSectionVisible]);
+
+  const validateCurrentSection = () => {
+    const errors = {};
+    const currentSection = survey?.sections?.[currentSectionIdx];
+    if (!currentSection) return errors;
+
+    const visibleQuestionsInSec = (currentSection.questions || []).filter(q => {
+      const qId = q.questionId || String(q._id);
+      return visibleQuestions[qId] !== false;
+    });
+
+    visibleQuestionsInSec.forEach(q => {
+      const qId = q.questionId || String(q._id);
+      if (q.type === 'info' || q.optional === true) {
+        return;
+      }
+
+      const isStaff = user?.role === 'quality' || user?.role === 'admin';
+      if (!isStaff && !interactedRef.current.has(qId)) {
+        errors[qId] = t('questionInteractionRequired') || 'Answer is required.';
+        return;
+      }
+
+      const err = getQuestionValidationError(q, answers);
+      if (err) {
+        errors[qId] = err;
+      }
+    });
+
+    return errors;
+  };
+
+  const proceedToNextSection = () => {
+    const errors = validateCurrentSection();
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(prev => ({ ...prev, ...errors }));
+      return;
+    }
+
+    const currentSection = survey?.sections?.[currentSectionIdx];
+    setFieldErrors(prev => {
+      const next = { ...prev };
+      (currentSection?.questions || []).forEach(q => {
+        const qId = q.questionId || String(q._id);
+        delete next[qId];
+      });
+      return next;
+    });
+
+    const visibleQuestionsInSec = (currentSection?.questions || []).filter(q => {
+      const qId = q.questionId || String(q._id);
+      return visibleQuestions[qId] !== false;
+    });
+
+    let activeChoiceLogic = null;
+    for (const q of visibleQuestionsInSec) {
+      const qId = q.questionId || String(q._id);
+      const val = answers[qId];
+      if (q.type === 'single_choice' && q.choices) {
+        const selectedChoice = q.choices.find(c => c.text === val);
+        if (selectedChoice?.logic) {
+          activeChoiceLogic = selectedChoice.logic;
+          break;
+        }
+      }
+    }
+
+    if (activeChoiceLogic && activeChoiceLogic.action) {
+      if (activeChoiceLogic.action === 'terminate') {
+        goToInterviewStep();
+        return;
+      }
+      if (activeChoiceLogic.action === 'skip' && activeChoiceLogic.skipToQuestionId) {
+        const targetIdx = questions.findIndex((qst) => qst.questionId === activeChoiceLogic.skipToQuestionId);
+        if (targetIdx !== -1) {
+          const targetQ = questions[targetIdx];
+          const targetQId = targetQ.questionId || String(targetQ._id);
+          const targetSecIdx = survey.sections.findIndex(sec => 
+            (sec.questions || []).some(q => (q.questionId || String(q._id)) === targetQId)
+          );
+          
+          if (targetSecIdx !== -1) {
+            let nextSecIdx = targetSecIdx;
+            while (nextSecIdx < survey.sections.length) {
+              if (isSectionVisible(nextSecIdx, answers)) {
+                setCurrentSectionIdx(nextSecIdx);
+                const firstQOfSec = survey.sections[nextSecIdx].questions[0];
+                if (firstQOfSec) {
+                  const firstQId = firstQOfSec.questionId || String(firstQOfSec._id);
+                  const flatIdx = questions.findIndex(q => (q.questionId || String(q._id)) === firstQId);
+                  if (flatIdx !== -1) setCurrentIdx(flatIdx);
+                }
+                return;
+              }
+              nextSecIdx++;
+            }
+            goToInterviewStep();
+            return;
+          }
+        }
+      }
+    }
+
+    let nextSecIdx = currentSectionIdx + 1;
+    while (nextSecIdx < survey.sections.length) {
+      if (isSectionVisible(nextSecIdx, answers)) {
+        setCurrentSectionIdx(nextSecIdx);
+        const firstQOfSec = survey.sections[nextSecIdx].questions[0];
+        if (firstQOfSec) {
+          const firstQId = firstQOfSec.questionId || String(firstQOfSec._id);
+          const flatIdx = questions.findIndex(q => (q.questionId || String(q._id)) === firstQId);
+          if (flatIdx !== -1) setCurrentIdx(flatIdx);
+        }
+        return;
+      }
+      nextSecIdx++;
+    }
+
+    goToInterviewStep();
+  };
+
+  const handlePreviousSection = () => {
+    let prevSecIdx = currentSectionIdx - 1;
+    while (prevSecIdx >= 0) {
+      if (isSectionVisible(prevSecIdx, answers)) {
+        setCurrentSectionIdx(prevSecIdx);
+        const firstQOfSec = survey.sections[prevSecIdx].questions[0];
+        if (firstQOfSec) {
+          const firstQId = firstQOfSec.questionId || String(firstQOfSec._id);
+          const flatIdx = questions.findIndex(q => (q.questionId || String(q._id)) === firstQId);
+          if (flatIdx !== -1) setCurrentIdx(flatIdx);
+        }
+        return;
+      }
+      prevSecIdx--;
+    }
+  };
+
+  const jumpToQuestionIdx = (idx) => {
+    setCurrentIdx(idx);
+    const targetQ = questions[idx];
+    if (targetQ && survey?.sections) {
+      const qId = targetQ.questionId || String(targetQ._id);
+      const secIdx = survey.sections.findIndex(sec =>
+        (sec.questions || []).some(q => (q.questionId || String(q._id)) === qId)
+      );
+      if (secIdx !== -1) {
+        setCurrentSectionIdx(secIdx);
+      }
+    }
+  };
+
+  const progressStats = useMemo(() => {
+    let totalVisible = 0;
+    let answeredVisible = 0;
+
+    questions.forEach(q => {
+      const qId = q.questionId || String(q._id);
+      if (visibleQuestions[qId] !== false) {
+        totalVisible++;
+        const ans = answers[qId];
+        if (ans !== undefined && ans !== null && ans !== '') {
+          if (Array.isArray(ans)) {
+            const valid = ans.filter(v => typeof v !== 'string' || !v.startsWith('other:') || v.substring(6).trim() !== '');
+            if (valid.length > 0) {
+              answeredVisible++;
+            }
+          } else {
+            answeredVisible++;
+          }
+        }
+      }
+    });
+
+    const percentage = totalVisible > 0 ? Math.round((answeredVisible / totalVisible) * 100) : 0;
+    return {
+      X: answeredVisible,
+      Y: totalVisible,
+      percentage
+    };
+  }, [questions, answers, visibleQuestions]);
+
+  const currentVisibleNumber = useMemo(() => {
+    let num = 1;
+    questions.forEach((q, idx) => {
+      const qId = q.questionId || String(q._id);
+      if (visibleQuestions[qId] !== false && idx < currentIdx) {
+        num++;
+      }
+    });
+    return num;
+  }, [questions, visibleQuestions, currentIdx]);
+
+  // Handle draft resume scrolling and default open section index
+  // Must also live above all early returns — Rules of Hooks
+  useEffect(() => {
+    if (questions.length > 0 && survey?.sections && phase === 'questions') {
+      const targetQ = questions[currentIdx];
+      if (targetQ) {
+        const qId = targetQ.questionId || String(targetQ._id);
+        const secIdx = survey.sections.findIndex(sec =>
+          (sec.questions || []).some(q => (q.questionId || String(q._id)) === qId)
+        );
+        if (secIdx !== -1) {
+          setDefaultOpenSectionIdx(secIdx);
+          setOpenSections(prev => ({ ...prev, [secIdx]: true }));
+        }
+
+        const timer = setTimeout(() => {
+          const el = document.getElementById(`question-card-${qId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 300);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [questions, survey, currentIdx, phase]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   if (!survey) return <div className="container">{t('loading')}</div>;
 
@@ -569,83 +1098,21 @@ export default function TakeSurvey({ mockSurvey }) {
     );
   }
 
-  // Questions
-  const visibleQuestions = useMemo(() => {
-    const map = {};
-    questions.forEach(q => {
-      const qId = q.questionId || String(q._id);
-      if (!q.visibility) {
-        map[qId] = true;
-      } else {
-        try {
-          map[qId] = evaluateCondition(q.visibility, answers || {});
-        } catch (e) {
-          map[qId] = true;
-        }
-      }
-    });
-    return map;
-  }, [questions, answers]);
-
-  const progressStats = useMemo(() => {
-    let totalVisible = 0;
-    let answeredVisible = 0;
-    
-    questions.forEach(q => {
-      const qId = q.questionId || String(q._id);
-      if (visibleQuestions[qId] !== false) {
-        totalVisible++;
-        const ans = answers[qId];
-        if (ans !== undefined && ans !== null && ans !== '') {
-          if (Array.isArray(ans)) {
-            const valid = ans.filter(v => typeof v !== 'string' || !v.startsWith('other:') || v.substring(6).trim() !== '');
-            if (valid.length > 0) {
-              answeredVisible++;
-            }
-          } else {
-            answeredVisible++;
-          }
-        }
-      }
-    });
-
-    const percentage = totalVisible > 0 ? Math.round((answeredVisible / totalVisible) * 100) : 0;
-    return {
-      X: answeredVisible,
-      Y: totalVisible,
-      percentage
-    };
-  }, [questions, answers, visibleQuestions]);
-
-  // Handle draft resume scrolling and default open section index
-  useEffect(() => {
-    if (questions.length > 0 && survey?.sections && phase === 'questions') {
-      const targetQ = questions[currentIdx];
-      if (targetQ) {
-        const qId = targetQ.questionId || String(targetQ._id);
-        const secIdx = survey.sections.findIndex(sec => 
-          (sec.questions || []).some(q => (q.questionId || String(q._id)) === qId)
-        );
-        if (secIdx !== -1) {
-          setDefaultOpenSectionIdx(secIdx);
-        }
-        
-        const timer = setTimeout(() => {
-          const el = document.getElementById(`question-card-${qId}`);
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
-        }, 300);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [questions, survey, currentIdx, phase]);
+  // Questions phase rendering below
 
   const handleAnswerChange = (questionId, value) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
+    markInteracted(questionId);
     const flatIdx = questions.findIndex(q => (q.questionId || String(q._id)) === questionId);
     if (flatIdx !== -1) {
       setCurrentIdx(flatIdx);
+    }
+    if (fieldErrors[questionId]) {
+      setFieldErrors(prev => {
+        const next = { ...prev };
+        delete next[questionId];
+        return next;
+      });
     }
   };
 
@@ -685,8 +1152,13 @@ export default function TakeSurvey({ mockSurvey }) {
     } else {
       handleAnswerChange(qId, val);
       
-      if (val !== 'Other' && choiceLogic?.action === 'terminate') {
-        goToInterviewStep();
+      // Auto-advance if not choosing 'Other', layout is not multi, and logic isn't to terminate
+      if (survey?.layoutMode !== 'multi') {
+        if (val !== 'Other' && (!choiceLogic || choiceLogic.action !== 'terminate')) {
+          setTimeout(() => handleNextQuestion(choiceLogic, { ...answers, [qId]: val }), 150);
+        } else if (val !== 'Other' && choiceLogic?.action === 'terminate') {
+          goToInterviewStep();
+        }
       }
     }
     
@@ -732,7 +1204,7 @@ export default function TakeSurvey({ mockSurvey }) {
     if (q.allowOther) choices.push({ text: 'Other', isOther: true });
 
     return (
-      <div className="glass-card fade-enter-active" style={{ padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+      <div id={`question-card-${qId}`} className="glass-card fade-enter-active" style={{ padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
         <h3 style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
           {typeof q.category === 'string' ? q.category.toUpperCase() : t('question')} {flatIdx + 1}
         </h3>
@@ -842,6 +1314,14 @@ export default function TakeSurvey({ mockSurvey }) {
                     value={otherValues[qId] || ''}
                     onChange={(e) => {
                       setOtherValues(prev => ({ ...prev, [qId]: e.target.value }));
+                      markInteracted(qId);
+                      if (fieldErrors[qId]) {
+                        setFieldErrors(prev => {
+                          const next = { ...prev };
+                          delete next[qId];
+                          return next;
+                        });
+                      }
                     }}
                   />
                 )}
@@ -863,116 +1343,252 @@ export default function TakeSurvey({ mockSurvey }) {
             />
           </div>
         )}
+
+        {fieldErrors[qId] && (
+          <div className="field-error-text" style={{ color: 'var(--danger)', marginTop: '0.75rem', fontWeight: 600, fontSize: '0.9rem' }}>
+            {fieldErrors[qId]}
+          </div>
+        )}
+
+        {showInteractionError && (
+          <p className="field-error-text">
+            {t('questionInteractionRequired')}
+          </p>
+        )}
       </div>
     );
   };
 
   return (
-    <div className="survey-layout">
-      {/* Mobile Toggle */}
-      <button className="btn-secondary mobile-sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
-        <Menu size={20} />
-      </button>
+    <DebugErrorBoundary>
+      <div className="survey-layout">
+        {/* Mobile Toggle */}
+        <button className="btn-secondary mobile-sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
+          <Menu size={20} />
+        </button>
 
-      {/* Sidebar */}
-      <div className={`survey-sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <h3 style={{ marginBottom: '1rem', fontSize: '1rem' }}>Questions</h3>
-        <div className="q-badge-grid">
-          {questions.map((qst, idx) => {
-            let statusClass = '';
-            const qId = qst.questionId || String(qst._id);
-            if (idx === currentIdx) {
-              statusClass = 'current';
-            } else if (answers[qId] !== undefined && answers[qId] !== null && answers[qId] !== '') {
-              statusClass = 'answered';
-            }
-            return (
-              <div 
-                key={idx} 
-                className={`q-badge ${statusClass}`}
-                onClick={() => {
-                  setCurrentIdx(idx);
-                  const el = document.getElementById(`question-card-${qId}`);
-                  if (el) {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  }
-                }}
-                title={qst.text}
-              >
-                {idx + 1}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="survey-main">
-        <div className="survey-content">
-          <div className="survey-progress-container">
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-              <span>Question {progressStats.X} of {progressStats.Y}</span>
-              <span>{progressStats.percentage}% completed</span>
-            </div>
-            <div className="survey-progress-bar-bg">
-              <div className="survey-progress-bar-fill" style={{ width: `${progressStats.percentage}%` }}></div>
-            </div>
-          </div>
-
-          <SectionedSurveyView
-            sections={survey.sections || []}
-            answers={answers}
-            visibleQuestions={visibleQuestions}
-            onAnswerChange={handleAnswerChange}
-            renderQuestion={renderQuestion}
-            readOnly={false}
-            defaultOpenSectionIdx={defaultOpenSectionIdx}
-          />
-        </div>
-
-        {/* Bottom Action Bar */}
-        <div className="survey-bottom-bar">
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <button className="btn-secondary" onClick={handlePrevious} disabled={currentIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <ChevronLeft size={18} /> Previous
-            </button>
-            <button className="btn-primary" onClick={() => handleNextQuestion()} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              Next <ChevronRight size={18} />
-            </button>
-          </div>
-          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-            {lastSaved && (
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <Save size={14} /> Saved {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            )}
-            <button className="btn-secondary" style={{ borderColor: 'var(--danger)', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.5rem' }} onClick={() => setShowEndCallConfirm(true)}>
-              <PhoneOff size={18} /> End Call
-            </button>
-          </div>
-        </div>
-        
-        {/* End Call Confirmation Modal */}
-        {showEndCallConfirm && (
-          <div className="modal-overlay">
-            <div className="modal-content glass-card fade-enter-active" style={{ maxWidth: '400px' }}>
-              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem', color: 'var(--danger)' }}>
-                <AlertTriangle size={24} />
-                <h2 style={{ margin: 0 }}>End Call?</h2>
-              </div>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                Are you sure you want to end this interview? You will be taken to the submission screen to finalize the outcome.
-              </p>
-              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-                <button className="btn-secondary" onClick={() => setShowEndCallConfirm(false)}>Cancel</button>
-                <button className="btn-primary" style={{ backgroundColor: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { setShowEndCallConfirm(false); goToInterviewStep(); }}>
-                  Yes, End Call
-                </button>
-              </div>
-            </div>
-          </div>
+        {/* Sidebar Overlay */}
+        {sidebarOpen && (
+          <div className="survey-sidebar-overlay" onClick={() => setSidebarOpen(false)} />
         )}
+
+        {/* Sidebar */}
+        <div className={`survey-sidebar ${sidebarOpen ? 'open' : ''}`} style={{ width: '300px' }}>
+          <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 700 }}>{t('sections') || 'Sections'}</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {survey.sections && survey.sections.map((sec, sIdx) => {
+              const questionsInSec = sec.questions || [];
+              const visibleQuestionsInSec = questionsInSec.filter((q) => {
+                const qId = q.questionId || String(q._id);
+                return visibleQuestions[qId] !== false;
+              });
+
+              if (visibleQuestionsInSec.length === 0) return null;
+
+              const isOpen = !!openSections[sIdx];
+              const ArrowIcon = isOpen ? ChevronDown : (isRtl ? ChevronLeft : ChevronRight);
+
+              return (
+                <div key={sIdx} className="sidebar-section-card" style={{ marginBottom: '0.25rem' }}>
+                  <div
+                    className="sidebar-section-header"
+                    onClick={() => setOpenSections(prev => ({ ...prev, [sIdx]: !prev[sIdx] }))}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      padding: '0.6rem 0.75rem',
+                      background: 'var(--surface-hover)',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0 }}>
+                      <ArrowIcon size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={sec.title}>
+                        {sec.title || `${t('section') || 'Section'} ${sIdx + 1}`}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '0.75rem', background: 'var(--primary-low)', color: 'var(--primary)', padding: '0.1rem 0.4rem', borderRadius: '10px', fontWeight: 'bold', flexShrink: 0 }}>
+                      {visibleQuestionsInSec.length}
+                    </span>
+                  </div>
+
+                  {isOpen && (
+                    <div className="sidebar-section-content" style={{ padding: '0.5rem', background: 'var(--surface)' }}>
+                      <div className="q-badge-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(35px, 1fr))', gap: '0.4rem', marginTop: 0 }}>
+                        {visibleQuestionsInSec.map((qst) => {
+                          const qId = qst.questionId || String(qst._id);
+                          const idx = questions.findIndex(q => (q.questionId || String(q._id)) === qId);
+
+                          let statusClass = '';
+                          if (idx === currentIdx) {
+                            statusClass = 'current';
+                          } else if (answers[qId] !== undefined && answers[qId] !== null && answers[qId] !== '') {
+                            statusClass = 'answered';
+                          }
+
+                          return (
+                            <div
+                              key={idx}
+                              className={`q-badge ${statusClass}`}
+                              onClick={() => {
+                                jumpToQuestionIdx(idx);
+                              }}
+                              style={{
+                                width: '35px',
+                                height: '35px',
+                                fontSize: '0.8rem',
+                                ...(idx === currentIdx ? { backgroundColor: 'var(--primary)', color: 'white', borderColor: 'var(--primary)', boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.3)' } : {})
+                              }}
+                              title={qst.text}
+                            >
+                              {idx + 1}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="survey-main">
+          <div className="survey-content">
+            <div className="survey-progress-container">
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                {survey?.layoutMode === 'multi' ? (
+                  <span>{t('page') || 'Page'} {pageStats.X} {t('of') || 'of'} {pageStats.Y}</span>
+                ) : (
+                  <span>Question {currentVisibleNumber} of {progressStats.Y}</span>
+                )}
+                <span>{progressStats.percentage}% completed</span>
+              </div>
+              <div className="survey-progress-bar-bg">
+                <div className="survey-progress-bar-fill" style={{ width: `${progressStats.percentage}%` }}></div>
+              </div>
+            </div>
+
+            {survey?.layoutMode === 'multi' ? (
+              (() => {
+                const currentSection = survey.sections[currentSectionIdx];
+                if (!currentSection) return <div>No valid section data found.</div>;
+                
+                const visibleQuestionsInSec = (currentSection.questions || []).filter(q => {
+                  const qId = q.questionId || String(q._id);
+                  return visibleQuestions[qId] !== false;
+                });
+                
+                return (
+                  <div key={currentSectionIdx} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    {currentSection.title && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'var(--primary-low)', color: 'var(--primary)', borderRadius: '6px', fontSize: '0.9rem', fontWeight: 700, alignSelf: 'flex-start' }}>
+                        {currentSection.title}
+                      </div>
+                    )}
+                    {visibleQuestionsInSec.map((q, qIdx) => renderQuestion(q, currentSectionIdx, qIdx))}
+                  </div>
+                );
+              })()
+            ) : (
+              (() => {
+                const currentQ = questions[currentIdx];
+                if (!currentQ) return <div>No valid question data format found.</div>;
+
+                const qId = currentQ.questionId || String(currentQ._id);
+                let sIdx = 0;
+                let qIdx = 0;
+                let sectionTitle = "";
+
+                if (survey.sections) {
+                  sIdx = survey.sections.findIndex(sec =>
+                    (sec.questions || []).some(q => (q.questionId || String(q._id)) === qId)
+                  );
+                  if (sIdx !== -1) {
+                    qIdx = survey.sections[sIdx].questions.findIndex(q => (q.questionId || String(q._id)) === qId);
+                    sectionTitle = survey.sections[sIdx].title;
+                  } else {
+                    sIdx = 0;
+                  }
+                }
+
+                return (
+                  <div key={currentIdx} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {sectionTitle && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'var(--primary-low)', color: 'var(--primary)', borderRadius: '6px', fontSize: '0.9rem', fontWeight: 700, alignSelf: 'flex-start' }}>
+                        {sectionTitle}
+                      </div>
+                    )}
+                    {renderQuestion(currentQ, sIdx, qIdx)}
+                  </div>
+                );
+              })()
+            )}
+          </div>
+
+          {/* Bottom Action Bar */}
+          <div className="survey-bottom-bar">
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              {survey?.layoutMode === 'multi' ? (
+                <>
+                  <button className="btn-secondary" onClick={handlePreviousSection} disabled={currentSectionIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <ChevronLeft size={18} /> Previous
+                  </button>
+                  <button className="btn-primary" onClick={proceedToNextSection} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    Next <ChevronRight size={18} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="btn-secondary" onClick={handlePrevious} disabled={currentIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <ChevronLeft size={18} /> Previous
+                  </button>
+                  <button className="btn-primary" onClick={() => handleNextQuestion()} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    Next <ChevronRight size={18} />
+                  </button>
+                </>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+              {lastSaved && (
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <Save size={14} /> Saved {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+              <button className="btn-secondary" style={{ borderColor: 'var(--danger)', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.5rem' }} onClick={() => setShowEndCallConfirm(true)}>
+                <PhoneOff size={18} /> End Call
+              </button>
+            </div>
+          </div>
+          
+          {/* End Call Confirmation Modal */}
+          {showEndCallConfirm && (
+            <div className="modal-overlay">
+              <div className="modal-content glass-card fade-enter-active" style={{ maxWidth: '400px' }}>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem', color: 'var(--danger)' }}>
+                  <AlertTriangle size={24} />
+                  <h2 style={{ margin: 0 }}>End Call?</h2>
+                </div>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                  Are you sure you want to end this interview? You will be taken to the submission screen to finalize the outcome.
+                </p>
+                <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                  <button className="btn-secondary" onClick={() => setShowEndCallConfirm(false)}>Cancel</button>
+                  <button className="btn-primary" style={{ backgroundColor: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { setShowEndCallConfirm(false); goToInterviewStep(); }}>
+                    Yes, End Call
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </DebugErrorBoundary>
   );
 }

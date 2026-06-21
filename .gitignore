@@ -27,3 +27,6 @@ data/db/
 
 ### local configs
 .local/
+
+coverage/
+scratch/

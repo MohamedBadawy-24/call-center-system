@@ -1,11 +1,12 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import { motion } from 'framer-motion';
-import { CheckCircle2, ClipboardList, Phone, User, Hash, CalendarClock, Loader2, UserPlus, Check, AlertTriangle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { CheckCircle2, ClipboardList, Phone, User, Hash, CalendarClock, Loader2, UserPlus, Check, AlertTriangle, X } from 'lucide-react';
 
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
+import { offlineDb } from '../utils/offlineDb';
 import {
   normalizeOutboundPrecall,
   metaLine,
@@ -129,6 +130,7 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
           <label className="precall-label">{label}</label>
           <input
             className={`input-field ${hasError ? 'has-error' : ''}`}
+            data-testid={`precall-${field.id}-input`}
             value={value ?? ''}
             onChange={(e) => onChange(field.id, e.target.value)}
             placeholder={field.placeholder || ''}
@@ -147,6 +149,7 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
           <label className="precall-label">{label}</label>
           <input
             className={`input-field ${hasError ? 'has-error' : ''}`}
+            data-testid={`precall-${field.id}-input`}
             type="number"
             min={field.min != null ? field.min : undefined}
             value={value ?? ''}
@@ -171,6 +174,7 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
               <button
                 key={opt.value}
                 type="button"
+                data-testid={`precall-${field.id}-btn-${opt.value}`}
                 className={`precall-seg-btn ${segValue === String(opt.value) ? 'active' : ''} ${hasError ? 'has-error' : ''}`}
                 onClick={() => !isReadOnly && onChange(field.id, opt.value)}
                 disabled={isReadOnly}
@@ -181,6 +185,7 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
             {field.allowOther && (
               <button
                 type="button"
+                data-testid={`precall-${field.id}-btn-other`}
                 className={`precall-seg-btn ${segOtherActive ? 'active' : ''} ${hasError ? 'has-error' : ''}`}
                 onClick={() => !isReadOnly && onChange(field.id, segOtherActive ? '' : 'other:')}
                 disabled={isReadOnly}
@@ -192,6 +197,7 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
           {segOtherActive && (
             <input
               className={`input-field ${hasError ? 'has-error' : ''}`}
+              data-testid={`precall-${field.id}-other-input`}
               style={{ marginTop: '0.5rem' }}
               placeholder={t('otherPlaceholder') || 'Please specify…'}
               value={otherText}
@@ -215,6 +221,7 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
           <label className="precall-label">{label}</label>
           <select
             className={`input-field ${hasError ? 'has-error' : ''}`}
+            data-testid={`precall-${field.id}-select`}
             value={selValue}
             onChange={(e) => {
               if (e.target.value === '__other__') {
@@ -238,6 +245,7 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
           {isOtherSelected && (
             <input
               className={`input-field ${hasError ? 'has-error' : ''}`}
+              data-testid={`precall-${field.id}-other-input`}
               style={{ marginTop: '0.5rem' }}
               placeholder={t('otherPlaceholder') || 'Please specify…'}
               value={otherText}
@@ -260,11 +268,15 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
 }
 
 export default function PreCallChecklist() {
-  const { t } = useContext(UIContext);
+  const { t, isOnline } = useContext(UIContext);
   const { user, setUser } = useContext(AuthContext);
   const navigate = useNavigate();
 
   const [surveyId, setSurveyId] = useState(null);
+  const [numberAssignmentMode, setNumberAssignmentMode] = useState('queue_only');
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [manualNumber, setManualNumber] = useState('');
+  const [manualSaving, setManualSaving] = useState(false);
   const [config, setConfig] = useState(() => normalizeOutboundPrecall(null));
   const [answers, setAnswers] = useState(() => buildInitialAnswers(normalizeOutboundPrecall(null).fields, user?.name));
   const [currentNumber, setCurrentNumber] = useState(null);
@@ -379,20 +391,52 @@ export default function PreCallChecklist() {
         const urlParams = new URLSearchParams(window.location.search);
         const sidUrl = urlParams.get('surveyId');
 
-        const [precallRes, numberRes] = await Promise.all([
-          api.get(`/agent/outbound-precall${sidUrl ? `?surveyId=${sidUrl}` : ''}`, { signal }),
+        let precallData = null;
+        if (isOnline) {
+          try {
+            const res = await api.get(`/agent/outbound-precall${sidUrl ? `?surveyId=${sidUrl}` : ''}`, { signal });
+            precallData = res.data;
+            await offlineDb.savePrecallConfig({
+              surveyId: sidUrl || 'global',
+              outboundPrecall: precallData.outboundPrecall,
+              targetGovernorate: precallData.targetGovernorate,
+              numberAssignmentMode: precallData.numberAssignmentMode || 'queue_only',
+            });
+          } catch (err) {
+            console.error("Network outbound precall fetch failed, trying offline fallback...", err);
+          }
+        }
+
+        if (!precallData) {
+          const cachedConfig = await offlineDb.getPrecallConfig(sidUrl);
+          if (cachedConfig) {
+            precallData = {
+              surveyId: cachedConfig.surveyId === 'global' ? null : cachedConfig.surveyId,
+              outboundPrecall: cachedConfig.outboundPrecall,
+              targetGovernorate: cachedConfig.targetGovernorate,
+              numberAssignmentMode: cachedConfig.numberAssignmentMode || 'queue_only',
+            };
+          }
+        }
+
+        if (!precallData) {
+          precallData = { surveyId: sidUrl, outboundPrecall: null, targetGovernorate: 'All', numberAssignmentMode: 'queue_only' };
+        }
+
+        const [numberRes] = await Promise.all([
           (isEditMode || editAnswersRef.current)
             ? Promise.resolve({ data: { number: editAnswersRef.current?.phone || currentNumber?.number, serialNumber: editAnswersRef.current?.serial_number || currentNumber?.serialNumber } })
             : Promise.resolve({ data: null })
         ]);
         if (cancelled) return;
-        setSurveyId(precallRes.data.surveyId || null);
+        setSurveyId(precallData.surveyId || null);
+        setNumberAssignmentMode(precallData.numberAssignmentMode || 'queue_only');
 
-        const tg = precallRes.data.targetGovernorate || 'All';
+        const tg = precallData.targetGovernorate || 'All';
         setTargetGovernorate(tg);
         setSelectedGov(tg);
 
-        const norm = normalizeOutboundPrecall(precallRes.data.outboundPrecall);
+        const norm = normalizeOutboundPrecall(precallData.outboundPrecall);
         setConfig(norm);
         const nextNum = numberRes.data;
         setCurrentNumber(nextNum);
@@ -490,6 +534,15 @@ export default function PreCallChecklist() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [answers]);
 
+  // Trigger prefetching when online, when the user is an agent, and targetGovernorate changes or online status restores
+  useEffect(() => {
+    if (isOnline && user?.role === 'agent' && targetGovernorate && !configLoading) {
+      console.log(`[Offline Inventory] Online status detected/restored or target governorate updated to '${targetGovernorate}'. Initiating prefetch...`);
+      prefetchNumbers(targetGovernorate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOnline, targetGovernorate, user?.role, configLoading]);
+
   const scriptText = useMemo(() => {
     const raw = metaLine(config.meta, 'script', t);
     const name = (answers.researcher_name || user?.name || '').trim();
@@ -514,18 +567,39 @@ export default function PreCallChecklist() {
       if (f.type === 'readonly_date') payload[f.id] = formatLocalDate(frozen);
       if (f.type === 'readonly_time') payload[f.id] = formatLocalTime(frozen);
     });
-    await api.post('/agent/precall-complete', {
+
+    const finalSerial = payload.serial_number || `OFFLINE-precall-${user?.id || 'agent'}-${Date.now()}`;
+    payload.serial_number = finalSerial;
+
+    const checklistData = {
       surveyId,
+      serialNumber: finalSerial,
       payload,
       interviewStartedAt: frozen.toISOString(),
       interviewDate: formatLocalDate(frozen),
       interviewStartDisplay: formatLocalTime(frozen),
-    });
-    if (!isEditMode) {
-      const me = await api.get('/auth/me');
-      setUser(me.data.user);
-      localStorage.setItem('user', JSON.stringify(me.data.user));
+    };
+
+    if (isOnline) {
+      try {
+        await api.post('/agent/precall-complete', checklistData);
+      } catch (err) {
+        console.error("Online precall submission failed, saving offline:", err);
+        await offlineDb.saveOfflinePrecall(checklistData);
+        toast.warning(t('savedOffline') || 'Pre-call checklist saved locally due to connection error.');
+      }
+    } else {
+      await offlineDb.saveOfflinePrecall(checklistData);
+      toast.info(t('savedOffline') || 'Checklist saved locally.');
     }
+
+    if (!isEditMode) {
+      const updatedUser = { ...user, precallCompletedForActiveSession: true };
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+    }
+
+    return finalSerial;
   };
 
   const refreshFormsCount = async () => {
@@ -548,13 +622,13 @@ export default function PreCallChecklist() {
     }
     setSubmitting(true);
     try {
-      await completePrecallSubmission();
+      const finalSerial = await completePrecallSubmission();
       if (draftKey) {
-        try { sessionStorage.setItem(draftKey, JSON.stringify(answers)); } catch (_) { /* quota */ }
+        try { sessionStorage.setItem(draftKey, JSON.stringify({ ...answers, serial_number: finalSerial })); } catch (_) { /* quota */ }
       }
       await refreshFormsCount();
-      if (isEditMode && surveyId) {
-        navigate(`/take-survey/${surveyId}?serial=${answers.serial_number}`, { replace: true });
+      if (surveyId) {
+        navigate(`/take-survey/${surveyId}?serial=${finalSerial}`, { replace: true });
       } else {
         navigate('/', { replace: true });
       }
@@ -601,21 +675,86 @@ export default function PreCallChecklist() {
     }
   };
 
+  const prefetchNumbers = async (gov) => {
+    if (!isOnline) return;
+    try {
+      const cached = await offlineDb.getCachedNumbers();
+      const currentCount = cached.length;
+      console.log(`[Offline Inventory] Current cached numbers inventory count: ${currentCount}`);
+      if (currentCount >= 20) {
+        console.log(`[Offline Inventory] Inventory already full (${currentCount}/20). Skipping prefetch.`);
+        return;
+      }
+
+      const needed = 20 - currentCount;
+      console.log(`[Offline Inventory] Prefetching ${needed} numbers for governorate '${gov || selectedGov}'...`);
+      const urlParams = new URLSearchParams(window.location.search);
+      const sidUrl = urlParams.get('surveyId');
+      
+      let fetchedCount = 0;
+      for (let i = 0; i < needed; i++) {
+        const res = await api.get(`/agent/next-number?governorate=${encodeURIComponent(gov || selectedGov)}${sidUrl ? `&surveyId=${sidUrl}` : ''}`);
+        if (res.data && res.data._id) {
+          await offlineDb.saveCachedNumber(res.data);
+          fetchedCount++;
+        } else {
+          console.log(`[Offline Inventory] No more numbers available from server for prefetch.`);
+          break; // No more numbers available
+        }
+      }
+      const updatedCached = await offlineDb.getCachedNumbers();
+      console.log(`[Offline Inventory] Prefetched ${fetchedCount} numbers. New cached inventory count: ${updatedCached.length}`);
+    } catch (err) {
+      console.error('Failed to prefetch numbers:', err);
+    }
+  };
+
   const fetchNumber = async (govOverride) => {
     const govToFetch = typeof govOverride === 'string' ? govOverride : selectedGov;
     setNumberLoading(true);
     try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const sidUrl = urlParams.get('surveyId');
-      const nextNumRes = await api.get(`/agent/next-number?governorate=${encodeURIComponent(govToFetch)}${sidUrl ? `&surveyId=${sidUrl}` : ''}`);
-      const nextNum = nextNumRes.data;
+      if (isOnline) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const sidUrl = urlParams.get('surveyId');
+        const nextNumRes = await api.get(`/agent/next-number?governorate=${encodeURIComponent(govToFetch)}${sidUrl ? `&surveyId=${sidUrl}` : ''}`);
+        const nextNum = nextNumRes.data;
 
-      setCurrentNumber(nextNum);
-      if (nextNum && nextNum.number) {
-        setAnswers(prev => ({ ...prev, phone: nextNum.number, serial_number: nextNum.serialNumber || '' }));
+        setCurrentNumber(nextNum);
+        if (nextNum && nextNum.number) {
+          setAnswers(prev => ({ ...prev, phone: nextNum.number, serial_number: nextNum.serialNumber || '' }));
+          const cachedBefore = await offlineDb.getCachedNumbers();
+          console.log(`[Offline Inventory] Fetched number online. Current cached numbers count before prefetch check: ${cachedBefore.length}`);
+          prefetchNumbers(govToFetch);
+        } else {
+          setAnswers(prev => ({ ...prev, phone: '', serial_number: '' }));
+          if (numberAssignmentMode === 'queue_then_manual' || numberAssignmentMode === 'manual_allowed') {
+            setIsManualModalOpen(true);
+            toast.info('Queue is empty. Please enter the number manually.');
+          } else {
+            toast.warning('No numbers available for the selected region.');
+          }
+        }
       } else {
-        setAnswers(prev => ({ ...prev, phone: '', serial_number: '' }));
-        toast.warning('No numbers available for the selected region.');
+        const cached = await offlineDb.getCachedNumbers();
+        const matched = cached.filter(n => govToFetch === 'All' || n.governorate === govToFetch);
+        console.log(`[Offline Inventory] Offline retrieval requested for governorate '${govToFetch}'. Total cached numbers: ${cached.length}, Matched: ${matched.length}`);
+        if (matched.length > 0) {
+          const nextNum = matched[0];
+          setCurrentNumber(nextNum);
+          setAnswers(prev => ({ ...prev, phone: nextNum.number, serial_number: nextNum.serialNumber || '' }));
+          await offlineDb.deleteCachedNumber(nextNum._id);
+          const cachedAfter = await offlineDb.getCachedNumbers();
+          console.log(`[Offline Inventory] Loaded number ${nextNum.number} from offline cache. Remaining cached numbers count: ${cachedAfter.length}`);
+          toast.info(t('loadedFromCache') || 'Loaded number from local offline cache.');
+        } else {
+          setAnswers(prev => ({ ...prev, phone: '', serial_number: '' }));
+          if (numberAssignmentMode === 'queue_then_manual' || numberAssignmentMode === 'manual_allowed') {
+            setIsManualModalOpen(true);
+            toast.info('No offline numbers available. Please enter the number manually.');
+          } else {
+            toast.warning(t('noOfflineNumbers') || 'No cached numbers available offline for this region.');
+          }
+        }
       }
     } catch (e) {
       console.error('Failed to load next number:', e);
@@ -629,6 +768,61 @@ export default function PreCallChecklist() {
     const newGov = e.target.value;
     setSelectedGov(newGov);
     fetchNumber(newGov);
+  };
+
+  const handleManualNumberSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!manualNumber || !manualNumber.trim()) {
+      toast.error('Please enter a phone number');
+      return;
+    }
+    const cleanNum = manualNumber.trim();
+    const digitsOnly = cleanNum.replace(/\D/g, '');
+    if (digitsOnly.length < 7 || digitsOnly.length > 15) {
+      toast.error('Invalid phone number format (must be 7-15 digits)');
+      return;
+    }
+
+    setManualSaving(true);
+    try {
+      if (isOnline) {
+        const res = await api.post('/agent/assign-manual-number', {
+          surveyId,
+          number: cleanNum,
+          governorate: selectedGov
+        });
+        const nextNum = res.data;
+        setCurrentNumber(nextNum);
+        setAnswers(prev => ({ ...prev, phone: nextNum.number, serial_number: nextNum.serialNumber || '' }));
+        toast.success('Manual number assigned successfully.');
+        setIsManualModalOpen(false);
+        setManualNumber('');
+      } else {
+        // Offline generation
+        const tempSerial = `OFFLINE-MANUAL-${Date.now()}`;
+        const mockPhoneDoc = {
+          _id: `temp-${Date.now()}`,
+          surveyId,
+          number: cleanNum,
+          agentId: user?.id,
+          status: 'pending',
+          serialNumber: tempSerial,
+          numberSource: 'manual',
+          governorate: selectedGov,
+          assignedAt: new Date().toISOString()
+        };
+        setCurrentNumber(mockPhoneDoc);
+        setAnswers(prev => ({ ...prev, phone: mockPhoneDoc.number, serial_number: mockPhoneDoc.serialNumber }));
+        toast.success('Manual number registered offline.');
+        setIsManualModalOpen(false);
+        setManualNumber('');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || 'Failed to assign manual number');
+    } finally {
+      setManualSaving(false);
+    }
   };
 
   const hintText = useMemo(() => {
@@ -859,6 +1053,7 @@ export default function PreCallChecklist() {
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
                           <select
                             className="input-field"
+                            data-testid="precall-governorate-select"
                             style={{ flex: 1, minWidth: '200px' }}
                             value={selectedGov}
                             onChange={handleGovChange}
@@ -870,14 +1065,29 @@ export default function PreCallChecklist() {
                             ))}
                           </select>
                           {!currentNumber && (
-                            <button
-                              type="button"
-                              className="btn-primary"
-                              onClick={() => fetchNumber(selectedGov)}
-                              disabled={numberLoading}
-                            >
-                              {numberLoading ? <Loader2 size={16} className="spin-icon" /> : 'Get Number'}
-                            </button>
+                            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', flex: 1, minWidth: '150px' }}>
+                              <button
+                                type="button"
+                                className="btn-primary"
+                                data-testid="precall-get-number-btn"
+                                onClick={() => fetchNumber(selectedGov)}
+                                disabled={numberLoading}
+                                style={{ flex: 1 }}
+                              >
+                                {numberLoading ? <Loader2 size={16} className="spin-icon" /> : 'Get Number'}
+                              </button>
+                              {numberAssignmentMode === 'manual_allowed' && (
+                                <button
+                                  type="button"
+                                  className="btn-secondary"
+                                  onClick={() => setIsManualModalOpen(true)}
+                                  disabled={numberLoading}
+                                  style={{ flex: 1 }}
+                                >
+                                  Enter Number Manually
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                         {!currentNumber && (
@@ -944,6 +1154,7 @@ export default function PreCallChecklist() {
           <button
             type="button"
             className="btn-secondary"
+            data-testid="precall-new-form-btn"
             onClick={onNewForm}
             disabled={submitting || !canSaveNew}
             title={!canSaveNew ? 'Fill all required fields (including Interview outcome) to save and get the next number' : 'Save result and get next number'}
@@ -953,6 +1164,7 @@ export default function PreCallChecklist() {
           <button
             type="button"
             className="btn-primary"
+            data-testid="precall-next-btn"
             disabled={submitting}
             onClick={onNext}
             style={{ minWidth: '160px' }}
@@ -970,6 +1182,75 @@ export default function PreCallChecklist() {
         serialNumber={answers.serial_number}
         onSuccess={() => navigate('/', { replace: true })}
       />
+
+      <AnimatePresence>
+        {isManualModalOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="drawer-overlay"
+              style={{ zIndex: 4000 }}
+              onClick={() => !manualSaving && setIsManualModalOpen(false)}
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, x: '-50%', y: '-50%' }}
+              animate={{ scale: 1, opacity: 1, x: '-50%', y: '-50%' }}
+              exit={{ scale: 0.9, opacity: 0, x: '-50%', y: '-50%' }}
+              style={{
+                position: 'fixed',
+                top: '50%',
+                left: '50%',
+                width: '450px',
+                maxWidth: '90vw',
+                zIndex: 4001,
+                background: 'var(--card-bg)',
+                backdropFilter: 'blur(32px)',
+                borderRadius: 'var(--radius-lg)',
+                border: 'var(--glass-border)',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+              }}
+            >
+              <div style={{ padding: '1.5rem', borderBottom: 'var(--glass-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <h2 style={{ marginBottom: 0, fontSize: '1.25rem' }}>Enter Number Manually</h2>
+                </div>
+                <button className="nav-action-btn" onClick={() => !manualSaving && setIsManualModalOpen(false)}><X size={20} /></button>
+              </div>
+
+              <form onSubmit={handleManualNumberSubmit}>
+                <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div>
+                    <label className="form-label" style={{ fontWeight: 600 }}>Phone Number</label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder="e.g. 01012345678"
+                      value={manualNumber}
+                      onChange={e => setManualNumber(e.target.value)}
+                      disabled={manualSaving}
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                <div style={{ padding: '1.25rem', borderTop: 'var(--glass-border)', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', background: 'rgba(0,0,0,0.1)' }}>
+                  <button type="button" className="btn-secondary" onClick={() => setIsManualModalOpen(false)} disabled={manualSaving}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-primary" disabled={manualSaving || !manualNumber.trim()}>
+                    {manualSaving ? <Loader2 size={16} className="spin-icon" /> : 'Save'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

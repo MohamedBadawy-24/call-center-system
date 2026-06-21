@@ -40,6 +40,7 @@ const PhoneNumberSchema = new mongoose.Schema({
   assignedAt: { type: Date, default: Date.now },
   calledAt: { type: Date },
   serialNumber: { type: String, unique: true, sparse: true },
+  numberSource: { type: String, enum: ['queue', 'manual'], default: 'queue' },
   createdAt: { type: Date, default: Date.now }
 });
 

@@ -1,0 +1,229 @@
+
+[TEST SETUP] Starting MongoMemoryReplSet...
+[TEST SETUP] Mongo Memory replica set running at: mongodb://127.0.0.1:63361/?replicaSet=testset
+[TEST SETUP] Starting backend Express server...
+◇ injected env (2) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+Connecting to MongoDB...
+
+✅ Server running on:
+   Local:   http://localhost:0
+   Network: http://192.168.100.209:0
+
+[TEST SETUP] Express server listening on port 63365 (URL: http://localhost:63365)
+[TEST SETUP] Seeding admin user...
+MongoDB Connected ✅
+[TEST SETUP] Logging in as admin...
+[TEST SETUP] Registering other roles...
+[TEST SETUP] Logging in other roles...
+[TEST SETUP] Suspending suspended agent...
+[TEST SETUP] Creating test survey...
+[TEST SETUP] globalSetup completed successfully! Shared context: /tmp/jest-shared-ctx.json
+  console.log
+    ◇ injected env (0) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+  console.log
+    Connecting to MongoDB...
+
+      at log (config/db.js:9:13)
+
+  console.log
+    
+    ✅ Server running on:
+
+      at Server.log (server.js:1828:11)
+
+  console.log
+       Local:   http://localhost:0
+
+      at Server.log (server.js:1829:11)
+
+  console.log
+       Network: http://192.168.100.209:0
+
+      at log (server.js:1830:35)
+          at Array.forEach (<anonymous>)
+
+  console.log
+
+
+      at Server.log (server.js:1831:11)
+
+  console.log
+    MongoDB Connected ✅
+
+      at log (config/db.js:14:13)
+
+  console.error
+    Precall Complete Error: MongoServerError: E11000 duplicate key error collection: test.phonenumbers index: serialNumber_1 dup key: { serialNumber: "TST1781482408060UPD" }
+        at InsertOneOperation.handleOk (/Users/mohamedbadawy/Desktop/call-center-system/node_modules/mongodb/src/operations/insert.ts:79:13)
+        at executeOperationWithRetries (/Users/mohamedbadawy/Desktop/call-center-system/node_modules/mongodb/src/operations/execute_operation.ts:267:26)
+        at processTicksAndRejections (node:internal/process/task_queues:104:5)
+        at executeOperation (/Users/mohamedbadawy/Desktop/call-center-system/node_modules/mongodb/src/operations/execute_operation.ts:127:12)
+        at Collection.insertOne (/Users/mohamedbadawy/Desktop/call-center-system/node_modules/mongodb/src/collection.ts:294:12)
+        at model.$__save (/Users/mohamedbadawy/Desktop/call-center-system/node_modules/mongoose/lib/model.js:428:16)
+        at model.save (/Users/mohamedbadawy/Desktop/call-center-system/node_modules/mongoose/lib/model.js:667:5)
+        at /Users/mohamedbadawy/Desktop/call-center-system/node_modules/mongoose/lib/model.js:2816:9
+        at async Promise.all (index 0)
+        at model.create (/Users/mohamedbadawy/Desktop/call-center-system/node_modules/mongoose/lib/model.js:2801:11)
+        at /Users/mohamedbadawy/Desktop/call-center-system/controllers/agentController.js:112:30
+        at /Users/mohamedbadawy/Desktop/call-center-system/utils/runTransaction.js:56:16
+        at ClientSession.withTransaction (/Users/mohamedbadawy/Desktop/call-center-system/node_modules/mongodb/src/sessions.ts:827:20)
+        at runTransaction (/Users/mohamedbadawy/Desktop/call-center-system/utils/runTransaction.js:55:5)
+        at exports.completePrecall (/Users/mohamedbadawy/Desktop/call-center-system/controllers/agentController.js:46:5) {
+      errorLabelSet: Set(0) {},
+      errorResponse: {
+        index: 0,
+        code: 11000,
+        errmsg: 'E11000 duplicate key error collection: test.phonenumbers index: serialNumber_1 dup key: { serialNumber: "TST1781482408060UPD" }',
+        keyPattern: { serialNumber: 1 },
+        keyValue: { serialNumber: 'TST1781482408060UPD' }
+      },
+      index: 0,
+      code: 11000,
+      keyPattern: { serialNumber: 1 },
+      keyValue: { serialNumber: 'TST1781482408060UPD' }
+    }
+
+      188 |     res.json({ ok: true });
+      189 |   } catch (err) {
+    > 190 |     console.error('Precall Complete Error:', err);
+          |             ^
+      191 |     res.status(500).json({ error: 'Server error' });
+      192 |   }
+      193 | };
+
+      at error (controllers/agentController.js:190:13)
+
+FAIL tests/precall.test.js
+  Survey Eligibility State Gate
+    ✓ HAPPY: Admin / Quality role is always eligible regardless of precall state (163 ms)
+    ✓ HAPPY: Agent with active status + completed 18+ precall in current session → canStartSurvey: true (125 ms)
+    ✓ GATE: Agent not in active status → canStartSurvey: false (94 ms)
+    ✓ GATE: Agent in active status but NO precall completed → canStartSurvey: false (97 ms)
+    ✓ GATE: Agent in active status but with underage (<18) precall → canStartSurvey: false (113 ms)
+    ✕ GATE: Agent in active status with under18NotQualified flag true precall → canStartSurvey: false (110 ms)
+  POST /agent/precall-complete
+    ✓ HAPPY PATH: Valid payload creates PrecallCompletion document (134 ms)
+    ✕ SERIAL UPSERT: Re-submitting same serialNumber updates existing doc (no duplicate) (156 ms)
+    ✓ PHONE SYNC: Re-submitting with different phone updates PhoneNumber (132 ms)
+    ✓ OUTCOME CATEGORIES & DISQUALIFICATIONS: (154 ms)
+    ✓ UNDER 18: forces interview_result = no_qualified and under18NotQualified = true (129 ms)
+    ✕ FAIL: Agent not in active status returns 400 (86 ms)
+    ✓ FAIL: Invalid interviewStartedAt date string returns 400 (99 ms)
+  GET /agent/precall-session-count
+    ✓ Returns count of PrecallCompletions for current active session (150 ms)
+    ✓ Returns 0 if agent not active (72 ms)
+
+  ● Survey Eligibility State Gate › GATE: Agent in active status with under18NotQualified flag true precall → canStartSurvey: false
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "under_18_not_qualified"
+    Received: "under_18"
+
+       98 |     expect(res.status).toBe(200);
+       99 |     expect(res.data.canStartSurvey).toBe(false);
+    > 100 |     expect(res.data.reason).toBe('under_18_not_qualified');
+          |                             ^
+      101 |   });
+      102 | });
+      103 |
+
+      at Object.toBe (tests/precall.test.js:100:29)
+
+  ● POST /agent/precall-complete › SERIAL UPSERT: Re-submitting same serialNumber updates existing doc (no duplicate)
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 500
+
+      144 |     }, token);
+      145 |
+    > 146 |     expect(res.status).toBe(200);
+          |                        ^
+      147 |
+      148 |     const PrecallCompletion = mongoose.model('PrecallCompletion');
+      149 |     const docs = await PrecallCompletion.find({ serialNumber: serial });
+
+      at Object.toBe (tests/precall.test.js:146:24)
+
+  ● POST /agent/precall-complete › FAIL: Agent not in active status returns 400
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 400
+    Received: 403
+
+      244 |     }, token);
+      245 |
+    > 246 |     expect(res.status).toBe(400);
+          |                        ^
+      247 |   });
+      248 |
+      249 |   it('FAIL: Invalid interviewStartedAt date string returns 400', async () => {
+
+      at Object.toBe (tests/precall.test.js:246:24)
+
+----------------------------------|---------|----------|---------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+File                              | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s                                                                                                                                                                                                                                                                                                                                                                                                      
+----------------------------------|---------|----------|---------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+All files                         |   25.15 |    17.67 |   13.33 |   26.94 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+ call-center-system               |   13.96 |     2.69 |    4.71 |   15.12 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  server.js                       |   13.96 |     2.69 |    4.71 |   15.12 | 53-75,97,109-129,137,146-172,178-216,222-232,238-244,250-273,279-328,334-339,345-349,360-430,450-544,552-672,678-697,703-726,732-736,743-764,770-781,787-858,865-902,907-987,993-1104,1110-1159,1170-1198,1204-1224,1230-1234,1240-1244,1250-1272,1278-1293,1299-1311,1317-1324,1330-1457,1463-1526,1532-1579,1585-1589,1595-1608,1614-1618,1624-1631,1637-1643,1649-1656,1662-1674,1680,1683,1689,1706-1723,1728-1807 
+ call-center-system/config        |   72.72 |       50 |     100 |   72.72 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  db.js                           |   72.72 |       50 |     100 |   72.72 | 6,16-17                                                                                                                                                                                                                                                                                                                                                                                                                
+ call-center-system/controllers   |   16.06 |    10.53 |    4.34 |   17.17 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  adminController.js              |   14.73 |        0 |       0 |    15.9 | 23-29,34-72,77-84,89-123,128-156                                                                                                                                                                                                                                                                                                                                                                                       
+  agentController.js              |   37.79 |     39.3 |      20 |   38.88 | 24,32,37,43,126-138,196-261,266-280,285-295,300-304,309-323,328-383,388-442,447-469,474-488                                                                                                                                                                                                                                                                                                                            
+  authController.js               |   17.11 |     10.4 |   11.11 |   18.33 | 21-25,29-34,39-43,48-81,86-141,146-167,172-195,200-228,233-278,283-310,315-319,324-350,355-378,386,389,394,406-408,443                                                                                                                                                                                                                                                                                                 
+  otherCodingController.js        |    5.16 |        0 |       0 |    5.55 | 17-85,91-122,128-239,245-296                                                                                                                                                                                                                                                                                                                                                                                           
+  qualityAuditController.js       |      16 |        0 |       0 |   17.02 | 18-62,68-120                                                                                                                                                                                                                                                                                                                                                                                                           
+  responseController.js           |    5.37 |        0 |       0 |    6.17 | 17-94,98-253,258-313,318-322,327-419,424-671                                                                                                                                                                                                                                                                                                                                                                           
+ call-center-system/middleware    |   51.21 |       25 |   44.44 |   53.84 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  auth.js                         |   52.94 |    38.46 |      60 |   57.44 | 7-8,14-15,21-22,26-27,39-40,51-56,60-65                                                                                                                                                                                                                                                                                                                                                                                
+  errorHandler.js                 |      10 |        0 |       0 |      10 | 5-18                                                                                                                                                                                                                                                                                                                                                                                                                   
+  validation.js                   |   66.66 |    33.33 |   33.33 |   66.66 | 20-24,40-43                                                                                                                                                                                                                                                                                                                                                                                                            
+ call-center-system/models        |   98.38 |      100 |       0 |   98.38 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  Counter.js                      |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  Draft.js                        |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  OtherCoding.js                  |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  PhoneNumber.js                  |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  PostponedSerial.js              |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  PrecallCompletion.js            |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  ProfileRequest.js               |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  Response.js                     |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  Review.js                       |      75 |      100 |       0 |      75 | 26                                                                                                                                                                                                                                                                                                                                                                                                                     
+  SopUpdate.js                    |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  StatusLog.js                    |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  Survey.js                       |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  User.js                         |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+ call-center-system/routes        |   78.37 |    33.33 |      50 |   78.37 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  admin.js                        |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  agent.js                        |   63.63 |    33.33 |      50 |   63.63 | 12-36,44,57                                                                                                                                                                                                                                                                                                                                                                                                            
+  auth.js                         |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+ call-center-system/services      |   71.55 |    65.21 |   77.77 |   80.21 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  precallService.js               |   70.47 |    65.69 |      75 |   79.31 | 49-51,79-88,104-106,111-115,155,161,179,186                                                                                                                                                                                                                                                                                                                                                                            
+  serialService.js                |     100 |        0 |     100 |     100 | 9                                                                                                                                                                                                                                                                                                                                                                                                                      
+ call-center-system/tests         |      80 |       50 |     100 |   88.88 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  ctx.js                          |      80 |       50 |     100 |   88.88 | 14                                                                                                                                                                                                                                                                                                                                                                                                                     
+ call-center-system/tests/helpers |      86 |       75 |     100 |   85.71 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  db.js                           |      86 |       75 |     100 |   85.71 | 23-25,110-113                                                                                                                                                                                                                                                                                                                                                                                                          
+ call-center-system/utils         |   73.33 |    59.25 |      80 |    91.3 |                                                                                                                                                                                                                                                                                                                                                                                                                        
+  runTransaction.js               |   73.33 |    59.25 |      80 |    91.3 | 31,62                                                                                                                                                                                                                                                                                                                                                                                                                  
+----------------------------------|---------|----------|---------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Test Suites: 1 failed, 1 total
+Tests:       3 failed, 12 passed, 15 total
+Snapshots:   0 total
+Time:        2.193 s, estimated 3 s
+Ran all test suites matching tests/precall.test.js.
+
+[TEST TEARDOWN] Starting global teardown...
+[TEST TEARDOWN] Mongoose disconnected.
+[TEST TEARDOWN] Socket.io closed.
+[TEST TEARDOWN] Express server closed.
+[TEST TEARDOWN] Mongo Memory replica set stopped.
+[TEST TEARDOWN] Shared context file removed.
+[TEST TEARDOWN] complete

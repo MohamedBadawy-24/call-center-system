@@ -14,6 +14,7 @@
   --accent: hsl(260, 80%, 65%);
   --success: hsl(150, 80%, 40%);
   --danger: hsl(0, 85%, 60%);
+  --error: hsl(0, 85%, 60%);
   --warning: hsl(40, 95%, 55%);
 
   /* Light Theme */
@@ -1127,14 +1128,14 @@ td:last-child { border-right: var(--glass-border); border-radius: 0 var(--radius
 /* Redesigned Survey Layout */
 .survey-layout {
   display: flex;
-  height: calc(100vh - 60px); /* Adjust based on navbar height */
+  height: calc(100dvh - 60px); /* Use dvh to fix Safari dynamic bar behavior */
   overflow: hidden;
   position: relative;
   background-color: var(--background);
 }
 
 .survey-sidebar {
-  width: 250px;
+  width: 300px;
   background-color: var(--surface);
   border-right: 1px solid var(--border);
   overflow-y: auto;
@@ -1142,6 +1143,24 @@ td:last-child { border-right: var(--glass-border); border-radius: 0 var(--radius
   display: flex;
   flex-direction: column;
   transition: transform 0.3s ease;
+}
+
+.sidebar-section-card {
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background-color: var(--surface);
+  transition: all 0.2s ease;
+}
+
+.sidebar-section-header:hover {
+  background-color: var(--surface-hover) !important;
+  opacity: 0.9;
+}
+
+.sidebar-section-content {
+  border-top: 1px solid var(--border);
+  padding: 0.5rem;
 }
 
 .survey-sidebar.collapsed {
@@ -1252,22 +1271,52 @@ td:last-child { border-right: var(--glass-border); border-radius: 0 var(--radius
   z-index: 101;
 }
 
+.survey-sidebar-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 99;
+}
+
 @media (max-width: 768px) {
   .survey-sidebar {
     position: absolute;
     z-index: 100;
     height: 100%;
+    left: 0;
+    right: auto;
     transform: translateX(-100%);
   }
   .survey-sidebar.open {
     transform: translateX(0);
     box-shadow: 4px 0 12px rgba(0,0,0,0.1);
   }
+  [dir='rtl'] .survey-sidebar {
+    left: auto;
+    right: 0;
+    transform: translateX(100%);
+    border-right: none;
+    border-left: 1px solid var(--border);
+  }
+  [dir='rtl'] .survey-sidebar.open {
+    transform: translateX(0);
+    box-shadow: -4px 0 12px rgba(0,0,0,0.1);
+  }
   .mobile-sidebar-toggle {
     display: block;
   }
+  [dir='rtl'] .mobile-sidebar-toggle {
+    left: auto;
+    right: 1rem;
+  }
   .survey-bottom-bar {
     padding: 1rem;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
     flex-wrap: wrap;
     gap: 0.5rem;
   }
@@ -1452,4 +1501,143 @@ td:last-child { border-right: var(--glass-border); border-radius: 0 var(--radius
   font-weight: 600;
   color: var(--text-primary);
 }
+
+.field-error-text {
+  color: var(--error);
+  margin-top: 0.75rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   MOBILE & TABLET RESPONSIVENESS OVERRIDES
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 1024px) {
+  /* Grids and stats cards stack on tablet and mobile */
+  .dashboard-grid, .stats-grid, .summary-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+  
+  /* Touch target sizes - 48px minimum height */
+  button, 
+  .btn-primary, 
+  .btn-secondary, 
+  .choice-btn, 
+  .precall-seg-btn, 
+  .input-field,
+  select,
+  .q-badge {
+    min-height: 48px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .q-badge {
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 0.9rem !important;
+  }
+
+  /* Make sure inputs and select wrappers display nicely with 48px height */
+  .input-field, select {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+  
+  /* Responsive Tables */
+  .table-container, table {
+    width: 100%;
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Form checklist segments / radio buttons span full width */
+  .precall-seg {
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 0.5rem !important;
+  }
+  
+  .precall-seg-btn {
+    width: 100% !important;
+    border-radius: var(--radius-sm) !important;
+    margin: 0 !important;
+  }
+  
+  .choice-grid {
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+  }
+  
+  .choice-btn {
+    width: 100% !important;
+  }
+
+  /* Outbound pre-call checklist grid stacking */
+  .precall-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+  
+  /* Survey Builder layouts */
+  .builder-layout {
+    flex-direction: column !important;
+  }
+  
+  .builder-sidebar {
+    width: 100% !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border) !important;
+  }
+  
+  /* Hide standard desktop navbar links */
+  .desktop-nav-links {
+    display: none !important;
+  }
+  
+  /* Show mobile nav links in drawer */
+  .mobile-nav-links {
+    display: flex !important;
+  }
+
+  /* Survey content padding & bottom gap space */
+  .survey-content {
+    padding: 1rem !important;
+    padding-bottom: calc(100px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .choice-btn {
+    padding: 1rem !important;
+  }
+
+  /* Typography sizing on mobile */
+  h1 { font-size: 1.6rem !important; }
+  h2 { font-size: 1.3rem !important; }
+  h3 { font-size: 1.1rem !important; }
+
+  /* Ensure survey card does not exceed viewport width */
+  .glass-card {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Secure word wrap to prevent horizontal scrolling, especially for Arabic text */
+  .survey-main, .survey-content, .choice-btn, h1, h2, h3, h4, p, span, label, td, th {
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+  }
+}
+
+/* Global root container safety */
+#root {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
 

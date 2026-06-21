@@ -436,6 +436,15 @@ app.get("/admin/export-survey/:id", staffAuth, responseController.exportCsv);
 
 app.get("/admin/export-advanced", staffAuth, responseController.exportAdvanced);
 
+// QUALITY OTHER ANSWERS CODING TOOL (Feature 4)
+const otherCodingController = require('./controllers/otherCodingController');
+app.get("/quality/other-coding/:surveyId/questions", staffAuth, otherCodingController.getOtherCodingQuestions);
+app.get("/quality/other-coding/:surveyId/:questionId", staffAuth, otherCodingController.getOtherCoding);
+app.put("/quality/other-coding/:surveyId/:questionId", staffAuth, otherCodingController.updateOtherCoding);
+app.get("/quality/other-coding/:surveyId/:questionId/export", staffAuth, otherCodingController.exportOtherCoding);
+
+
+
 // PHONE NUMBERS - ADMIN UPLOAD XLSX (after survey creation)
 app.post('/admin/survey/:id/numbers', [upload.single('xlsx'), adminAuth, validateSurveyId], async (req, res) => {
   try {
@@ -470,7 +479,10 @@ app.post('/admin/survey/:id/numbers', [upload.single('xlsx'), adminAuth, validat
       }
 
       if (numberValue) {
-        extractedNumbers.push(String(numberValue).trim());
+        const s = String(numberValue).replace(/[^0-9]/g, '');
+        if (s.length >= 7 && s.length <= 15) {
+          extractedNumbers.push(String(numberValue).trim());
+        }
       }
     }
 
@@ -722,6 +734,8 @@ app.get('/admin/survey/:id/numbers/disqualified/export', [staffAuth, validateSur
 app.delete('/admin/survey/:id/numbers', [adminAuth, validateSurveyId], async (req, res) => {
   try {
     await PhoneNumber.deleteMany({ surveyId: req.params.id });
+    const io = req.app.get('io');
+    if (io) io.emit("stats-update");
     res.json({ message: 'Numbers list cleared successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to clear numbers list' });
@@ -747,6 +761,7 @@ app.post("/quality/suspend-agent/:id", staffAuth, async (req, res) => {
     await user.save();
     
     io.emit("agentSuspended", { agentId: user._id });
+    io.emit("stats-update");
     io.to(user._id.toString()).emit("status-pushed", { status: 'off-duty', statusStartedAt: user.statusStartedAt });
 
     res.json({ message: "Agent suspended successfully", user });
@@ -766,6 +781,7 @@ app.post("/quality/unsuspend-agent/:id", staffAuth, async (req, res) => {
     user.suspendedReason = null;
     await user.save();
 
+    io.emit("stats-update");
     res.json({ message: "Agent unsuspended successfully", user });
   } catch (err) {
     console.error("Error unsuspending agent:", err);
@@ -1150,6 +1166,11 @@ app.get("/quality/drop-off/:surveyId", staffAuth, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+// QUALITY AUDIT CHECKLIST ROUTE (Feature 5)
+const qualityAuditController = require('./controllers/qualityAuditController');
+app.get("/quality/agent-precall/:agentId", staffAuth, qualityAuditController.getAgentPrecall);
+app.post("/quality/audit", staffAuth, qualityAuditController.submitAudit);
 
 // QUALITY: SHADOW REVIEW (GET)
 app.get("/quality/shadow/:serialNumber", staffAuth, async (req, res) => {
@@ -1589,6 +1610,8 @@ app.put("/admin/settings/dailyGoal", adminAuth, async (req, res) => {
       { value: goal },
       { upsert: true, returnDocument: 'after' }
     );
+    const io = req.app.get('io');
+    if (io) io.emit("stats-update");
     res.json({ success: true, dailyGoal: goal });
   } catch (err) {
     res.status(500).json({ error: "Failed to save daily goal" });
@@ -1612,6 +1635,8 @@ app.post("/sops", staffAuth, async (req, res) => {
     if (!title || !content) return res.status(400).json({ error: "Title and content are required" });
     const sop = new SopUpdate({ title, content, createdBy: req.user.id });
     await sop.save();
+    const io = req.app.get('io');
+    if (io) io.emit("stats-update");
     res.json(sop);
   } catch (err) {
     res.status(500).json({ error: "Failed to create SOP update" });
@@ -1816,3 +1841,5 @@ server.listen(PORT, HOST, () => {
   addresses.forEach(ip => console.log(`   Network: http://${ip}:${PORT}`));
   console.log('');
 });
+
+module.exports = { app, server, io };

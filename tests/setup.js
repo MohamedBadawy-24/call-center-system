@@ -1,193 +1,125 @@
-/**
- * Shared test setup — runs once per process (singleton).
- * Registers test users, logs in all roles, creates a test campaign with numbers.
- * Exports: adminToken, agentAToken, agentBToken, qualityToken, surveyId, agentAId, agentBId, qualityId
- */
-require('dotenv').config({ path: 'tests/.env.test' });
-const axios = require('axios');
 const mongoose = require('mongoose');
+const fs = require('fs');
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/call-center';
+process.env.JWT_SECRET = 'test-jwt-secret-key-1234567890';
 
-// Unique suffix so re-runs don't collide with existing data.
-// Uses a fixed value per test run by hashing the PID and minute, so concurrent
-// suites running in the same minute share the same RUN_ID (and therefore the
-// same DB records), which is intentional when --runInBand is used.
-const RUN_ID = `${process.pid}${Math.floor(Date.now() / 60000)}`;
+// Hoisted Mock for nodemailer
+const mockSendEmail = jest.fn().mockResolvedValue({ messageId: 'test-123' });
+jest.mock('../utils/mailer', () => mockSendEmail);
 
-const TEST_USERS = {
-  admin:  { email: 'admin@baseera.com',              password: 'Admin123_', role: 'admin'   },
-  agentA: { email: `agent-a-${RUN_ID}@test.invalid`, password: 'Agent1_test', role: 'agent' },
-  agentB: { email: `agent-b-${RUN_ID}@test.invalid`, password: 'Agent2_test', role: 'agent' },
-  quality:{ email: `quality-${RUN_ID}@test.invalid`, password: 'Quality1_test', role: 'quality' },
-  suspended: { email: `suspended-${RUN_ID}@test.invalid`, password: 'Suspend1_test', role: 'agent' },
-};
+const CTX_FILE = process.env.JEST_SHARED_CTX || '/tmp/jest-shared-ctx.json';
+let mongoUri = process.env.MONGO_URI_TEST || process.env.MONGO_URI;
 
-// Shared state populated by setup()
-const ctx = {
-  BASE_URL,
-  adminToken: null,
-  agentAToken: null,
-  agentBToken: null,
-  qualityToken: null,
-  adminId: null,
-  agentAId: null,
-  agentBId: null,
-  qualityId: null,
-  suspendedId: null,
-  surveyId: null,
-  TEST_USERS,
-  RUN_ID,
-};
-
-// Singleton so login is called at most once per jest process regardless of
-// how many test files import this module.
-let _setupPromise = null;
-let _setupDone = false;
-
-async function loginRaw(email, password) {
-  const res = await axios.post(`${BASE_URL}/auth/login`, { email, password });
-  return { token: res.data.token, id: res.data.user.id };
-}
-
-async function registerUser(adminToken, { email, password, role, name }) {
-  await axios.post(
-    `${BASE_URL}/auth/register`,
-    { name: name || email, email, password, role },
-    { headers: { Authorization: `Bearer ${adminToken}` } }
-  );
-}
-
-async function _doSetup() {
-  // ── Admin login ──────────────────────────────────────────────────────────
-  const adminLogin = await loginRaw(TEST_USERS.admin.email, TEST_USERS.admin.password);
-  ctx.adminToken = adminLogin.token;
-  ctx.adminId    = adminLogin.id;
-
-  // ── Register test users ──────────────────────────────────────────────────
-  for (const key of ['agentA', 'agentB', 'quality', 'suspended']) {
-    const u = TEST_USERS[key];
-    await registerUser(ctx.adminToken, { ...u, name: `${key}-${RUN_ID}` }).catch(() => {});
-  }
-
-  // ── Log in all test users ────────────────────────────────────────────────
-  const [agentALogin, agentBLogin, qualityLogin, suspendedLogin] = await Promise.all([
-    loginRaw(TEST_USERS.agentA.email,    TEST_USERS.agentA.password),
-    loginRaw(TEST_USERS.agentB.email,    TEST_USERS.agentB.password),
-    loginRaw(TEST_USERS.quality.email,   TEST_USERS.quality.password),
-    loginRaw(TEST_USERS.suspended.email, TEST_USERS.suspended.password),
-  ]);
-
-  ctx.agentAToken   = agentALogin.token;
-  ctx.agentAId      = agentALogin.id;
-  ctx.agentBToken   = agentBLogin.token;
-  ctx.agentBId      = agentBLogin.id;
-  ctx.qualityToken  = qualityLogin.token;
-  ctx.qualityId     = qualityLogin.id;
-  ctx.suspendedId   = suspendedLogin.id;
-
-  // ── Suspend the suspended test agent ─────────────────────────────────────
-  await axios.post(
-    `${BASE_URL}/quality/suspend-agent/${ctx.suspendedId}`,
-    { reason: 'test suspension' },
-    { headers: { Authorization: `Bearer ${ctx.adminToken}` } }
-  );
-
-  // ── Create a test campaign ────────────────────────────────────────────────
-  const surveyRes = await axios.post(
-    `${BASE_URL}/survey`,
-    {
-      title: `Test Campaign ${RUN_ID}`,
-      description: 'Automated test campaign',
-      isActive: true,
-      goal: 100,
-      sections: [
-        {
-          title: 'Section 1',
-          questions: [
-            { questionId: 'q1', text: 'What is your name?', type: 'text' },
-            { questionId: 'q2', text: 'Rate your experience', type: 'rating' },
-          ],
-        },
-      ],
-    },
-    { headers: { Authorization: `Bearer ${ctx.adminToken}` } }
-  );
-  ctx.surveyId = surveyRes.data._id;
-
-  // ── Connect to MongoDB and insert test phone numbers ─────────────────────
-  if (mongoose.connection.readyState === 0) {
-    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 10000 });
-  }
-
-  const PhoneNumber = getPhoneNumberModel();
-  const testNumbers = Array.from({ length: 25 }, (_, i) => ({
-    surveyId: new mongoose.Types.ObjectId(ctx.surveyId),
-    number:   `0100000${String(i + 1).padStart(4, '0')}`,
-    status:   'pending',
-    governorate: 'Cairo',
-  }));
-  await PhoneNumber.insertMany(testNumbers).catch(() => {});
-
-  _setupDone = true;
-}
-
-function getPhoneNumberModel() {
-  // Guard against double model registration when multiple test files import setup.js
+if (!mongoUri && fs.existsSync(CTX_FILE)) {
   try {
-    return mongoose.model('PhoneNumber');
-  } catch {
-    return mongoose.model('PhoneNumber', new mongoose.Schema({
-      surveyId:    mongoose.Schema.Types.ObjectId,
-      number:      String,
-      status:      { type: String, default: 'pending' },
-      governorate: String,
-      agentId:     mongoose.Schema.Types.ObjectId,
-      serialNumber:String,
-      assignedAt:  Date,
-      createdAt:   { type: Date, default: Date.now },
-    }));
+    const ctx = JSON.parse(fs.readFileSync(CTX_FILE, 'utf8'));
+    mongoUri = ctx.MONGO_URI_TEST || ctx.MONGO_URI;
+  } catch (err) {
+    // Ignore
   }
 }
 
-/**
- * Full setup: connect DB, seed users, create campaign, upload numbers.
- * Idempotent — multiple calls from different test files share the same promise.
- */
-async function setup() {
-  if (_setupDone) return ctx;
-  if (!_setupPromise) _setupPromise = _doSetup();
-  await _setupPromise;
-  return ctx;
+if (mongoUri) {
+  process.env.MONGO_URI = mongoUri;
+  process.env.MONGO_URI_TEST = mongoUri;
 }
 
-/**
- * Clean up all test data created during the run.
- * Safe to call multiple times — only cleans on first call.
- */
-let _teardownDone = false;
-async function teardown() {
-  if (_teardownDone) return;
-  _teardownDone = true;
+// Start Express server synchronously at load-time so that test files' top-level process.env.BASE_URL is correct!
+const workerId = parseInt(process.env.JEST_WORKER_ID || '1', 10);
+const workerPort = (51000 + workerId).toString();
+process.env.PORT = workerPort;
+process.env.WORKER_SERVER_PORT = workerPort;
+process.env.BASE_URL = `http://localhost:${workerPort}`;
 
-  if (mongoose.connection.readyState === 1) {
-    const db = mongoose.connection.db;
-    // Test phone numbers (standard prefix 0100000XXXX)
-    await db.collection('phonenumbers').deleteMany({ number: /^0100000/ }).catch(() => {});
-    if (ctx.surveyId) {
-      const sid = new mongoose.Types.ObjectId(ctx.surveyId);
-      await db.collection('responses').deleteMany({ surveyId: sid }).catch(() => {});
-      await db.collection('precallcompletions').deleteMany({ surveyId: sid }).catch(() => {});
-      await db.collection('drafts').deleteMany({ surveyId: sid }).catch(() => {});
-      await db.collection('surveys').deleteOne({ _id: sid }).catch(() => {});
+const appModule = require('../server.js');
+const workerServer = appModule.server;
+
+beforeAll(async () => {
+  // 1. Connect mongoose to test DB
+  if (mongoose.connection.readyState === 0) {
+    await mongoose.connect(mongoUri || 'mongodb://127.0.0.1:27017/call-center', {
+      serverSelectionTimeoutMS: 10000,
+    });
+  } else if (mongoose.connection.readyState === 2) {
+    await new Promise((resolve) => {
+      mongoose.connection.once('open', resolve);
+    });
+  }
+
+  // Wait for the listening event just in case (though it's bound synchronously)
+  await new Promise((resolve) => {
+    if (workerServer.listening) {
+      resolve();
+    } else {
+      workerServer.once('listening', resolve);
     }
-    const testEmails = Object.values(TEST_USERS)
-      .filter(u => u.email.includes('@test.invalid'))
-      .map(u => u.email);
-    await db.collection('users').deleteMany({ email: { $in: testEmails } }).catch(() => {});
-    await mongoose.disconnect().catch(() => {});
+  });
+});
+
+afterAll(async () => {
+  // 1. Close worker server & socket.io
+  if (workerServer) {
+    const appModule = require('../server.js');
+    if (appModule.io) {
+      await new Promise(resolve => appModule.io.close(resolve));
+    }
+    await new Promise(resolve => workerServer.close(resolve));
+  }
+
+  // 2. Disconnect mongoose
+  if (mongoose.connection.readyState !== 0) {
+    await mongoose.connection.close();
+  }
+});
+
+async function clearAllCollections() {
+  if (mongoose.connection.readyState !== 1) return;
+  const collections = mongoose.connection.collections;
+  
+  let ctx = null;
+  if (fs.existsSync(CTX_FILE)) {
+    try {
+      ctx = JSON.parse(fs.readFileSync(CTX_FILE, 'utf8'));
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  for (const key in collections) {
+    try {
+      if (key === 'users') {
+        if (ctx && ctx.TEST_USERS) {
+          const emailsToKeep = Object.values(ctx.TEST_USERS).map(u => u.email);
+          await collections[key].deleteMany({ email: { $nin: emailsToKeep } });
+        } else {
+          await collections[key].deleteMany({ email: { $ne: 'admin@baseera.com' } });
+        }
+      } else if (key === 'surveys') {
+        if (ctx && ctx.surveyId) {
+          await collections[key].deleteMany({ _id: { $ne: new mongoose.Types.ObjectId(ctx.surveyId) } });
+        } else {
+          await collections[key].deleteMany({});
+        }
+      } else if (key === 'phonenumbers') {
+        await collections[key].deleteMany({});
+      } else {
+        await collections[key].deleteMany({});
+      }
+    } catch (err) {
+      console.error(`Error clearing collection ${key}:`, err.message);
+    }
   }
 }
 
-module.exports = { setup, teardown, ctx, getPhoneNumberModel };
+beforeAll(async () => {
+  await clearAllCollections();
+});
+
+afterAll(async () => {
+  await clearAllCollections();
+});
+
+module.exports = {
+  mockSendEmail,
+  clearAllCollections
+};

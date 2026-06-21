@@ -43,6 +43,7 @@ exports.completePrecall = async (req, res) => {
       return res.status(400).json({ error: 'Invalid interviewStartedAt' });
     }
 
+    let doc;
     await runTransaction(async (session) => {
     payload = payload && typeof payload === 'object' ? { ...payload } : {};
     const ageYears = parseRespondentAgeYears(payload);
@@ -83,7 +84,6 @@ exports.completePrecall = async (req, res) => {
     // Only attach serialNumber when it is a real value so the sparse index is not violated
     if (serialNumber) precallData.serialNumber = serialNumber;
 
-    let doc;
     if (serialNumber) {
       doc = await PrecallCompletion.findOneAndUpdate(
         { serialNumber, userId: user._id },
@@ -185,7 +185,7 @@ exports.completePrecall = async (req, res) => {
     const io = req.app.get('io');
     if (io) io.emit('stats-update');
 
-    res.json({ ok: true });
+    res.json({ ok: true, serialNumber: doc.serialNumber });
   } catch (err) {
     console.error('Precall Complete Error:', err);
     res.status(500).json({ error: 'Server error' });
@@ -236,6 +236,8 @@ exports.getNextNumber = async (req, res) => {
           recoveredNumber = null;
         } else {
           number = recoveredNumber;
+          const assignedCount = await PhoneNumber.countDocuments({ agentId: user._id, status: 'pending' });
+          console.log(`[Offline Inventory] Recovered existing pending number ${number.number} for agent ${user.email || user.name}. Total pre-allocated pending numbers in DB for agent: ${assignedCount}`);
         }
       }
 
@@ -251,6 +253,10 @@ exports.getNextNumber = async (req, res) => {
           },
           { returnDocument: 'after' }
         );
+        if (number) {
+          const assignedCount = await PhoneNumber.countDocuments({ agentId: user._id, status: 'pending' });
+          console.log(`[Offline Inventory] Assigned new pending number ${number.number} to agent ${user.email || user.name}. Total pre-allocated pending numbers in DB for agent: ${assignedCount}`);
+        }
       }
 
       if (number) break;
@@ -488,3 +494,86 @@ exports.getDraft = async (req, res) => {
     res.status(500).json({ error: 'Failed to get draft' });
   }
 };
+
+exports.assignManualNumber = async (req, res) => {
+  try {
+    const isStaff = req.user.role === 'admin' || req.user.role === 'quality';
+    if (!isStaff && req.user.role !== 'agent') {
+      return res.status(403).json({ error: 'Agents only' });
+    }
+
+    const { surveyId, number } = req.body;
+    if (!surveyId || !mongoose.Types.ObjectId.isValid(surveyId)) {
+      return res.status(400).json({ error: 'Valid Survey ID is required' });
+    }
+    if (!number || typeof number !== 'string' || !number.trim()) {
+      return res.status(400).json({ error: 'Phone number is required' });
+    }
+
+    const cleanNumber = number.trim();
+    // Validate format: e.g. at least 7 digits, maximum 15 digits
+    const digitsOnly = cleanNumber.replace(/\D/g, '');
+    if (digitsOnly.length < 7 || digitsOnly.length > 15) {
+      return res.status(400).json({ error: 'Invalid phone number format (must be 7-15 digits)' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+
+    const survey = await Survey.findById(surveyId);
+    if (!survey) {
+      return res.status(404).json({ error: 'Survey not found' });
+    }
+
+    // Check assignment mode
+    const mode = survey.numberAssignmentMode || 'queue_only';
+    if (mode === 'queue_only') {
+      return res.status(400).json({ error: 'Manual number entry is not allowed for this campaign' });
+    }
+
+    if (mode === 'queue_then_manual') {
+      // Check if there are active numbers in the queue for this campaign
+      let governorate = req.body.governorate;
+      if (req.user.role === 'agent') {
+        if (survey.targetGovernorate && survey.targetGovernorate !== 'All') {
+          governorate = survey.targetGovernorate;
+        }
+      }
+      const assignQuery = { surveyId: survey._id, status: 'pending', agentId: { $exists: false } };
+      if (governorate && governorate !== 'All') assignQuery.governorate = governorate;
+
+      const queueCount = await PhoneNumber.countDocuments(assignQuery);
+      if (queueCount > 0) {
+        return res.status(400).json({ error: 'The queue still has available numbers. Please get numbers from the queue.' });
+      }
+    }
+
+    // Check duplication of this manual number within the campaign
+    const existing = await PhoneNumber.findOne({ surveyId: survey._id, number: cleanNumber });
+    if (existing) {
+      return res.status(400).json({ error: 'This phone number has already been added/used in this campaign' });
+    }
+
+    // Get the next serial number
+    const serialNumber = await getNextSerialNumber('survey_numbers');
+
+    // Create and assign the PhoneNumber doc
+    const newPhoneDoc = await PhoneNumber.create({
+      surveyId: survey._id,
+      number: cleanNumber,
+      agentId: user._id,
+      status: 'pending',
+      serialNumber,
+      numberSource: 'manual',
+      assignedAt: new Date(),
+    });
+
+    res.json(newPhoneDoc);
+  } catch (err) {
+    console.error('Assign Manual Number Error:', err);
+    res.status(500).json({ error: 'Failed to assign manual number' });
+  }
+};
+

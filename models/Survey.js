@@ -1,3 +1,11 @@
+/**
+ * DIAGNOSTIC - Survey.js
+ * Current schemas: LogicSchema, ChoiceSchema, QuestionSchema, SectionSchema, SurveySchema.
+ * Current fields in QuestionSchema: questionId, text, script, category, type, choices, allowOther,
+ * allowMultipleOther, minSelections, maxSelections, visibility.
+ *
+ * Changes: Add required field to QuestionSchema (Boolean, default: false) to support Feature 6.
+ */
 const mongoose = require("mongoose");
 
 const LogicSchema = new mongoose.Schema({
@@ -14,6 +22,8 @@ const ChoiceSchema = new mongoose.Schema({
 
 const QuestionSchema = new mongoose.Schema({
   questionId: { type: String, required: true }, // custom ID for logic refs
+  required: { type: Boolean, default: false },
+  optional: { type: Boolean, default: false },
   text: String,
   script: String, // What the agent reads
   category: String, // intro, screening, demographic, main
@@ -44,12 +54,14 @@ const SurveySchema = new mongoose.Schema({
   /** Optional outbound precall overrides: { fieldKey: string } — see admin-ui outboundPrecallConfig */
   outboundPrecall: { type: mongoose.Schema.Types.Mixed, default: undefined },
   sections: [SectionSchema],
+  layoutMode: { type: String, enum: ['single', 'multi'], default: 'single' },
   goal: { type: Number, default: 0 },
   targetGovernorate: { type: String, default: 'All' },
   governorateGoals: [{
     governorate: String,
     goal: Number
   }],
+  numberAssignmentMode: { type: String, enum: ['queue_only', 'queue_then_manual', 'manual_allowed'], default: 'queue_only' },
   isActive: { type: Boolean, default: true },
   draftData: { type: mongoose.Schema.Types.Mixed, default: undefined },
   createdAt: { type: Date, default: Date.now },

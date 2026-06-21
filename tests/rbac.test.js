@@ -1,11 +1,11 @@
 /**
  * tests/rbac.test.js
- * Role-Based Access Control
+ * Role-Based Access Control — Full Endpoint Matrix
  *
  * Source files read before writing:
  *   - middleware/auth.js (auth, adminAuth, staffAuth, agentActiveAuth)
- *   - controllers/adminController.js (listUsers, deleteUser)
- *   - controllers/authController.js (register)
+ *   - routes/admin.js, routes/auth.js, routes/agent.js
+ *   - server.js (inline route definitions)
  */
 const axios = require('axios');
 const getCtx = require('./ctx');
@@ -23,6 +23,9 @@ async function GET(path, token) {
 async function POST(path, body, token) {
   return axios.post(`${BASE_URL}${path}`, body, token ? auth(token) : {}).catch(e => e.response);
 }
+async function PUT(path, body, token) {
+  return axios.put(`${BASE_URL}${path}`, body, token ? auth(token) : {}).catch(e => e.response);
+}
 async function DELETE(path, token) {
   return axios.delete(`${BASE_URL}${path}`, token ? auth(token) : {}).catch(e => e.response);
 }
@@ -37,7 +40,7 @@ beforeAll(() => {
   adminId     = ctx.adminId;
 });
 
-// ── No token → 401 ────────────────────────────────────────────────────────────
+// ── No token → 401 on protected routes ────────────────────────────────────────
 
 describe('No token → 401 on protected routes', () => {
   it('GET /admin/users without token → 401', async () => {
@@ -49,9 +52,21 @@ describe('No token → 401 on protected routes', () => {
   it('GET /agent/next-number without token → 401', async () => {
     expect((await GET('/agent/next-number', null)).status).toBe(401);
   });
+  it('POST /survey without token → 401', async () => {
+    expect((await POST('/survey', { title: 'x', sections: [] }, null)).status).toBe(401);
+  });
+  it('GET /admin/surveys-stats without token → 401', async () => {
+    expect((await GET('/admin/surveys-stats', null)).status).toBe(401);
+  });
+  it('GET /responses/:surveyId without token → 401', async () => {
+    expect((await GET(`/responses/${surveyId}`, null)).status).toBe(401);
+  });
+  it('POST /auth/status without token → 401', async () => {
+    expect((await POST('/auth/status', { status: 'active' }, null)).status).toBe(401);
+  });
 });
 
-// ── Agent token → 403 on admin endpoints ──────────────────────────────────────
+// ── Agent token → 403 on admin-only endpoints (adminAuth) ─────────────────────
 
 describe('Agent token → 403 on admin-only endpoints', () => {
   it('GET /admin/users with agent token → 403', async () => {
@@ -66,6 +81,59 @@ describe('Agent token → 403 on admin-only endpoints', () => {
   it('POST /survey with agent token → 403', async () => {
     const res = await POST('/survey', { title: 'Unauthorized', sections: [] }, agentAToken);
     expect(res.status).toBe(403);
+  });
+  it('PUT /survey/:id with agent token → 403', async () => {
+    const res = await PUT(`/survey/${surveyId}`, { title: 'Unauthorized', sections: [] }, agentAToken);
+    expect(res.status).toBe(403);
+  });
+  it('PUT /survey/:id/autosave with agent token → 403', async () => {
+    const res = await PUT(`/survey/${surveyId}/autosave`, { sections: [] }, agentAToken);
+    expect(res.status).toBe(403);
+  });
+  it('PUT /surveys/:id/toggle with agent token → 403', async () => {
+    const res = await PUT(`/surveys/${surveyId}/toggle`, {}, agentAToken);
+    expect(res.status).toBe(403);
+  });
+  it('GET /admin/profile-requests with agent token → 403', async () => {
+    expect((await GET('/admin/profile-requests', agentAToken)).status).toBe(403);
+  });
+  it('PATCH /admin/users/:id/researcher-code with agent token → 403', async () => {
+    const res = await axios.patch(`${BASE_URL}/admin/users/${agentAId}/researcher-code`, { researcherCode: 'X' }, auth(agentAToken)).catch(e => e.response);
+    expect(res.status).toBe(403);
+  });
+});
+
+// ── Agent token → 403 on staff-only endpoints (staffAuth) ─────────────────────
+
+describe('Agent token → 403 on staff-only endpoints', () => {
+  it('GET /admin/surveys-stats with agent token → 403', async () => {
+    expect((await GET('/admin/surveys-stats', agentAToken)).status).toBe(403);
+  });
+  it('GET /responses/:surveyId with agent token → 403', async () => {
+    expect((await GET(`/responses/${surveyId}`, agentAToken)).status).toBe(403);
+  });
+  it('GET /admin/responses with agent token → 403', async () => {
+    expect((await GET('/admin/responses', agentAToken)).status).toBe(403);
+  });
+  it('GET /admin/export-advanced with agent token → 403', async () => {
+    expect((await GET(`/admin/export-advanced?surveyId=${surveyId}&format=csv`, agentAToken)).status).toBe(403);
+  });
+  it('GET /stats/agents with agent token → 403', async () => {
+    expect((await GET('/stats/agents', agentAToken)).status).toBe(403);
+  });
+  it('GET /admin/analytics with agent token → 403', async () => {
+    expect((await GET('/admin/analytics', agentAToken)).status).toBe(403);
+  });
+  it('POST /quality/suspend-agent/:id with agent token → 403', async () => {
+    const res = await POST(`/quality/suspend-agent/${agentAId}`, { reason: 'test' }, agentAToken);
+    expect(res.status).toBe(403);
+  });
+  it('POST /reviews with agent token → 403', async () => {
+    const res = await POST('/reviews', { agentId: agentAId, type: 'Feedback', feedbackText: 'test' }, agentAToken);
+    expect(res.status).toBe(403);
+  });
+  it('GET /users/list with agent token → 403', async () => {
+    expect((await GET('/users/list', agentAToken)).status).toBe(403);
   });
 });
 
@@ -84,6 +152,27 @@ describe('Quality token → 403 on admin-only endpoints', () => {
   });
   it('DELETE /admin/users/:id with quality token → 403', async () => {
     expect((await DELETE(`/admin/users/${agentAId}`, qualityToken)).status).toBe(403);
+  });
+  it('POST /survey with quality token → 403', async () => {
+    const res = await POST('/survey', { title: 'Quality Nope', sections: [] }, qualityToken);
+    expect(res.status).toBe(403);
+  });
+  it('DELETE /admin/survey/:id/numbers with quality token → 403', async () => {
+    expect((await DELETE(`/admin/survey/${surveyId}/numbers`, qualityToken)).status).toBe(403);
+  });
+});
+
+// ── Quality token CAN access staff-only endpoints (positive) ──────────────────
+
+describe('Quality token → 200 on staff endpoints', () => {
+  it('GET /admin/surveys-stats with quality token → 200', async () => {
+    expect((await GET('/admin/surveys-stats', qualityToken)).status).toBe(200);
+  });
+  it('GET /stats/agents with quality token → 200', async () => {
+    expect((await GET('/stats/agents', qualityToken)).status).toBe(200);
+  });
+  it('GET /users/list with quality token → 200', async () => {
+    expect((await GET('/users/list', qualityToken)).status).toBe(200);
   });
 });
 
@@ -124,5 +213,16 @@ describe('Admin self-delete and last-admin guards', () => {
         expect(res.status).toBe(200);
       }
     }
+  });
+});
+
+// ── Invalid / Malformed tokens ────────────────────────────────────────────────
+
+describe('Invalid token handling', () => {
+  it('Malformed JWT → 401', async () => {
+    expect((await GET('/auth/me', 'not-a-real-token')).status).toBe(401);
+  });
+  it('Expired-looking token → 401', async () => {
+    expect((await GET('/auth/me', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsIm5hbWUiOiJ0ZXN0Iiwicm9sZSI6ImFnZW50IiwiaWF0IjoxNjAwMDAwMDAwLCJleHAiOjE2MDAwMDAwMDF9.invalid')).status).toBe(401);
   });
 });

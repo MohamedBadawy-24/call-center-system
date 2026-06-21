@@ -1,3 +1,12 @@
+/**
+ * DIAGNOSTIC - UserManagement.jsx
+ * Displays user list: name, email, role, status, actions.
+ * Delete action calls DELETE /admin/users/:id.
+ *
+ * Changes:
+ * - Add "Researcher Code" column.
+ * - Add InlineResearcherCodeEdit component to handle PATCH /admin/users/:id/researcher-code.
+ */
 import React, { useEffect, useState, useContext } from 'react';
 import { api } from '../api/client';
 import { motion } from 'framer-motion';
@@ -7,6 +16,78 @@ import { Users, Trash2, UserPlus, ArrowLeft } from 'lucide-react';
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+
+const InlineResearcherCodeEdit = ({ user, onUpdate }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [val, setVal] = useState(user.researcherCode || '');
+  const [loading, setLoading] = useState(false);
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      const res = await api.patch(`/admin/users/${user._id}/researcher-code`, { researcherCode: val });
+      setIsEditing(false);
+      onUpdate(res.data);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to update researcher code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+        <input 
+          type="text" 
+          value={val} 
+          onChange={e => setVal(e.target.value)} 
+          style={{ 
+            padding: '0.25rem 0.5rem', 
+            fontSize: '0.8rem', 
+            width: '90px',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--primary)',
+            background: 'var(--bg-secondary)',
+            color: 'var(--text-primary)'
+          }}
+          autoFocus
+        />
+        <button 
+          className="btn-primary" 
+          onClick={handleSave} 
+          disabled={loading}
+          style={{ padding: '0.25rem 0.5rem', height: 'auto', fontSize: '0.75rem' }}
+        >
+          ✓
+        </button>
+        <button 
+          className="btn-secondary" 
+          onClick={() => { setIsEditing(false); setVal(user.researcherCode || ''); }} 
+          style={{ padding: '0.25rem 0.5rem', height: 'auto', fontSize: '0.75rem' }}
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <span 
+      onClick={() => setIsEditing(true)} 
+      style={{ 
+        cursor: 'pointer', 
+        borderBottom: '1px dashed var(--text-secondary)',
+        color: user.researcherCode ? 'var(--text-primary)' : 'var(--text-secondary)',
+        fontStyle: user.researcherCode ? 'normal' : 'italic',
+        fontWeight: user.researcherCode ? 800 : 500,
+      }}
+      title="Click to edit researcher code"
+    >
+      {user.researcherCode || '—'}
+    </span>
+  );
+};
 
 export default function UserManagement() {
   const { t } = useContext(UIContext);
@@ -85,6 +166,7 @@ export default function UserManagement() {
               <th>{t('displayName')}</th>
               <th>{t('emailAddress')}</th>
               <th>{t('role')}</th>
+              <th>{t('researcherCode')}</th>
               <th>{t('status')}</th>
               <th style={{ width: '140px' }}>{t('actions')}</th>
             </tr>
@@ -98,6 +180,11 @@ export default function UserManagement() {
                   <td style={{ fontWeight: 800 }}>{u.name}</td>
                   <td style={{ color: 'var(--text-secondary)', fontWeight: 700 }}>{u.email}</td>
                   <td style={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem' }}>{u.role}</td>
+                  <td>
+                    <InlineResearcherCodeEdit user={u} onUpdate={(updatedUser) => {
+                      setUsers(prev => prev.map(x => x._id === updatedUser._id ? { ...x, researcherCode: updatedUser.researcherCode } : x));
+                    }} />
+                  </td>
                   <td style={{ fontWeight: 800, fontSize: '0.85rem' }}>{u.currentStatus || '—'}</td>
                   <td>
                     <button

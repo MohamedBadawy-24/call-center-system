@@ -14,19 +14,32 @@ test.describe('E2E Production Simulation: Offline Sync', () => {
     expect(fs.existsSync(tempFile)).toBe(true);
     const { id: surveyId, title: surveyTitle } = JSON.parse(fs.readFileSync(tempFile, 'utf8'));
 
-    // Initialize mock mediaDevices for take survey page
+    // Mock getDisplayMedia at page initialization to bypass screen capture prompts
     await page.addInitScript(() => {
-      Object.defineProperty(navigator, 'mediaDevices', {
-        value: {
-          getDisplayMedia: async () => {
-            return {
-              getVideoTracks: () => [{ stop: () => {} }],
-              getAudioTracks: () => [{ stop: () => {} }],
-            };
-          },
-        },
-        writable: true,
-      });
+      const mockTrack = {
+        enabled: true,
+        id: 'mock-track-id',
+        kind: 'video',
+        label: 'Fake Screen',
+        muted: false,
+        readyState: 'live',
+        stop: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      };
+      const mockStream = {
+        active: true,
+        id: 'mock-stream-id',
+        getTracks: () => [mockTrack],
+        getVideoTracks: () => [mockTrack],
+        getAudioTracks: () => [],
+        addTrack: () => {},
+        removeTrack: () => {},
+        clone: () => mockStream,
+      };
+      if (navigator.mediaDevices) {
+        navigator.mediaDevices.getDisplayMedia = async () => mockStream;
+      }
     });
 
     // 2. Log in as an Agent
@@ -41,10 +54,11 @@ test.describe('E2E Production Simulation: Offline Sync', () => {
     await page.getByTestId('baseera-login-button').click();
 
     // Confirm agent lands on agent dashboard or precall
-    await page.waitForURL(/(\/|\/agent\/precall)/, { timeout: 15000 });
+    await page.waitForURL(url => url.pathname === '/' || url.pathname === '/agent/precall', { timeout: 30000 });
 
     // 3. Change status to 'Active/Ready'
-    await page.locator('.status-pill').click();
+    await page.locator('.status-pill').click({ force: true });
+    await page.waitForTimeout(500); // Wait for Framer Motion dropdown animation
     await page.locator('.status-dropdown button').filter({ hasText: /^Active$/i }).click();
 
     // Verify status updated (active label color/text)

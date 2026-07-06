@@ -72,6 +72,8 @@ export default function Login() {
 
         {error && (
           <motion.div 
+            role="alert"
+            data-testid="login-error-message"
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             style={{ 

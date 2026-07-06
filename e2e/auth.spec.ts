@@ -60,8 +60,8 @@ test.describe('Authentication Flows', () => {
 
     await loginPage.login(agentEmail, 'Agent123_test');
 
-    // Agent should be redirected to /agent or /precall
-    await page.waitForURL(/(\/agent|\/precall)/, { timeout: 10_000 });
+    // Agent should be redirected to / or /precall or /agent/precall
+    await page.waitForURL(url => url.pathname === '/' || url.pathname === '/agent/precall' || url.pathname === '/precall', { timeout: 10_000 });
   });
 
   test('Logout clears auth and redirects to /login', async ({ page }) => {

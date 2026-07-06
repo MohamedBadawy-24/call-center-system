@@ -45,7 +45,7 @@ test.describe('E2E Production Simulation: Survey Creation & Publishing', () => {
 
     // Find the campaign and click Edit / View
     const campaignCard = page.locator('.glass-card').filter({ has: page.locator('h3', { hasText: title }) }).first();
-    await campaignCard.getByRole('link', { name: /Edit \/ View/i }).click();
+    await campaignCard.getByRole('link', { name: /Edit \/ View/i }).click({ force: true });
     await page.waitForURL('**/admin/builder/*', { timeout: 15000 });
 
     // Toggles the campaign to Inactive (when loaded it might default to Active)

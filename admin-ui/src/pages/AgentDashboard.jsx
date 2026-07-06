@@ -116,7 +116,9 @@ export default function AgentDashboard() {
               });
               peerConnectionsRef.current[auditorId] = pc;
 
-              stream.getTracks().forEach(track => pc.addTrack(track, stream));
+              if (stream && typeof stream.getTracks === 'function') {
+                stream.getTracks().forEach(track => pc.addTrack(track, stream));
+              }
 
               pc.onicecandidate = (event) => {
                 if (event.candidate) {
@@ -184,7 +186,7 @@ export default function AgentDashboard() {
   }, [user.currentStatus, user.id, user.role, user.name]);
 
   const stopStreaming = () => {
-    if (streamRef.current) {
+    if (streamRef.current && typeof streamRef.current.getTracks === 'function') {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }

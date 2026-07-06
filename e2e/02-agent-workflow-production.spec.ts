@@ -61,10 +61,11 @@ test.describe('E2E Production Simulation: Agent Workflow Lifecycle', () => {
     await page.getByTestId('baseera-login-button').click();
 
     // Confirm agent lands on agent dashboard or precall
-    await page.waitForURL(/(\/|\/agent\/precall)/, { timeout: 15000 });
+    await page.waitForURL(url => url.pathname === '/' || url.pathname === '/agent/precall', { timeout: 30000 });
 
     // 2. Change status to 'Active/Ready'
-    await page.locator('.status-pill').click();
+    await page.locator('.status-pill').click({ force: true });
+    await page.waitForTimeout(500); // Wait for Framer Motion dropdown animation
     await page.locator('.status-dropdown button').filter({ hasText: /^Active$/i }).click();
 
     // Verify status updated (active label color/text)

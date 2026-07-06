@@ -34,17 +34,17 @@ test.describe('User Management', () => {
   test('Register page has name, email, password, and role fields', async ({ page }) => {
     await page.goto('/admin/register');
 
-    await expect(page.getByPlaceholder(/name/i).first()).toBeVisible();
-    await expect(page.getByPlaceholder(/email/i).first()).toBeVisible();
-    await expect(page.getByPlaceholder(/password/i).first()).toBeVisible();
+    await expect(page.getByTestId('baseera-register-name')).toBeVisible();
+    await expect(page.getByTestId('baseera-register-email')).toBeVisible();
+    await expect(page.getByTestId('baseera-register-password')).toBeVisible();
   });
 
   test('Admin can create a new agent user', async ({ page }) => {
     await page.goto('/admin/register');
 
-    const name = page.getByPlaceholder(/name/i).first();
-    const email = page.getByPlaceholder(/email/i).first();
-    const password = page.getByPlaceholder(/password/i).first();
+    const name = page.getByTestId('baseera-register-name');
+    const email = page.getByTestId('baseera-register-email');
+    const password = page.getByTestId('baseera-register-password');
 
     await name.fill('E2E New Agent');
     await email.fill(`e2e-new-agent-${Date.now()}@baseera.test`);
@@ -56,8 +56,7 @@ test.describe('User Management', () => {
       await submitBtn.click();
 
       // Wait for success feedback
-      const successToast = page.getByRole('alert');
-      await expect(successToast.first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText(/has been added as/i)).toBeVisible({ timeout: 10_000 });
     }
   });
 });

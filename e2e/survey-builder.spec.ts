@@ -15,10 +15,10 @@ test.describe('Survey Builder', () => {
   });
 
   test('Navigate to create new survey', async ({ page }) => {
-    const createLink = page.getByRole('link', { name: /Create Survey/i });
+    const createLink = page.getByRole('link', { name: /\+ Create New Survey/i });
     await createLink.click();
     await expect(page).toHaveURL(/\/admin\/builder$/);
-    await expect(page.getByText(/Create Call Script/i)).toBeVisible();
+    await expect(page.getByText(/Create Campaign/i)).toBeVisible();
   });
 
   test('Create survey form has required fields', async ({ page }) => {
@@ -34,6 +34,10 @@ test.describe('Survey Builder', () => {
     await page.goto('/admin/builder');
     const builder = new SurveyBuilderPage(page);
 
+    // Deactivate campaign to enable editing/saving
+    await page.getByRole('button', { name: 'Active', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Inactive', exact: true })).toBeVisible();
+
     await builder.setTitle(`E2E Created Survey ${Date.now()}`);
     await builder.setGoal(75);
 
@@ -47,6 +51,13 @@ test.describe('Survey Builder', () => {
     await page.goto('/admin/builder');
     const builder = new SurveyBuilderPage(page);
 
+    // Deactivate campaign to enable editing/saving
+    await page.getByRole('button', { name: 'Active', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Inactive', exact: true })).toBeVisible();
+
+    // Switch to Builder tab where section controls reside
+    await page.getByRole('button', { name: /Builder/i }).click();
+
     // Add a section
     await builder.addSection();
 
@@ -59,8 +70,8 @@ test.describe('Survey Builder', () => {
     await addQBtn.click();
 
     // A question text input should appear
-    const questionInputs = page.getByPlaceholder('Question text');
-    await expect(questionInputs.first()).toBeVisible();
+    const questionInput = page.locator('div', { has: page.locator('label', { hasText: /Question Text/i }) }).locator('input').first();
+    await expect(questionInput).toBeVisible();
   });
 
   test('Editing an existing survey loads saved data', async ({ page }) => {

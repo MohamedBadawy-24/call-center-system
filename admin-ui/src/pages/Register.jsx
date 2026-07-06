@@ -126,6 +126,7 @@ export default function Register() {
                 className="input-field"
                 value={name}
                 placeholder=""
+                data-testid="baseera-register-name"
                 onChange={e => setName(e.target.value)}
               />
             </div>
@@ -141,6 +142,7 @@ export default function Register() {
                 className="input-field"
                 value={email}
                 placeholder=""
+                data-testid="baseera-register-email"
                 onChange={e => setEmail(e.target.value)}
               />
             </div>
@@ -156,6 +158,7 @@ export default function Register() {
                 className="input-field"
                 value={password}
                 placeholder="Min. 8 characters"
+                data-testid="baseera-register-password"
                 onChange={e => setPassword(e.target.value)}
               />
             </div>

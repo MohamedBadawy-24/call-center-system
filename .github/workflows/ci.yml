@@ -106,7 +106,7 @@ jobs:
         run: |
           docker run -d -p 27017:27017 --name mongo mongo:7 mongod --replSet rs0
           sleep 5
-          docker exec mongo mongosh --eval "rs.initiate()"
+          docker exec mongo mongosh --eval 'rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "localhost:27017" }] })'
 
       - name: Install frontend dependencies
         run: npm ci

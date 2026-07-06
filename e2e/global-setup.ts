@@ -55,16 +55,16 @@ async function globalSetup(config: FullConfig) {
     } catch (loginErr) {
       // Fallback to registration if login fails
       try {
-        await axios.post(`${BACKEND}/auth/register`, {
+        const adminData = {
           name: 'E2E Admin',
           email: 'e2e-admin@baseera.test',
           password: 'Admin123_test',
           role: 'admin',
-        });
-        // Explicitly login to retrieve token
+        };
+        await axios.post(`${BACKEND}/auth/register`, { ...adminData });
         const loginRes = await axios.post(`${BACKEND}/auth/login`, {
-          email: 'e2e-admin@baseera.test',
-          password: 'Admin123_test',
+          email: adminData.email,
+          password: adminData.password,
         });
         adminToken = loginRes.data.token;
         const meRes = await axios.get(`${BACKEND}/auth/me`, {
@@ -83,27 +83,25 @@ async function globalSetup(config: FullConfig) {
   let agentId: string;
   const agentEmail = `e2e-agent-${Date.now()}@baseera.test`;
 
-  const agentRegRes = await axios.post(
+  const agentData = {
+    name: 'E2E Agent',
+    email: agentEmail,
+    password: 'Agent123_test',
+    role: 'agent',
+    researcherCode: 'E2E-AG-123',
+  };
+
+  await axios.post(
     `${BACKEND}/auth/register`,
-    {
-      name: 'E2E Agent',
-      email: agentEmail,
-      password: 'Agent123_test',
-      role: 'agent',
-      researcherCode: 'E2E-AG-123',
-    },
+    { ...agentData },
     { headers: { Authorization: `Bearer ${adminToken}` } }
   );
-  agentToken = agentRegRes.data.token;
 
-  if (!agentToken) {
-    // If register doesn't return token, login
-    const loginRes = await axios.post(`${BACKEND}/auth/login`, {
-      email: agentEmail,
-      password: 'Agent123_test',
-    });
-    agentToken = loginRes.data.token;
-  }
+  const agentLoginRes = await axios.post(`${BACKEND}/auth/login`, {
+    email: agentData.email,
+    password: agentData.password,
+  });
+  agentToken = agentLoginRes.data.token;
 
   const agentMe = await axios.get(`${BACKEND}/auth/me`, {
     headers: { Authorization: `Bearer ${agentToken}` },
@@ -129,20 +127,20 @@ async function globalSetup(config: FullConfig) {
   } catch (err) {
     // Register then login
     try {
-      await axios.post(
-        `${BACKEND}/auth/register`,
-        {
-          name: 'E2E Quality Reviewer',
-          email: qualityEmail,
-          password: 'Quality123_test',
-          role: 'quality',
-        },
-        { headers: { Authorization: `Bearer ${adminToken}` } }
-      );
-      // Explicitly login to retrieve token
-      const qualityLoginRes = await axios.post(`${BACKEND}/auth/login`, {
+      const qualityData = {
+        name: 'E2E Quality Reviewer',
         email: qualityEmail,
         password: 'Quality123_test',
+        role: 'quality',
+      };
+      await axios.post(
+        `${BACKEND}/auth/register`,
+        { ...qualityData },
+        { headers: { Authorization: `Bearer ${adminToken}` } }
+      );
+      const qualityLoginRes = await axios.post(`${BACKEND}/auth/login`, {
+        email: qualityData.email,
+        password: qualityData.password,
       });
       qualityToken = qualityLoginRes.data.token;
       const qualityMe = await axios.get(`${BACKEND}/auth/me`, {

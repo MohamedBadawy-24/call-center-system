@@ -10,9 +10,8 @@
 # Database strategy:
 #   • Backend Jest tests spin up their own MongoMemoryReplSet in-process
 #     (see tests/globalSetup.js), so they need NO external MongoDB service.
-#   • Playwright E2E tests need a real MongoDB instance because the backend
-#     server.js connects via MONGO_URI. We use a GitHub Actions MongoDB
-#     service container for this.
+#   • Playwright E2E tests need a real MongoDB replica set. We start one
+#     manually via Docker with explicit localhost member host binding.
 # ──────────────────────────────────────────────────────────────────
 
 name: CI
@@ -72,7 +71,7 @@ jobs:
   e2e-playwright:
     name: E2E Playwright Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     needs: unit-integration  # Only run E2E if unit tests pass
 
     env:
@@ -80,6 +79,7 @@ jobs:
       JWT_SECRET: ci-e2e-jwt-secret-key-1234567890
       PORT: 3000
       HOST: 0.0.0.0
+      NODE_ENV: test
       E2E_BACKEND_URL: http://localhost:3000
       E2E_BASE_URL: http://localhost:3001
 
@@ -105,8 +105,27 @@ jobs:
       - name: Start MongoDB Replica Set
         run: |
           docker run -d -p 27017:27017 --name mongo mongo:7 mongod --replSet rs0
-          sleep 5
+          echo "Waiting for MongoDB to accept connections..."
+          for i in $(seq 1 30); do
+            if docker exec mongo mongosh --quiet --eval "db.adminCommand({ping:1})" >/dev/null 2>&1; then
+              echo "MongoDB is accepting connections."
+              break
+            fi
+            echo "Attempt $i: MongoDB not ready yet..."
+            sleep 2
+          done
+          echo "Initiating replica set..."
           docker exec mongo mongosh --eval 'rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "localhost:27017" }] })'
+          echo "Waiting for replica set to elect primary..."
+          for i in $(seq 1 15); do
+            IS_PRIMARY=$(docker exec mongo mongosh --quiet --eval "rs.isMaster().ismaster" 2>/dev/null || echo "false")
+            if [ "$IS_PRIMARY" = "true" ]; then
+              echo "Replica set primary elected!"
+              break
+            fi
+            echo "Attempt $i: Waiting for primary election..."
+            sleep 2
+          done
 
       - name: Install frontend dependencies
         run: npm ci
@@ -124,12 +143,18 @@ jobs:
       # ── Start Backend Server ──
       - name: Start backend server
         run: |
-          node server.js &
-          echo "Waiting for backend to be ready..."
-          for i in $(seq 1 30); do
-            if curl -s http://localhost:3000/auth/has-users > /dev/null 2>&1; then
+          NODE_ENV=test node server.js > backend.log 2>&1 &
+          echo "Waiting for backend to be ready (polling /auth/has-users)..."
+          for i in $(seq 1 60); do
+            if curl -sS --fail http://localhost:3000/auth/has-users > /dev/null 2>&1; then
               echo "Backend is ready!"
               break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "ERROR: Backend failed to start within 120 seconds."
+              echo "=== Backend Logs ==="
+              cat backend.log
+              exit 1
             fi
             echo "Attempt $i: backend not ready yet..."
             sleep 2
@@ -155,7 +180,7 @@ jobs:
         run: npx playwright test --project=chromium --workers=1
 
       # ── Upload Artifacts on Failure ──
-      - name: Upload Playwright report
+      - name: Upload Playwright report and backend logs
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
@@ -163,4 +188,5 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            backend.log
           retention-days: 14

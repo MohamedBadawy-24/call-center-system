@@ -1,7 +1,7 @@
 # ──────────────────────────────────────────────────────────────────
 # Baseera Call Center System — CI Pipeline
 # ──────────────────────────────────────────────────────────────────
-# Triggers on push/PR to main.
+# Triggers on push/PR to master.
 #
 # Jobs:
 #   1. unit-integration  – Backend Jest (170 tests) + Frontend Vitest (31 tests)
@@ -19,9 +19,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 env:
   NODE_ENV: test

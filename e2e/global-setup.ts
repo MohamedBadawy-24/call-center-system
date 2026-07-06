@@ -123,7 +123,7 @@ async function globalSetup(config: FullConfig) {
 
   try {
     // Attempt seeded admin login first
-    adminToken = await tryLogin('mohhamed242@gmail.com', 'Baseera@123');
+    adminToken = await tryLogin('e2e-admin@baseera.test', 'Admin123_test');
   } catch (err: any) {
     console.warn('[E2E SETUP] Seed login failed, trying e2e-admin...');
     try {

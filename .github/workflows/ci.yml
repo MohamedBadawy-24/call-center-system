@@ -138,6 +138,9 @@ jobs:
       # ── Build Frontend for Serving ──
       - name: Build frontend
         run: npm run build
+        env:
+          VITE_API_URL: http://localhost:3000
+          VITE_SOCKET_URL: http://localhost:3000
         working-directory: admin-ui
 
       # ── Start Backend Server ──

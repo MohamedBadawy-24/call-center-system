@@ -21,7 +21,21 @@ router.get('/outbound-precall', auth, async (req, res) => {
     if (surveyId && mongoose.Types.ObjectId.isValid(surveyId)) {
       survey = await Survey.findById(surveyId).lean();
     } else {
-      survey = await Survey.findOne({ isActive: { $ne: false } }).sort({ createdAt: -1 }).lean();
+      const filter = { isActive: { $ne: false } };
+      if (req.user.role === 'agent') {
+        filter.$or = [
+          { targetAudience: { $in: ['agent', 'both'] } },
+          { targetAudience: { $exists: false } },
+          { targetAudience: null }
+        ];
+      } else if (req.user.role === 'quality') {
+        filter.$or = [
+          { targetAudience: { $in: ['quality', 'both'] } },
+          { targetAudience: { $exists: false } },
+          { targetAudience: null }
+        ];
+      }
+      survey = await Survey.findOne(filter).sort({ createdAt: -1 }).lean();
     }
     if (!survey) {
       return res.json({ surveyId: null, outboundPrecall: null, surveyTitle: null });

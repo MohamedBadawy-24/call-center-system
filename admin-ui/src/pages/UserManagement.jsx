@@ -12,6 +12,7 @@ import { api } from '../api/client';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Users, Trash2, UserPlus, ArrowLeft } from 'lucide-react';
+import { toast } from 'react-toastify';
 
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
@@ -29,7 +30,7 @@ const InlineResearcherCodeEdit = ({ user, onUpdate }) => {
       setIsEditing(false);
       onUpdate(res.data);
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to update researcher code');
+      toast.error(err.response?.data?.error || 'Failed to update researcher code');
     } finally {
       setLoading(false);
     }
@@ -103,7 +104,7 @@ export default function UserManagement() {
       setUsers(res.data || []);
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.error || 'Failed to load users');
+      toast.error(err.response?.data?.error || 'Failed to load users');
     } finally {
       setLoading(false);
     }
@@ -118,11 +119,11 @@ export default function UserManagement() {
   const handleDelete = async (u) => {
     if (!u?._id) return;
     if (u._id === user?.id) {
-      alert(t('cannotDeleteSelf'));
+      toast.warning(t('cannotDeleteSelf'));
       return;
     }
     if (u.role === 'admin' && adminCount <= 1) {
-      alert(t('cannotDeleteLastAdmin'));
+      toast.warning(t('cannotDeleteLastAdmin'));
       return;
     }
 
@@ -133,7 +134,7 @@ export default function UserManagement() {
       await api.delete(`/admin/users/${u._id}`);
       setUsers(prev => prev.filter(x => x._id !== u._id));
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to delete user');
+      toast.error(err.response?.data?.error || 'Failed to delete user');
     } finally {
       setDeletingId(null);
     }

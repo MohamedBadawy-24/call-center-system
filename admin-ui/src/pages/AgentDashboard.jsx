@@ -4,6 +4,7 @@ import { api, SOCKET_BASE } from '../api/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ClipboardList, Star, ArrowLeft } from 'lucide-react';
 import { io } from 'socket.io-client';
+import { toast } from 'react-toastify';
 
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
@@ -199,7 +200,7 @@ export default function AgentDashboard() {
     const isStaff = user.role === 'admin' || user.role === 'quality';
     if (!isStaff && user.currentStatus !== 'active') {
       e.preventDefault();
-      alert(t('mustBeActive'));
+      toast.warning(t('mustBeActive'));
       return;
     }
     navigate(`/take-survey/${surveyId}`);
@@ -251,7 +252,7 @@ export default function AgentDashboard() {
               gap: '0.75rem'
             }}
           >
-            <span>💬</span> Auditor Whisper: {whisperMessage}
+            💬 {whisperMessage}
           </motion.div>
         )}
       </AnimatePresence>
@@ -282,7 +283,7 @@ export default function AgentDashboard() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Star size={18} fill="var(--warning)" color="var(--warning)" />
-                <span style={{ fontWeight: 800, fontSize: '0.9rem' }}>Daily Goal</span>
+                <span style={{ fontWeight: 800, fontSize: '0.9rem' }}>{t('campaignGoal') || 'Daily Goal'}</span>
               </div>
               <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--success)' }}>{stats.completed} / {dailyGoal}</span>
             </div>
@@ -291,7 +292,7 @@ export default function AgentDashboard() {
             </div>
             {stats.completed >= dailyGoal && (
               <div style={{ fontSize: '0.75rem', color: 'var(--warning)', marginTop: '0.5rem', fontWeight: 700, textAlign: 'center' }}>
-                🌟 Goal Reached! Amazing Job! 🌟
+                🌟 {t('completed') || 'Goal Reached!'} 🌟
               </div>
             )}
           </motion.div>
@@ -330,9 +331,10 @@ export default function AgentDashboard() {
           );
         })}
         {surveys.length === 0 && !loading && (
-          <motion.div variants={itemVariants} style={{ color: "var(--text-secondary)", fontStyle: 'italic' }}>
-            No campaigns available at this time.
-          </motion.div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', padding: '2rem', color: 'var(--text-secondary)' }}>
+            <ClipboardList size={40} style={{ opacity: 0.2 }} />
+            <span style={{ fontWeight: 600 }}>{t('emptyStateNoCampaigns') || 'No campaigns available.'}</span>
+          </div>
         )}
       </motion.div>
     </motion.div>

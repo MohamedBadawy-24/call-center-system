@@ -130,7 +130,7 @@ export default function ResponseHistory() {
   const handleExport = async (e) => {
     e.preventDefault();
     if (!exportFilters.surveyId) {
-      alert(t('selectSurveyToExport'));
+      toast.error(t('selectSurveyToExport'));
       return;
     }
     try {
@@ -151,7 +151,7 @@ export default function ResponseHistory() {
       setShowExportModal(false);
     } catch (err) {
       console.error("Export error:", err);
-      alert("Export failed. Please try again.");
+      toast.error(t('surveyLoadFailed') || 'Export failed. Please try again.');
     } finally {
       setExportLoading(false);
     }
@@ -203,7 +203,7 @@ export default function ResponseHistory() {
             onClick={() => setViewFlagged(!viewFlagged)} 
             style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: viewFlagged ? 'var(--danger)' : '', color: viewFlagged ? '#fff' : '' }}
           >
-            <Flag size={18} /> {viewFlagged ? 'View All' : 'Flagged Only'}
+            <Flag size={18} /> {viewFlagged ? (t('allResponses') || 'View All') : (t('flaggedResponse') || 'Flagged Only')}
           </button>
           <button className="btn-primary" onClick={() => setShowExportModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Download size={18} /> {t('advancedExport')}
@@ -374,7 +374,7 @@ export default function ResponseHistory() {
         {filteredResponses.length === 0 ? (
           <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
             <ClipboardList size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
-            <p>No responses found matching your search.</p>
+            <p style={{ margin: 0, fontWeight: 600 }}>{t('emptyStateNoResponses') || 'No responses found matching your search.'}</p>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -413,7 +413,7 @@ export default function ResponseHistory() {
                       <td style={{ padding: '1.25rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <User size={16} color="var(--primary)" />
-                          <span>{r.agentId?.name || 'Unknown Agent'}</span>
+                          <span>{r.agentId?.name || t('notAssigned')}</span>
                         </div>
                       </td>
                       <td style={{ padding: '1.25rem', fontSize: '0.85rem' }}>
@@ -546,7 +546,7 @@ export default function ResponseHistory() {
                                   {r.flagNote && (
                                     <div className="answer-item" style={{ borderLeft: '3px solid var(--danger)', paddingLeft: '1rem', gridColumn: '1 / -1', background: 'rgba(var(--danger-rgb), 0.05)', padding: '1rem', borderRadius: '8px' }}>
                                       <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--danger)', marginBottom: '0.25rem', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <AlertTriangle size={16} /> Flagged for Re-review by {r.flaggedBy} on {new Date(r.flaggedAt).toLocaleDateString()}
+                                        <AlertTriangle size={16} /> {t('flaggedResponse') || 'Flagged'} — {r.flaggedBy} · {new Date(r.flaggedAt).toLocaleDateString()}
                                       </div>
                                       <div style={{ fontWeight: 600 }}>{r.flagNote}</div>
                                     </div>
@@ -569,7 +569,7 @@ export default function ResponseHistory() {
                                     </div>
                                   ))
                                 ) : (
-                                  <div style={{ color: 'var(--text-secondary)', gridColumn: '1 / -1' }}>No answers recorded for this response.</div>
+                                  <div style={{ color: 'var(--text-secondary)', gridColumn: '1 / -1' }}>{t('notAnswered') || 'No answers recorded.'}</div>
                                 )}
                               </div>
                             </motion.div>

@@ -156,8 +156,8 @@ export default function AdminDashboard() {
               } catch (err) {
                 toast.error(err.response?.data?.error || "Failed to delete survey");
               }
-            }}>Delete</button>
-            <button className="btn-secondary" onClick={closeToast}>Cancel</button>
+            }}>{t('confirmDeleteSurveyBtn') || 'Delete Survey'}</button>
+            <button className="btn-secondary" onClick={closeToast}>{t('cancelDeleteSurvey') || 'Keep Survey'}</button>
           </div>
         </div>
       ),
@@ -523,19 +523,19 @@ export default function AdminDashboard() {
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="drawer-overlay" onClick={() => setSuspendModal({ open: false, agentId: null, reason: "" })} />
             <motion.div initial={{ scale: 0.9, opacity: 0, x: '-50%', y: '-50%' }} animate={{ scale: 1, opacity: 1, x: '-50%', y: '-50%' }} exit={{ scale: 0.9, opacity: 0, x: '-50%', y: '-50%' }} className="glass-card" style={{ position: 'fixed', top: '50%', left: '50%', zIndex: 1000, width: '400px', maxWidth: '90vw' }}>
-              <h3>Suspend Agent</h3>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Please provide a reason for suspension.</p>
+              <h3>{t('suspendAgent') || 'Suspend Agent'}</h3>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>{t('suspendReasonPrompt') || 'Please provide a reason for suspension.'}</p>
               <textarea 
                 value={suspendModal.reason} 
                 onChange={e => setSuspendModal(prev => ({ ...prev, reason: e.target.value }))} 
                 className="glass-input" 
                 rows="3" 
                 style={{ width: '100%', marginBottom: '1rem', padding: '0.75rem' }} 
-                placeholder="Reason..." 
+                placeholder={t('suspendReasonPlaceholder') || 'Reason...'} 
               />
               <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                <button className="btn-secondary" onClick={() => setSuspendModal({ open: false, agentId: null, reason: "" })}>Cancel</button>
-                <button className="btn-primary" onClick={handleSuspend} style={{ background: 'var(--danger)' }}>Suspend</button>
+                <button className="btn-secondary" onClick={() => setSuspendModal({ open: false, agentId: null, reason: "" })}>{t('cancelSuspend') || 'Cancel Suspension'}</button>
+                <button className="btn-primary" onClick={handleSuspend} style={{ background: 'var(--danger)' }}>{t('suspendBtn') || 'Suspend'}</button>
               </div>
             </motion.div>
           </>

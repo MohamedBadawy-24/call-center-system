@@ -1,4 +1,5 @@
-require("dotenv").config();
+const env = require("./config/env");
+const logger = require("./utils/logger");
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
@@ -92,7 +93,7 @@ app.use(
   })
 );
 
-const corsOrigins = process.env.CORS_ORIGIN;
+const corsOrigins = env.CORS_ORIGIN;
 const allowedOrigins = corsOrigins
   ? corsOrigins.split(",").map((o) => o.trim()).filter(Boolean)
   : [];
@@ -163,6 +164,10 @@ app.post("/survey", adminAuth, async (req, res) => {
 
     await survey.save();
 
+    if (survey.linkedCampaignId) {
+      await Survey.findByIdAndUpdate(survey.linkedCampaignId, { linkedCampaignId: survey._id });
+    }
+
     const io = req.app.get('io');
     if (io) io.emit("stats-update");
 
@@ -187,6 +192,8 @@ app.put("/survey/:id", adminAuth, async (req, res) => {
       }
     }
     
+    const oldLinkId = survey.linkedCampaignId;
+
     // If saving/publishing, we apply the payload and clear the draft
     Object.assign(survey, req.body);
     
@@ -208,11 +215,22 @@ app.put("/survey/:id", adminAuth, async (req, res) => {
     
     await survey.save();
 
+    const newLinkId = survey.linkedCampaignId;
+    if (String(oldLinkId) !== String(newLinkId)) {
+      if (oldLinkId) {
+        await Survey.findByIdAndUpdate(oldLinkId, { linkedCampaignId: null });
+      }
+      if (newLinkId) {
+        await Survey.findByIdAndUpdate(newLinkId, { linkedCampaignId: survey._id });
+      }
+    }
+
     const io = req.app.get('io');
     if (io) io.emit("stats-update");
 
     res.json(survey);
   } catch (err) {
+    logger.error("Error updating survey:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -233,11 +251,24 @@ app.put("/survey/:id/autosave", adminAuth, async (req, res) => {
   }
 });
 
-// GET ALL SURVEYS (Auth required)
 app.get("/surveys", auth, async (req, res) => {
   try {
     let filter = {};
-    if (req.user.role === 'agent') filter.isActive = { $ne: false }; // True or undefined means active
+    if (req.user.role === 'agent') {
+      filter.isActive = { $ne: false };
+      filter.$or = [
+        { targetAudience: { $in: ['agent', 'both'] } },
+        { targetAudience: { $exists: false } },
+        { targetAudience: null }
+      ];
+    } else if (req.user.role === 'quality') {
+      filter.isActive = { $ne: false };
+      filter.$or = [
+        { targetAudience: { $in: ['quality', 'both'] } },
+        { targetAudience: { $exists: false } },
+        { targetAudience: null }
+      ];
+    }
     const surveys = await Survey.find(filter, "title description isActive createdAt");
     res.json(surveys);
   } catch (err) {
@@ -271,6 +302,74 @@ app.put("/surveys/:id/toggle", adminAuth, async (req, res) => {
   } catch (err) {
     console.error("Toggle survey error:", err);
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+// GET CAMPAIGN COMPARISON (Admin + Quality)
+app.get("/admin/compare", staffAuth, async (req, res) => {
+  try {
+    const { surveyId, searchValue } = req.query;
+    if (!surveyId || !searchValue) {
+      return res.status(400).json({ error: "Missing surveyId or searchValue" });
+    }
+
+    const surveyA = await Survey.findById(surveyId);
+    if (!surveyA) return res.status(404).json({ error: "Primary campaign not found" });
+
+    if (!surveyA.linkedCampaignId) {
+      return res.status(400).json({ error: "This campaign is not linked to any other campaign" });
+    }
+    const surveyB = await Survey.findById(surveyA.linkedCampaignId);
+    if (!surveyB) return res.status(404).json({ error: "Linked campaign not found" });
+
+    let phoneDocA = await PhoneNumber.findOne({
+      surveyId: surveyA._id,
+      $or: [{ serialNumber: searchValue }, { number: searchValue }]
+    });
+
+    if (!phoneDocA) {
+      const directResponse = await Response.findOne({ surveyId: surveyA._id, serialNumber: searchValue });
+      if (directResponse) {
+        phoneDocA = { serialNumber: searchValue, number: "" };
+      } else {
+        return res.status(404).json({ error: "No matching record found in primary campaign" });
+      }
+    }
+
+    const serialA = phoneDocA.serialNumber;
+    const phoneNum = phoneDocA.number;
+
+    let serialB = null;
+    const matchField = surveyA.comparisonMatchField || 'serialNumber';
+
+    if (matchField === 'phoneNumber' && phoneNum) {
+      const phoneDocB = await PhoneNumber.findOne({
+        surveyId: surveyB._id,
+        number: phoneNum
+      });
+      if (phoneDocB) {
+        serialB = phoneDocB.serialNumber;
+      }
+    } else {
+      serialB = serialA;
+    }
+
+    const responseA = await Response.findOne({ surveyId: surveyA._id, serialNumber: serialA }).populate('agentId', 'name email');
+    const responseB = serialB ? await Response.findOne({ surveyId: surveyB._id, serialNumber: serialB }).populate('agentId', 'name email') : null;
+
+    res.json({
+      surveyA,
+      surveyB,
+      responseA,
+      responseB,
+      matchField,
+      serialA,
+      serialB,
+      phoneNumber: phoneNum
+    });
+  } catch (err) {
+    console.error("Comparison Error:", err);
+    res.status(500).json({ error: "Server error during comparison" });
   }
 });
 
@@ -1687,11 +1786,11 @@ app.delete("/survey/:id", adminAuth, async (req, res) => {
 });
 
 function socketIoAllowedOrigins() {
-  if (process.env.SOCKET_IO_CORS_ORIGIN) {
-    return process.env.SOCKET_IO_CORS_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean);
+  if (env.SOCKET_IO_CORS_ORIGIN) {
+    return env.SOCKET_IO_CORS_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean);
   }
-  if (process.env.CORS_ORIGIN) {
-    return process.env.CORS_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean);
+  if (env.CORS_ORIGIN) {
+    return env.CORS_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean);
   }
   return ["http://localhost:3001", "http://127.0.0.1:3001"];
 }
@@ -1720,7 +1819,7 @@ io.use(async (socket, next) => {
       socket.handshake.query?.token ||
       (socket.handshake.headers.authorization || "").replace(/^Bearer\s+/i, "");
     if (!token) return next(new Error("Authentication required"));
-    const jwtSecret = process.env.JWT_SECRET;
+    const jwtSecret = env.JWT_SECRET;
     if (!jwtSecret) return next(new Error("Server misconfigured"));
     const decoded = jwt.verify(String(token).replace(/^Bearer\s+/i, ""), jwtSecret);
     const user = await User.findById(decoded.id).select("role suspended");
@@ -1822,8 +1921,8 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+const PORT = env.PORT;
+const HOST = env.HOST;
 
 server.listen(PORT, HOST, () => {
   const os = require('os');
@@ -1836,10 +1935,9 @@ server.listen(PORT, HOST, () => {
       }
     }
   }
-  console.log(`\n✅ Server running on:`);
-  console.log(`   Local:   http://localhost:${PORT}`);
-  addresses.forEach(ip => console.log(`   Network: http://${ip}:${PORT}`));
-  console.log('');
+  logger.info(`Server running on:`);
+  logger.info(`   Local:   http://localhost:${PORT}`);
+  addresses.forEach(ip => logger.info(`   Network: http://${ip}:${PORT}`));
 });
 
 module.exports = { app, server, io };

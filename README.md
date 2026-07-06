@@ -50,8 +50,8 @@ MONGO_URI=mongodb://localhost/baseera
 JWT_SECRET=your-64-char-secret
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=mohhamed3491@gmail.com
-SMTP_PASS=djas yrwg drtx hidp
+SMTP_USER=email@gmail.com
+SMTP_PASS=email_password
 CORS_ORIGIN=http://localhost:3001
 ```
 

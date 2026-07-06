@@ -66,30 +66,30 @@ export default function SurveyCanvas() {
    * updater operates on the correct, up-to-date array.
    */
 
-  const makeUpdateQ = useCallback((sIdx, qIdx) => (patch) => {
+  const makeUpdateQ = useCallback((sIdx, questionId) => (patch) => {
     updateState(prev => ({
       ...prev,
       sections: prev.sections.map((sec, si) => {
         if (si !== sIdx) return sec;
         return {
           ...sec,
-          questions: sec.questions.map((q, qi) =>
-            qi === qIdx ? { ...q, ...patch } : q
+          questions: sec.questions.map(q =>
+            q.questionId === questionId ? { ...q, ...patch } : q
           ),
         };
       }),
     }));
   }, [updateState]);
 
-  const makeUpdateChoice = useCallback((sIdx, qIdx) => (cIdx, patch) => {
+  const makeUpdateChoice = useCallback((sIdx, questionId) => (cIdx, patch) => {
     updateState(prev => ({
       ...prev,
       sections: prev.sections.map((sec, si) => {
         if (si !== sIdx) return sec;
         return {
           ...sec,
-          questions: sec.questions.map((q, qi) => {
-            if (qi !== qIdx) return q;
+          questions: sec.questions.map(q => {
+            if (q.questionId !== questionId) return q;
             const choices = [...(q.choices || [])];
             choices[cIdx] = { ...choices[cIdx], ...patch };
             return { ...q, choices };
@@ -99,15 +99,15 @@ export default function SurveyCanvas() {
     }));
   }, [updateState]);
 
-  const makeAddChoice = useCallback((sIdx, qIdx) => () => {
+  const makeAddChoice = useCallback((sIdx, questionId) => () => {
     updateState(prev => ({
       ...prev,
       sections: prev.sections.map((sec, si) => {
         if (si !== sIdx) return sec;
         return {
           ...sec,
-          questions: sec.questions.map((q, qi) => {
-            if (qi !== qIdx) return q;
+          questions: sec.questions.map(q => {
+            if (q.questionId !== questionId) return q;
             return {
               ...q,
               choices: [...(q.choices || []), { text: 'New Option', value: '', logic: null }],
@@ -118,15 +118,15 @@ export default function SurveyCanvas() {
     }));
   }, [updateState]);
 
-  const makeRemoveChoice = useCallback((sIdx, qIdx) => (cIdx) => {
+  const makeRemoveChoice = useCallback((sIdx, questionId) => (cIdx) => {
     updateState(prev => ({
       ...prev,
       sections: prev.sections.map((sec, si) => {
         if (si !== sIdx) return sec;
         return {
           ...sec,
-          questions: sec.questions.map((q, qi) => {
-            if (qi !== qIdx) return q;
+          questions: sec.questions.map(q => {
+            if (q.questionId !== questionId) return q;
             return { ...q, choices: (q.choices || []).filter((_, i) => i !== cIdx) };
           }),
         };
@@ -134,35 +134,62 @@ export default function SurveyCanvas() {
     }));
   }, [updateState]);
 
-  const makeDuplicateQ = useCallback((sIdx, qIdx) => () => {
+  const makeDuplicateQ = useCallback((sIdx, questionId) => () => {
     updateState(prev => ({
       ...prev,
       sections: prev.sections.map((sec, si) => {
         if (si !== sIdx) return sec;
-        const newQ = JSON.parse(JSON.stringify(sec.questions[qIdx]));
+        const idx = sec.questions.findIndex(q => q.questionId === questionId);
+        if (idx === -1) return sec;
+        const newQ = JSON.parse(JSON.stringify(sec.questions[idx]));
         newQ.questionId = crypto.randomUUID();
         newQ.text = newQ.text + ' (Copy)';
+        
+        if (newQ._groupId) {
+          setTimeout(() => {
+            updateState(current => ({
+              ...current,
+              groups: (current.groups || []).map(grp => {
+                if (grp._id === newQ._groupId) {
+                  return { ...grp, questionIds: [...grp.questionIds, newQ.questionId] };
+                }
+                return grp;
+              })
+            }));
+          }, 0);
+        }
+        
         return {
           ...sec,
           questions: [
-            ...sec.questions.slice(0, qIdx + 1),
+            ...sec.questions.slice(0, idx + 1),
             newQ,
-            ...sec.questions.slice(qIdx + 1),
+            ...sec.questions.slice(idx + 1),
           ],
         };
       }),
     }));
   }, [updateState]);
 
-  const makeDeleteQ = useCallback((sIdx, qIdx) => () => {
+  const makeDeleteQ = useCallback((sIdx, questionId) => () => {
     if (!window.confirm('Are you sure you want to delete this question?')) return;
-    updateState(prev => ({
-      ...prev,
-      sections: prev.sections.map((sec, si) => {
+    updateState(prev => {
+      const updatedGroups = (prev.groups || []).map(grp => ({
+        ...grp,
+        questionIds: grp.questionIds.filter(id => id !== questionId)
+      }));
+
+      const newSections = prev.sections.map((sec, si) => {
         if (si !== sIdx) return sec;
-        return { ...sec, questions: sec.questions.filter((_, qi) => qi !== qIdx) };
-      }),
-    }));
+        return { ...sec, questions: sec.questions.filter(q => q.questionId !== questionId) };
+      });
+
+      return {
+        ...prev,
+        groups: updatedGroups,
+        sections: newSections
+      };
+    });
   }, [updateState]);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -198,12 +225,12 @@ export default function SurveyCanvas() {
                     question={q}
                     sIdx={sIdx}
                     qIdx={qIdx}
-                    updateQ={makeUpdateQ(sIdx, qIdx)}
-                    updateChoice={makeUpdateChoice(sIdx, qIdx)}
-                    addChoice={makeAddChoice(sIdx, qIdx)}
-                    removeChoice={makeRemoveChoice(sIdx, qIdx)}
-                    duplicateQ={makeDuplicateQ(sIdx, qIdx)}
-                    deleteQ={makeDeleteQ(sIdx, qIdx)}
+                    updateQ={makeUpdateQ(sIdx, q.questionId)}
+                    updateChoice={makeUpdateChoice(sIdx, q.questionId)}
+                    addChoice={makeAddChoice(sIdx, q.questionId)}
+                    removeChoice={makeRemoveChoice(sIdx, q.questionId)}
+                    duplicateQ={makeDuplicateQ(sIdx, q.questionId)}
+                    deleteQ={makeDeleteQ(sIdx, q.questionId)}
                   />
                 ))}
               </SortableContext>

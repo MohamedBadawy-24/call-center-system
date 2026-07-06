@@ -25,8 +25,8 @@ services:
       MONGO_URI: mongodb://admin:${MONGO_INIT_PASSWORD}@mongo:27017/baseera?authSource=admin
       NODE_ENV: production
       PORT: 3000
-      CORS_ORIGIN: http://localhost:3001
-      SOCKET_IO_CORS_ORIGIN: http://localhost:3001
+      CORS_ORIGIN: https://admin.yourdomain.com
+      SOCKET_IO_CORS_ORIGIN: https://admin.yourdomain.com
     depends_on:
       - mongo
     volumes:

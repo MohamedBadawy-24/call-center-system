@@ -4,7 +4,7 @@ const STATIC_ASSETS = [
   '/index.html',
   '/src/main.jsx',
   '/src/App.jsx',
-  '/src/index.css',
+  '/src/styles/index.css',
 ];
 
 // Install Service Worker and Pre-cache Core Assets

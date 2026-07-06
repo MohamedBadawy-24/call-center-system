@@ -480,7 +480,7 @@ export function validateOutboundAnswers(fields, answers) {
   return true;
 }
 
-export function buildInitialAnswers(fields, userName) {
+export function buildInitialAnswers(fields, userName, userCode) {
   const answers = {};
   fields.forEach((f) => {
     if (f.type === 'readonly_date' || f.type === 'readonly_time') return;
@@ -492,6 +492,9 @@ export function buildInitialAnswers(fields, userName) {
   });
   if (fields.some((x) => x.id === 'researcher_name')) {
     answers.researcher_name = userName || '';
+  }
+  if (fields.some((x) => x.id === 'researcher_code')) {
+    answers.researcher_code = userCode || '';
   }
   if (fields.some((x) => x.id === 'is_egyptian')) {
     const seg = fields.find((x) => x.id === 'is_egyptian');

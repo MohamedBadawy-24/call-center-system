@@ -7,7 +7,7 @@ const authController = require('../controllers/authController');
 
 const strictAuthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 50,
+  max: process.env.NODE_ENV === 'production' ? 50 : 10000,
   message: { error: 'Too many attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,

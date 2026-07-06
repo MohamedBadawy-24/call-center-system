@@ -1,0 +1,74 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+/* Base resets and defaults */
+* {
+  box-sizing: border-box;
+}
+
+a {
+  text-decoration: none;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  overflow-x: hidden;
+  line-height: var(--line-height-base);
+}
+
+h1, h2, h3, h4 {
+  margin-top: 0;
+  color: var(--text-primary);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: -0.04em;
+  line-height: var(--line-height-heading);
+}
+
+h1 {
+  font-size: var(--font-size-6xl);
+}
+
+h2 {
+  font-size: var(--font-size-5xl);
+}
+
+/* Global root container safety */
+#root {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* RTL Layout General Support */
+[dir='rtl'] {
+  direction: rtl;
+  text-align: right;
+}
+
+[dir='rtl'] body {
+  direction: rtl;
+  text-align: right;
+}
+
+[dir='rtl'] .dropdown-menu {
+  right: auto;
+  left: 0;
+}
+
+[dir='rtl'] .nav-links {
+  margin-right: var(--space-4xl);
+  margin-left: 0;
+}
+
+[dir='rtl'] .choice-btn,
+[dir='rtl'] .input-field,
+[dir='rtl'] .form-label,
+[dir='rtl'] table,
+[dir='rtl'] th,
+[dir='rtl'] td {
+  text-align: right;
+}

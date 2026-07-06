@@ -6,7 +6,7 @@ import { UIContext } from '../context/UIContext';
 import { toast } from 'react-toastify';
 import { INTERVIEW_OUTCOME_OPTIONS, evaluateCondition } from '../utils/outboundPrecallConfig';
 import HandoverModal from '../components/HandoverModal';
-import { UserPlus, Menu, ChevronLeft, ChevronRight, Save, PhoneOff, AlertTriangle, ChevronDown } from 'lucide-react';
+import { UserPlus, Menu, ChevronLeft, ChevronRight, Save, PhoneOff, AlertTriangle, ChevronDown, Check, Lock } from 'lucide-react';
 import SectionedSurveyView from '../components/SectionedSurveyView';
 import { offlineDb } from '../utils/offlineDb';
 
@@ -62,6 +62,137 @@ export default function TakeSurvey({ mockSurvey }) {
   const [lastSaved, setLastSaved] = useState(null);
   const [defaultOpenSectionIdx, setDefaultOpenSectionIdx] = useState(0);
   const [openSections, setOpenSections] = useState({});
+  const [maxReachedIdx, setMaxReachedIdx] = useState(0);
+
+  // ─── Hooks must be above ALL early returns (Rules of Hooks) ──────────────
+  const visibleQuestions = useMemo(() => {
+    const map = {};
+    questions.forEach(q => {
+      const qId = q.questionId || String(q._id);
+      if (!q.visibility) {
+        map[qId] = true;
+      } else {
+        try {
+          const matched = evaluateCondition(q.visibility, answers || {});
+          const act = q.visibility.action || 'show';
+          if (act === 'show') {
+            map[qId] = matched;
+          } else if (act === 'hide' || act === 'skip') {
+            map[qId] = !matched;
+          } else {
+            map[qId] = matched;
+          }
+        } catch (e) {
+          map[qId] = true;
+        }
+      }
+    });
+    return map;
+  }, [questions, answers]);
+
+  const isCurrentGroupComplete = useMemo(() => {
+    const currentQ = questions[currentIdx];
+    if (!currentQ || !currentQ._groupId) return true;
+    const groupQs = questions.filter(q => q._groupId === currentQ._groupId);
+    const visibleGroupQs = groupQs.filter(gq => {
+      const gqId = gq.questionId || String(gq._id);
+      return visibleQuestions[gqId] !== false;
+    });
+    return visibleGroupQs.every(gq => {
+      const gqId = gq.questionId || String(gq._id);
+      const val = answers[gqId];
+      return val !== undefined && val !== null && val !== '';
+    });
+  }, [questions, currentIdx, visibleQuestions, answers]);
+
+  // Compute completed sections
+  const completedSections = useMemo(() => {
+    const completed = {};
+    if (!survey?.sections) return completed;
+    survey.sections.forEach((sec, sIdx) => {
+      // Flatten groups into individual questions for completion tracking
+      const rawQs = sec.questions || [];
+      const questionsInSec = rawQs.flatMap(item =>
+        item.type === 'group' ? (item.questions || []) : [item]
+      );
+      const visibleQuestionsInSec = questionsInSec.filter((q) => {
+        const qId = q.questionId || String(q._id);
+        return visibleQuestions[qId] !== false;
+      });
+
+      if (visibleQuestionsInSec.length === 0) {
+        completed[sIdx] = false;
+        return;
+      }
+
+      const allAnswered = visibleQuestionsInSec.every((q) => {
+        const qId = q.questionId || String(q._id);
+        const val = answers[qId];
+        return val !== undefined && val !== null && val !== '';
+      });
+
+      completed[sIdx] = allAnswered;
+    });
+
+    return completed;
+  }, [survey?.sections, visibleQuestions, answers]);
+
+  // Collapse completed sections automatically
+  useEffect(() => {
+    setOpenSections(prev => {
+      let changed = false;
+      const next = { ...prev };
+      Object.keys(completedSections).forEach(sIdx => {
+        if (completedSections[sIdx] && next[sIdx] === true) {
+          next[sIdx] = false;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [completedSections]);
+
+  // Auto-expand the current section in the sidebar when reached
+  useEffect(() => {
+    if (survey?.sections) {
+      setOpenSections(prev => ({
+        ...prev,
+        [currentSectionIdx]: true
+      }));
+    }
+  }, [currentSectionIdx, survey?.sections]);
+
+  // Auto-collapse section when all questions inside it are answered
+  useEffect(() => {
+    if (survey?.sections) {
+      setOpenSections(prev => {
+        let changed = false;
+        const next = { ...prev };
+        survey.sections.forEach((_, sIdx) => {
+          if (completedSections[sIdx] && prev[sIdx] === true) {
+            next[sIdx] = false;
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }
+  }, [completedSections, survey?.sections]);
+
+  // Compute maxReachedIdx based on current idx and answered questions
+  useEffect(() => {
+    let furthest = currentIdx;
+    questions.forEach((q, idx) => {
+      const qId = q.questionId || String(q._id);
+      const hasAnswer = answers[qId] !== undefined && answers[qId] !== null && answers[qId] !== '';
+      if (hasAnswer && idx > furthest) {
+        furthest = idx;
+      }
+    });
+    if (furthest > maxReachedIdx) {
+      setMaxReachedIdx(furthest);
+    }
+  }, [currentIdx, questions, answers, maxReachedIdx]);
 
   const [interactedQuestions, setInteractedQuestions] = useState(new Set());
   // Ref mirrors the Set synchronously so canProceedFromQuestion never reads a
@@ -101,7 +232,15 @@ export default function TakeSurvey({ mockSurvey }) {
       let allQ = [];
       if (mockSurvey.sections) {
         mockSurvey.sections.forEach((sec) => {
-          allQ = allQ.concat(sec.questions);
+          (sec.questions || []).forEach(item => {
+            if (item.type === 'group') {
+              (item.questions || []).forEach(innerQ => {
+                allQ.push({ ...innerQ, _groupId: item.groupId, _groupLabel: item.label });
+              });
+            } else {
+              allQ.push(item);
+            }
+          });
         });
       }
       setQuestions(allQ);
@@ -133,7 +272,15 @@ export default function TakeSurvey({ mockSurvey }) {
           let allQ = [];
           if (surveyData.sections) {
             surveyData.sections.forEach((sec) => {
-              allQ = allQ.concat(sec.questions);
+              (sec.questions || []).forEach(item => {
+                if (item.type === 'group') {
+                  (item.questions || []).forEach(innerQ => {
+                    allQ.push({ ...innerQ, _groupId: item.groupId, _groupLabel: item.label });
+                  });
+                } else {
+                  allQ.push(item);
+                }
+              });
             });
           } else if (surveyData.questions) {
             allQ = surveyData.questions;
@@ -419,7 +566,11 @@ export default function TakeSurvey({ mockSurvey }) {
           if (!qst) return true; // Not a survey question (e.g. pre-call data)
           if (!qst.visibility) return true;
           try {
-            return evaluateCondition(qst.visibility, answers);
+            const matched = evaluateCondition(qst.visibility, answers);
+            const act = qst.visibility.action || 'show';
+            if (act === 'show') return matched;
+            if (act === 'hide' || act === 'skip') return !matched;
+            return matched;
           } catch (e) {
             return true;
           }
@@ -446,6 +597,7 @@ export default function TakeSurvey({ mockSurvey }) {
     };
     const offlinePayload = {
       ...payload,
+      serialNumber: precallSerialNumber || '',
       isOfflineSync: true,
       offlineStartedAt: startTime ? new Date(startTime) : new Date(),
       offlineCompletedAt: new Date(),
@@ -663,6 +815,41 @@ export default function TakeSurvey({ mockSurvey }) {
       }
     }
 
+    // If this question is in a group, validate ALL group members and jump past the entire group
+    if (currentQ._groupId) {
+      const groupQs = questions.filter(q => q._groupId === currentQ._groupId);
+      // Only act on the first question of the group (since all are shown together)
+      const firstInGroup = questions.findIndex(q => q._groupId === currentQ._groupId);
+      if (currentIdx === firstInGroup) {
+        // Validate all group questions
+        let hasError = false;
+        const newErrors = { ...fieldErrors };
+        for (const gq of groupQs) {
+          const gqId = gq.questionId || String(gq._id);
+          if (visibleQuestions[gqId] !== false) {
+            const err = getQuestionValidationError(gq, providedAnswers);
+            if (err) {
+              newErrors[gqId] = err;
+              hasError = true;
+            }
+          }
+        }
+        if (hasError) {
+          setFieldErrors(newErrors);
+          return;
+        }
+        // Jump to the first question after the entire group
+        const lastInGroup = questions.findLastIndex(q => q._groupId === currentQ._groupId);
+        const nextIdx = findNextVisibleIdx(lastInGroup + 1, providedAnswers);
+        if (nextIdx !== -1) {
+          setCurrentIdx(nextIdx);
+        } else {
+          goToInterviewStep();
+        }
+        return;
+      }
+    }
+
     const nextIdx = findNextVisibleIdx(currentIdx + 1, providedAnswers);
     if (nextIdx !== -1) {
       setCurrentIdx(nextIdx);
@@ -736,23 +923,6 @@ export default function TakeSurvey({ mockSurvey }) {
   }, [currentIdx, currentSectionIdx, phase, answers, questions, survey?.layoutMode]);
 
 
-  // ─── Hooks must be above ALL early returns (Rules of Hooks) ──────────────
-  const visibleQuestions = useMemo(() => {
-    const map = {};
-    questions.forEach(q => {
-      const qId = q.questionId || String(q._id);
-      if (!q.visibility) {
-        map[qId] = true;
-      } else {
-        try {
-          map[qId] = evaluateCondition(q.visibility, answers || {});
-        } catch (e) {
-          map[qId] = true;
-        }
-      }
-    });
-    return map;
-  }, [questions, answers]);
 
   const isSectionVisible = useCallback((secIdx, currentAnswers = answers) => {
     if (!survey?.sections || !survey.sections[secIdx]) return false;
@@ -793,7 +963,11 @@ export default function TakeSurvey({ mockSurvey }) {
     const currentSection = survey?.sections?.[currentSectionIdx];
     if (!currentSection) return errors;
 
-    const visibleQuestionsInSec = (currentSection.questions || []).filter(q => {
+    const questionsInSec = (currentSection.questions || []).flatMap(item =>
+      item.type === 'group' ? (item.questions || []) : [item]
+    );
+
+    const visibleQuestionsInSec = questionsInSec.filter(q => {
       const qId = q.questionId || String(q._id);
       return visibleQuestions[qId] !== false;
     });
@@ -926,6 +1100,10 @@ export default function TakeSurvey({ mockSurvey }) {
   };
 
   const jumpToQuestionIdx = (idx) => {
+    const isStaff = user?.role === 'quality' || user?.role === 'admin';
+    if (!isStaff && idx > maxReachedIdx) {
+      return;
+    }
     setCurrentIdx(idx);
     const targetQ = questions[idx];
     if (targetQ && survey?.sections) {
@@ -1100,6 +1278,42 @@ export default function TakeSurvey({ mockSurvey }) {
 
   // Questions phase rendering below
 
+  const scrollToNextInGroup = (answeredQId, latestAnswers) => {
+    const answeredQ = questions.find(q => (q.questionId || String(q._id)) === answeredQId);
+    if (!answeredQ || !answeredQ._groupId) return;
+
+    const groupQs = questions.filter(q => q._groupId === answeredQ._groupId);
+    const visibleGroupQs = groupQs.filter(gq => {
+      const gqId = gq.questionId || String(gq._id);
+      if (!gq.visibility) return true;
+      try {
+        return evaluateCondition(gq.visibility, latestAnswers);
+      } catch (e) {
+        return true;
+      }
+    });
+
+    const answeredIdx = visibleGroupQs.findIndex(gq => (gq.questionId || String(gq._id)) === answeredQId);
+    if (answeredIdx === -1) return;
+
+    if (answeredIdx < visibleGroupQs.length - 1) {
+      const nextQ = visibleGroupQs[answeredIdx + 1];
+      const nextQId = nextQ.questionId || String(nextQ._id);
+      const element = document.getElementById(`question-card-${nextQId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const input = element.querySelector('input, select, textarea, button');
+        if (input) input.focus({ preventScroll: true });
+      }
+    } else {
+      const nextButton = document.querySelector('.survey-bottom-bar .btn-primary');
+      if (nextButton) {
+        nextButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        nextButton.focus({ preventScroll: true });
+      }
+    }
+  };
+
   const handleAnswerChange = (questionId, value) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
     markInteracted(questionId);
@@ -1113,6 +1327,15 @@ export default function TakeSurvey({ mockSurvey }) {
         delete next[questionId];
         return next;
       });
+    }
+
+    // Auto-scroll on answering a group question
+    const q = questions.find(qst => (qst.questionId || String(qst._id)) === questionId);
+    if (q && q._groupId && value !== undefined && value !== null && value !== '') {
+      const latestAnswers = { ...answers, [questionId]: value };
+      setTimeout(() => {
+        scrollToNextInGroup(questionId, latestAnswers);
+      }, 100);
     }
   };
 
@@ -1153,7 +1376,7 @@ export default function TakeSurvey({ mockSurvey }) {
       handleAnswerChange(qId, val);
       
       // Auto-advance if not choosing 'Other', layout is not multi, and logic isn't to terminate
-      if (survey?.layoutMode !== 'multi') {
+      if (survey?.layoutMode !== 'multi' && !q._groupId) {
         if (val !== 'Other' && (!choiceLogic || choiceLogic.action !== 'terminate')) {
           setTimeout(() => handleNextQuestion(choiceLogic, { ...answers, [qId]: val }), 150);
         } else if (val !== 'Other' && choiceLogic?.action === 'terminate') {
@@ -1184,7 +1407,7 @@ export default function TakeSurvey({ mockSurvey }) {
     return parsed;
   };
 
-  const renderQuestion = (q, sIdx, qIdx) => {
+  const renderQuestion = (q, sIdx, qIdx, isLocked = false) => {
     const qId = q.questionId || String(q._id);
     const flatIdx = questions.findIndex(qst => (qst.questionId || String(qst._id)) === qId);
     
@@ -1204,7 +1427,16 @@ export default function TakeSurvey({ mockSurvey }) {
     if (q.allowOther) choices.push({ text: 'Other', isOther: true });
 
     return (
-      <div id={`question-card-${qId}`} className="glass-card fade-enter-active" style={{ padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+      <div 
+        id={`question-card-${qId}`} 
+        className="glass-card fade-enter-active" 
+        style={{ 
+          padding: '1.25rem', 
+          border: '1px solid var(--border-color)', 
+          borderRadius: '8px',
+          ...(isLocked ? { opacity: 0.5, pointerEvents: 'none' } : {})
+        }}
+      >
         <h3 style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
           {typeof q.category === 'string' ? q.category.toUpperCase() : t('question')} {flatIdx + 1}
         </h3>
@@ -1344,6 +1576,33 @@ export default function TakeSurvey({ mockSurvey }) {
           </div>
         )}
 
+        {q.type === 'number' && (
+          <div className="form-group" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <input
+              type="number"
+              inputMode="numeric"
+              className="input-field"
+              placeholder={t('typeNumber') || t('typeAnswer')}
+              value={answers[qId] ?? ''}
+              onChange={(e) => {
+                const raw = e.target.value;
+                // Allow only digits, optional leading minus, and decimal point
+                const cleaned = raw.replace(/[^0-9.\-]/g, '');
+                handleAnswerChange(qId, cleaned);
+              }}
+              onKeyDown={(e) => {
+                // Block non-numeric keys except navigation/control keys
+                const allowed = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', '.', '-'];
+                if (!allowed.includes(e.key) && !/^[0-9]$/.test(e.key)) {
+                  e.preventDefault();
+                }
+              }}
+              style={{ flex: 1 }}
+              autoFocus={flatIdx === currentIdx}
+            />
+          </div>
+        )}
+
         {fieldErrors[qId] && (
           <div className="field-error-text" style={{ color: 'var(--danger)', marginTop: '0.75rem', fontWeight: 600, fontSize: '0.9rem' }}>
             {fieldErrors[qId]}
@@ -1377,13 +1636,32 @@ export default function TakeSurvey({ mockSurvey }) {
           <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 700 }}>{t('sections') || 'Sections'}</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {survey.sections && survey.sections.map((sec, sIdx) => {
-              const questionsInSec = sec.questions || [];
-              const visibleQuestionsInSec = questionsInSec.filter((q) => {
+              // Flatten groups for sidebar visibility and count
+              const rawQsInSec = sec.questions || [];
+              const flatQsInSec = rawQsInSec.flatMap(item =>
+                item.type === 'group' ? (item.questions || []).map(inner => ({ ...inner, _groupId: item.groupId, _groupLabel: item.label })) : [item]
+              );
+              const visibleQuestionsInSec = flatQsInSec.filter((q) => {
                 const qId = q.questionId || String(q._id);
                 return visibleQuestions[qId] !== false;
               });
 
               if (visibleQuestionsInSec.length === 0) return null;
+
+              // Build sidebar items: groups become a single item
+              const seenGroupIds = new Set();
+              const sidebarItems = [];
+              for (const q of visibleQuestionsInSec) {
+                if (q._groupId) {
+                  if (!seenGroupIds.has(q._groupId)) {
+                    seenGroupIds.add(q._groupId);
+                    sidebarItems.push({ _isGroup: true, _groupId: q._groupId, _groupLabel: q._groupLabel, _firstQ: q });
+                  }
+                } else {
+                  sidebarItems.push(q);
+                }
+              }
+
 
               const isOpen = !!openSections[sIdx];
               const ArrowIcon = isOpen ? ChevronDown : (isRtl ? ChevronLeft : ChevronRight);
@@ -1411,45 +1689,128 @@ export default function TakeSurvey({ mockSurvey }) {
                         {sec.title || `${t('section') || 'Section'} ${sIdx + 1}`}
                       </span>
                     </div>
-                    <span style={{ fontSize: '0.75rem', background: 'var(--primary-low)', color: 'var(--primary)', padding: '0.1rem 0.4rem', borderRadius: '10px', fontWeight: 'bold', flexShrink: 0 }}>
-                      {visibleQuestionsInSec.length}
-                    </span>
+                    {completedSections[sIdx] ? (
+                      <Check size={14} style={{ color: 'var(--success)', flexShrink: 0 }} />
+                    ) : (
+                      <span style={{ fontSize: '0.75rem', background: 'var(--primary-low)', color: 'var(--primary)', padding: '0.1rem 0.4rem', borderRadius: '10px', fontWeight: 'bold', flexShrink: 0 }}>
+                        {sidebarItems.length}
+                      </span>
+                    )}
                   </div>
 
                   {isOpen && (
-                    <div className="sidebar-section-content" style={{ padding: '0.5rem', background: 'var(--surface)' }}>
-                      <div className="q-badge-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(35px, 1fr))', gap: '0.4rem', marginTop: 0 }}>
-                        {visibleQuestionsInSec.map((qst) => {
-                          const qId = qst.questionId || String(qst._id);
-                          const idx = questions.findIndex(q => (q.questionId || String(q._id)) === qId);
-
-                          let statusClass = '';
-                          if (idx === currentIdx) {
-                            statusClass = 'current';
-                          } else if (answers[qId] !== undefined && answers[qId] !== null && answers[qId] !== '') {
-                            statusClass = 'answered';
-                          }
+                    <div className="sidebar-section-content" style={{ padding: '0.25rem 0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem', background: 'var(--surface)' }}>
+                      {sidebarItems.map((qst, siIdx) => {
+                        // Group node
+                        if (qst._isGroup) {
+                          const firstQ = qst._firstQ;
+                          const firstQId = firstQ.questionId || String(firstQ._id);
+                          const firstIdx = questions.findIndex(q => (q.questionId || String(q._id)) === firstQId);
+                          const isCurrent = firstIdx === currentIdx || (questions[currentIdx]?._groupId === qst._groupId);
+                          const isStaff = user?.role === 'quality' || user?.role === 'admin';
+                          const isLocked = !isStaff && firstIdx > maxReachedIdx;
+                          // Check if all group questions answered
+                          const groupFlat = questions.filter(q => q._groupId === qst._groupId);
+                          const allGroupAnswered = groupFlat.every(q => {
+                            const gqId = q.questionId || String(q._id);
+                            const v = answers[gqId];
+                            return v !== undefined && v !== null && v !== '';
+                          });
 
                           return (
                             <div
-                              key={idx}
-                              className={`q-badge ${statusClass}`}
-                              onClick={() => {
-                                jumpToQuestionIdx(idx);
-                              }}
+                              key={`grp-${qst._groupId}`}
+                              className={`sidebar-question-item ${isCurrent ? 'current' : ''} ${allGroupAnswered ? 'answered' : ''} ${isLocked ? 'locked' : ''}`}
+                              onClick={() => { if (!isLocked) jumpToQuestionIdx(firstIdx); }}
                               style={{
-                                width: '35px',
-                                height: '35px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                padding: '0.4rem 0.6rem',
+                                borderRadius: '4px',
+                                cursor: isLocked ? 'not-allowed' : 'pointer',
                                 fontSize: '0.8rem',
-                                ...(idx === currentIdx ? { backgroundColor: 'var(--primary)', color: 'white', borderColor: 'var(--primary)', boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.3)' } : {})
+                                color: isLocked ? 'var(--text-secondary)' : 'var(--primary)',
+                                opacity: isLocked ? 0.6 : 1,
+                                background: isCurrent ? 'var(--primary-low)' : 'transparent',
+                                border: isCurrent ? '1px solid var(--primary)' : '1px dashed hsla(var(--p-h), var(--p-s), var(--p-l), 0.3)',
+                                transition: 'all 0.2s ease',
+                                fontWeight: isCurrent ? '700' : '600',
                               }}
-                              title={qst.text}
                             >
-                              {idx + 1}
+                              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '16px', flexShrink: 0 }}>
+                                {isLocked ? <Lock size={12} style={{ opacity: 0.5 }} /> : allGroupAnswered ? <Check size={12} style={{ color: 'var(--success)' }} /> : <span style={{ fontSize: '0.7rem' }}>⬡</span>}
+                              </span>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                                {qst._groupLabel || (t('questionGroupLabel') || 'Group')}
+                              </span>
+                              <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>({groupFlat.length})</span>
                             </div>
                           );
-                        })}
-                      </div>
+                        }
+
+                        // Regular question node
+                        const qId = qst.questionId || String(qst._id);
+                        const idx = questions.findIndex(q => (q.questionId || String(q._id)) === qId);
+                        const isCurrent = idx === currentIdx;
+                        const isAnswered = answers[qId] !== undefined && answers[qId] !== null && answers[qId] !== '';
+                        const isStaff = user?.role === 'quality' || user?.role === 'admin';
+                        const isLocked = !isStaff && idx > maxReachedIdx;
+
+                        let statusIcon = null;
+                        if (isLocked) {
+                          statusIcon = <Lock size={12} style={{ color: 'var(--text-secondary)', opacity: 0.5 }} />;
+                        } else if (isAnswered) {
+                          statusIcon = <Check size={12} style={{ color: 'var(--success)' }} />;
+                        } else if (isCurrent) {
+                          statusIcon = <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--primary)' }} />;
+                        } else {
+                          statusIcon = <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--border-color)' }} />;
+                        }
+
+                        const displayTitle = qst.text && qst.text.length > 40
+                          ? qst.text.slice(0, 40) + '...'
+                          : qst.text || `${t('question') || 'Question'} ${idx + 1}`;
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`sidebar-question-item ${isCurrent ? 'current' : ''} ${isAnswered ? 'answered' : ''} ${isLocked ? 'locked' : ''}`}
+                            onClick={() => {
+                              if (!isLocked) jumpToQuestionIdx(idx);
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.5rem',
+                              padding: '0.4rem 0.6rem',
+                              borderRadius: '4px',
+                              cursor: isLocked ? 'not-allowed' : 'pointer',
+                              fontSize: '0.8rem',
+                              color: isLocked ? 'var(--text-secondary)' : 'var(--text-primary)',
+                              opacity: isLocked ? 0.6 : 1,
+                              background: isCurrent ? 'var(--primary-low)' : 'transparent',
+                              border: isCurrent ? '1px solid var(--primary)' : '1px solid transparent',
+                              transition: 'all 0.2s ease',
+                              fontWeight: isCurrent ? '600' : 'normal',
+                            }}
+                            title={qst.text}
+                          >
+                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '16px', flexShrink: 0 }}>
+                              {statusIcon}
+                            </span>
+                            <span style={{
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              flex: 1,
+                              textAlign: isRtl ? 'right' : 'left'
+                            }}>
+                              {displayTitle}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1480,11 +1841,6 @@ export default function TakeSurvey({ mockSurvey }) {
                 const currentSection = survey.sections[currentSectionIdx];
                 if (!currentSection) return <div>No valid section data found.</div>;
                 
-                const visibleQuestionsInSec = (currentSection.questions || []).filter(q => {
-                  const qId = q.questionId || String(q._id);
-                  return visibleQuestions[qId] !== false;
-                });
-                
                 return (
                   <div key={currentSectionIdx} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                     {currentSection.title && (
@@ -1492,7 +1848,48 @@ export default function TakeSurvey({ mockSurvey }) {
                         {currentSection.title}
                       </div>
                     )}
-                    {visibleQuestionsInSec.map((q, qIdx) => renderQuestion(q, currentSectionIdx, qIdx))}
+                    {(currentSection.questions || []).map((q, qIdx) => {
+                      if (q.type === 'group') {
+                        const visibleGroupQs = (q.questions || []).filter(gq => {
+                          const gqId = gq.questionId || String(gq._id);
+                          return visibleQuestions[gqId] !== false;
+                        });
+                        if (visibleGroupQs.length === 0) return null;
+                        return (
+                          <div key={`grp-card-${q.groupId || qIdx}`} className="question-group-box">
+                            <div className="question-group-header">
+                              <span>⬡</span>
+                              <span>{q.label || (t('questionGroupLabel') || 'Question Group')}</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1rem' }}>
+                              {visibleGroupQs.map((gq, gi) => {
+                                let isLocked = false;
+                                if (gi > 0) {
+                                  isLocked = visibleGroupQs.slice(0, gi).some(prevQ => {
+                                    const prevQId = prevQ.questionId || String(prevQ._id);
+                                    const val = answers[prevQId];
+                                    return val === undefined || val === null || val === '';
+                                  });
+                                }
+                                return (
+                                  <div key={gq.questionId || String(gq._id)} id={`question-card-${gq.questionId || String(gq._id)}`}>
+                                    {renderQuestion(gq, currentSectionIdx, gi, isLocked)}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      } else {
+                        const qId = q.questionId || String(q._id);
+                        if (visibleQuestions[qId] === false) return null;
+                        return (
+                          <div key={qId} id={`question-card-${qId}`}>
+                            {renderQuestion(q, currentSectionIdx, qIdx)}
+                          </div>
+                        );
+                      }
+                    })}
                   </div>
                 );
               })()
@@ -1518,16 +1915,68 @@ export default function TakeSurvey({ mockSurvey }) {
                   }
                 }
 
-                return (
-                  <div key={currentIdx} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {sectionTitle && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'var(--primary-low)', color: 'var(--primary)', borderRadius: '6px', fontSize: '0.9rem', fontWeight: 700, alignSelf: 'flex-start' }}>
-                        {sectionTitle}
+                return (() => {
+                  // If question belongs to a group, render all group siblings together
+                  if (currentQ._groupId) {
+                    const groupQs = questions.filter(q => q._groupId === currentQ._groupId);
+                    const firstInGroup = questions.findIndex(q => q._groupId === currentQ._groupId);
+                    // Only render the group block when we're at the first question in the group
+                    if (currentIdx !== firstInGroup) {
+                      // Already rendered as part of group — skip (shouldn't normally reach here)
+                      return null;
+                    }
+                    const visibleGroupQs = groupQs.filter(gq => {
+                      const gqId = gq.questionId || String(gq._id);
+                      return visibleQuestions[gqId] !== false;
+                    });
+                    if (visibleGroupQs.length === 0) return null;
+                    return (
+                      <div key={currentIdx} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        {sectionTitle && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'var(--primary-low)', color: 'var(--primary)', borderRadius: '6px', fontSize: '0.9rem', fontWeight: 700, alignSelf: 'flex-start' }}>
+                            {sectionTitle}
+                          </div>
+                        )}
+                        <div className="question-group-box">
+                          <div className="question-group-header">
+                            <span>⬡</span>
+                            <span>{currentQ._groupLabel || (t('questionGroupLabel') || 'Question Group')}</span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {visibleGroupQs.map((gq, gi) => {
+                              const gqSIdx = survey?.sections ? survey.sections.findIndex(sec =>
+                                (sec.questions || []).some(item => {
+                                  if (item.type === 'group') return (item.questions || []).some(inner => (inner.questionId || String(inner._id)) === (gq.questionId || String(gq._id)));
+                                  return (item.questionId || String(item._id)) === (gq.questionId || String(gq._id));
+                                })
+                              ) : 0;
+                              let isLocked = false;
+                              if (gi > 0) {
+                                isLocked = visibleGroupQs.slice(0, gi).some(prevQ => {
+                                  const prevQId = prevQ.questionId || String(prevQ._id);
+                                  const val = answers[prevQId];
+                                  return val === undefined || val === null || val === '';
+                                });
+                              }
+                              return renderQuestion(gq, gqSIdx >= 0 ? gqSIdx : 0, gi, isLocked);
+                            })}
+                          </div>
+                        </div>
                       </div>
-                    )}
-                    {renderQuestion(currentQ, sIdx, qIdx)}
-                  </div>
-                );
+                    );
+                  }
+
+                  return (
+                    <div key={currentIdx} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {sectionTitle && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'var(--primary-low)', color: 'var(--primary)', borderRadius: '6px', fontSize: '0.9rem', fontWeight: 700, alignSelf: 'flex-start' }}>
+                          {sectionTitle}
+                        </div>
+                      )}
+                      {renderQuestion(currentQ, sIdx, qIdx)}
+                    </div>
+                  );
+                })()
               })()
             )}
           </div>
@@ -1549,7 +1998,7 @@ export default function TakeSurvey({ mockSurvey }) {
                   <button className="btn-secondary" onClick={handlePrevious} disabled={currentIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <ChevronLeft size={18} /> Previous
                   </button>
-                  <button className="btn-primary" onClick={() => handleNextQuestion()} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <button className="btn-primary" onClick={() => handleNextQuestion()} disabled={!isCurrentGroupComplete} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     Next <ChevronRight size={18} />
                   </button>
                 </>
@@ -1573,15 +2022,15 @@ export default function TakeSurvey({ mockSurvey }) {
               <div className="modal-content glass-card fade-enter-active" style={{ maxWidth: '400px' }}>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem', color: 'var(--danger)' }}>
                   <AlertTriangle size={24} />
-                  <h2 style={{ margin: 0 }}>End Call?</h2>
+                  <h2 style={{ margin: 0 }}>{t('endCallConfirmTitle') || 'End Call?'}</h2>
                 </div>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                  Are you sure you want to end this interview? You will be taken to the submission screen to finalize the outcome.
+                  {t('endCallConfirmDesc') || 'Are you sure you want to end this interview? You will be taken to the submission screen to finalize the outcome.'}
                 </p>
                 <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-                  <button className="btn-secondary" onClick={() => setShowEndCallConfirm(false)}>Cancel</button>
+                  <button className="btn-secondary" onClick={() => setShowEndCallConfirm(false)}>{t('stayInCall') || 'Stay in Call'}</button>
                   <button className="btn-primary" style={{ backgroundColor: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { setShowEndCallConfirm(false); goToInterviewStep(); }}>
-                    Yes, End Call
+                    {t('endCallYes') || 'Yes, End Call'}
                   </button>
                 </div>
               </div>

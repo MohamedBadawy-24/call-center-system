@@ -4,6 +4,7 @@ import { OUTBOUND_FIELD_TYPES, OUTBOUND_TEMPLATE_PRESETS, normalizeOutboundPreca
 import ConditionBuilder from '../../../components/ConditionBuilder';
 import { Layers } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { UIContext } from '../../../context/UIContext';
 
 const META_KEYS = [
   { key: 'title', label: 'Page title' },
@@ -20,6 +21,7 @@ const META_KEYS = [
 
 export default function PrecallTab() {
   const { isAdmin, surveyState, updateState } = useContext(SurveyBuilderContext);
+  const { t } = useContext(UIContext);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
 
   const outboundConfig = surveyState.outboundConfig;
@@ -172,9 +174,9 @@ export default function PrecallTab() {
           {templatePickerOpen && (
             <div className="modal-overlay" onClick={() => setTemplatePickerOpen(false)}>
               <div className="modal-content glass-card" onClick={(e) => e.stopPropagation()}>
-                <h3 style={{ marginTop: 0 }}>Choose an older template</h3>
+                <h3 style={{ marginTop: 0 }}>{t('chooseOlderTemplate') || 'Choose an older template'}</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-                  Pick a starting layout. You can still edit every field afterward.
+                  {t('chooseOlderTemplateDesc') || 'Pick a starting layout. You can still edit every field afterward.'}
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {OUTBOUND_TEMPLATE_PRESETS.map((p) => (
@@ -184,7 +186,7 @@ export default function PrecallTab() {
                   ))}
                 </div>
                 <button type="button" className="btn-primary" style={{ marginTop: '1rem', width: '100%' }} onClick={() => setTemplatePickerOpen(false)}>
-                  Cancel
+                  {t('cancelTemplateSelection') || 'Cancel Template Selection'}
                 </button>
               </div>
             </div>

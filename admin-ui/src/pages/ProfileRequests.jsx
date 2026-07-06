@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { api } from '../api/client';
 import { UIContext } from '../context/UIContext';
+import { toast } from 'react-toastify';
 
 export default function ProfileRequests() {
   const { t } = useContext(UIContext);
@@ -32,7 +33,7 @@ export default function ProfileRequests() {
       });
       fetchRequests();
     } catch (err) {
-      alert(err.response?.data?.error || "Failed to resolve request");
+      toast.error(err.response?.data?.error || 'Failed to resolve request');
     }
   };
 

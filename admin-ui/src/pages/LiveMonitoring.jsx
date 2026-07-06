@@ -5,6 +5,7 @@ import { Monitor, Maximize2, X, Activity, MessageSquare, Send } from 'lucide-rea
 import { api, SOCKET_BASE } from '../api/client';
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
+import { toast } from 'react-toastify';
 
 export default function LiveMonitoring() {
   const { t } = useContext(UIContext);
@@ -65,7 +66,7 @@ export default function LiveMonitoring() {
     });
 
     socketRef.current.on('stream-error', (data) => {
-      alert(data.message);
+      toast.error(data.message);
       handleCloseSpectate();
     });
 

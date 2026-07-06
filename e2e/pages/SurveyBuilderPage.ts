@@ -17,7 +17,7 @@ export class SurveyBuilderPage {
     this.titleInput = page.getByPlaceholder(/campaign title|Health Awareness/i);
     this.goalInput = page.getByPlaceholder('Target count');
     this.saveButton = page.getByRole('button', { name: /Save Survey/i });
-    this.addSectionButton = page.getByRole('button', { name: /Add Section/i });
+    this.addSectionButton = page.getByRole('button', { name: /\+ Section/i });
     this.governorateSelect = page.locator('select').filter({ hasText: /All Governorates/i });
   }
 

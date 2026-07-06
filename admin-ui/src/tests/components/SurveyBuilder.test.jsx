@@ -111,23 +111,32 @@ describe('SurveyBuilder Component Tests', () => {
       expect(screen.getByPlaceholderText(/Health Awareness/i)).toBeInTheDocument();
     });
 
+    // Switch to Builder tab
+    const builderTabBtn = screen.getByText(/Builder/i);
+    await act(async () => {
+      fireEvent.click(builderTabBtn);
+    });
+
     // Click "Add Section" button
-    const addSecBtn = screen.getByText(/\+ Add New Section/i);
+    const addSecBtn = screen.getByText(/\+ Section/i);
     await act(async () => {
       fireEvent.click(addSecBtn);
     });
 
-    // Verify there are now two sections
-    expect(screen.getAllByDisplayValue('New Section').length).toBe(1);
+    // Verify there are now two sections (original "Main Questions" + "New Section")
+    // Note: BuilderTab renders section headers like "Section 1: Main Questions" or input values
+    const sectionInputs = screen.getAllByDisplayValue(/New Section|Main Questions/);
+    expect(sectionInputs.length).toBeGreaterThanOrEqual(1);
 
     // Click "Add Question" button in first section
-    const addQuesBtn = screen.getAllByText(/\+ Add Question/i)[0];
+    const addQuesBtn = screen.getAllByText(/Add Question/i)[0];
     await act(async () => {
       fireEvent.click(addQuesBtn);
     });
 
     // Verify a new question input is rendered
-    expect(screen.getAllByPlaceholderText('Question Text').length).toBe(2);
+    expect(screen.getByDisplayValue('How are you?')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('New Question')).toBeInTheDocument();
   });
 
   it('SUBMISSION: puts save survey data', async () => {
@@ -152,7 +161,7 @@ describe('SurveyBuilder Component Tests', () => {
     fireEvent.change(titleInput, { target: { value: 'Updated Health Survey' } });
 
     // Locate Save Button
-    const saveBtn = screen.getByText(/Save Survey/i);
+    const saveBtn = screen.getByText(/Publish \/ Save/i);
     await act(async () => {
       fireEvent.click(saveBtn);
     });

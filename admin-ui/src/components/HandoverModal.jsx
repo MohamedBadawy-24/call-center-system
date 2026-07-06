@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, UserPlus, Search, Loader2 } from 'lucide-react';
 import { api } from '../api/client';
 import { UIContext } from '../context/UIContext';
+import { toast } from 'react-toastify';
 
 export default function HandoverModal({ isOpen, onClose, serialNumber, onSuccess }) {
   const { t } = useContext(UIContext);
@@ -25,16 +26,17 @@ export default function HandoverModal({ isOpen, onClose, serialNumber, onSuccess
   }, [isOpen]);
 
   const handleHandover = async (targetAgentId, targetName) => {
-    if (!window.confirm(`Are you sure you want to handover this call to ${targetName}?`)) return;
+    const confirmMsg = t('handoverConfirm') || "Are you sure you want to handover this call?";
+    if (!window.confirm(`${confirmMsg} (${targetName})?`)) return;
     
     setSubmitting(true);
     try {
       await api.post('/agent/handover', { serialNumber, targetAgentId });
-      alert(`Successfully handed over to ${targetName}`);
+      toast.success((t('handoverSuccess') || "Successfully handed over call") + `: ${targetName}`);
       onSuccess();
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.error || "Handover failed");
+      toast.error(err.response?.data?.error || t('handoverFailed') || "Handover failed");
     } finally {
       setSubmitting(false);
     }

@@ -1,3 +1,0 @@
-- [Vite proxy & relative API base](vite-proxy-setup.md) — frontend must use relative API_BASE ('') + proxy all backend paths including /socket.io in vite.config.js
-- [Translation key fallback trap](translation-fallback-trap.md) — t() returns key name (not falsy) when missing; JSX `|| 'fallback'` never fires; always add keys to both EN and AR sections
-- [Toggle CastError fix](mongoose-castError-pattern.md) — any route using findById must guard with isValid() first or MongoDB CastError becomes a 500

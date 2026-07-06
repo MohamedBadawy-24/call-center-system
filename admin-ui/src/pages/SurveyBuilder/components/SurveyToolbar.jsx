@@ -1,6 +1,6 @@
 import React, { useContext, useEffect } from 'react';
 import { SurveyBuilderContext } from '../SurveyBuilderContext';
-import { Save, Eye, LayoutTemplate, Undo, Redo, CheckCircle2, ClipboardList, Settings } from 'lucide-react';
+import { Save, Eye, LayoutTemplate, Undo, Redo, CheckCircle2, ClipboardList, Settings, Layers } from 'lucide-react';
 import { UIContext } from '../../../context/UIContext';
 
 export default function SurveyToolbar() {
@@ -60,6 +60,14 @@ export default function SurveyToolbar() {
             style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', border: 'none', background: activeTab === 'builder' ? 'var(--surface)' : 'transparent', borderRadius: '6px', fontWeight: activeTab === 'builder' ? 700 : 500, boxShadow: activeTab === 'builder' ? 'var(--shadow-sm)' : 'none' }}
           >
             <LayoutTemplate size={16} /> Builder
+          </button>
+          <button 
+            type="button"
+            className={`tab-btn ${activeTab === 'groups' ? 'active' : ''}`}
+            onClick={() => setActiveTab('groups')}
+            style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', border: 'none', background: activeTab === 'groups' ? 'var(--surface)' : 'transparent', borderRadius: '6px', fontWeight: activeTab === 'groups' ? 700 : 500, boxShadow: activeTab === 'groups' ? 'var(--shadow-sm)' : 'none' }}
+          >
+            <Layers size={16} /> Groups
           </button>
           <button 
             type="button"

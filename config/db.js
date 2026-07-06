@@ -1,19 +1,21 @@
 const mongoose = require("mongoose");
+const env = require("./env");
+const logger = require("../utils/logger");
 
 const connectDB = async () => {
   try {
-    if (!process.env.MONGO_URI) {
+    if (!env.MONGO_URI) {
       throw new Error("MONGO_URI is missing");
     }
 
-    console.log("Connecting to MongoDB...");
-    await mongoose.connect(process.env.MONGO_URI, {
+    logger.info("Connecting to MongoDB...");
+    await mongoose.connect(env.MONGO_URI, {
       serverSelectionTimeoutMS: 10000,
       connectTimeoutMS: 10000,
     });
-    console.log("MongoDB Connected ✅");
+    logger.info("MongoDB Connected ✅");
   } catch (error) {
-    console.error("MongoDB Error:", error.message);
+    logger.error(`MongoDB Error: ${error.message}`);
     process.exit(1);
   }
 };

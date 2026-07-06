@@ -39,7 +39,7 @@ export default function Feedbacks() {
         setAgents(filteredAgents);
       }
     } catch (err) {
-      console.error(err);
+      toast.error(t('feedbackLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -51,10 +51,10 @@ export default function Feedbacks() {
       await api.post('/reviews', formData);
       setFormData({ agentId: '', type: 'Feedback', feedbackText: '' });
       setShowForm(false);
-      toast.success('Feedback submitted');
+      toast.success(t('feedbackSubmitted'));
       fetchData();
     } catch (err) {
-      toast.error('Failed to submit feedback');
+      toast.error(t('feedbackSubmitFailed'));
     }
   };
 
@@ -86,8 +86,8 @@ export default function Feedbacks() {
                 value={formData.agentId}
                 onChange={e => setFormData({ ...formData, agentId: e.target.value })}
               >
-                <option value="">Select User...</option>
-                <option value="none" style={{ fontWeight: 'bold' }}>General (None)</option>
+                <option value="">{t('selectUser')}</option>
+                <option value="none" style={{ fontWeight: 'bold' }}>{t('general')}</option>
                 {agents.map(a => <option key={a._id} value={a._id}>{a.name} ({a.role})</option>)}
               </select>
             </div>
@@ -113,21 +113,24 @@ export default function Feedbacks() {
                 onChange={e => setFormData({ ...formData, feedbackText: e.target.value })}
               ></textarea>
             </div>
-            <button type="submit" className="btn-primary" style={{ alignSelf: 'flex-start' }}>Submit</button>
+            <button type="submit" className="btn-primary" style={{ alignSelf: 'flex-start' }}>{t('addFeedback') || 'Add Feedback'}</button>
           </form>
         </motion.div>
       )}
 
       <div className="glass-card">
         {feedbacks.length === 0 ? (
-          <p style={{ color: 'var(--text-secondary)' }}>No feedbacks found.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2rem', color: 'var(--text-secondary)', gap: '0.5rem' }}>
+            <MessageSquare size={36} style={{ opacity: 0.3 }} />
+            <p style={{ margin: 0, fontWeight: 600 }}>{t('emptyStateFeedback') || 'No feedback submitted yet.'}</p>
+          </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {feedbacks.map(f => (
               <div key={f._id} style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                   <strong style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    {f.type || 'Feedback'}: Target: {f.agentId ? `${f.agentId.name}` : 'General (None)'}
+                    {f.type || t('feedbackType')}: {f.agentId ? `${f.agentId.name}` : (t('general') || 'General')}
                     {user.role === 'agent' && f.seenBy?.includes(user.id) && (
                       <span title="Read" style={{ color: 'var(--success)', display: 'inline-flex', alignItems: 'center' }}>✓</span>
                     )}
@@ -137,7 +140,7 @@ export default function Feedbacks() {
                   </span>
                 </div>
                 <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-                  Submitted by: {f.qualityId?.name || 'Unknown'}
+                  {t('submittedBy')}: {f.qualityId?.name || t('notAssigned')}
                 </div>
                 <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{f.feedbackText}</p>
               </div>

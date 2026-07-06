@@ -105,7 +105,7 @@ export default function LiveMonitorAudit() {
     });
 
     socketRef.current.on('stream-error', (data) => {
-      alert(data.message);
+      toast.error(data.message);
       handleCloseSpectate();
     });
 

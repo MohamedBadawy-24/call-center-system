@@ -28,12 +28,14 @@ vi.mock('react-router-dom', async () => {
 
 describe('PreCallChecklist Page Component Tests', () => {
   const authValue = {
-    user: { id: '1', name: 'Agent John', role: 'agent' },
+    user: { id: '1', name: 'Agent John', role: 'agent', researcherCode: 'RC-007' },
     setUser: vi.fn()
   };
 
   const uiValue = {
-    t: (key) => key
+    t: (key) => key,
+    isOnline: true,
+    language: 'en'
   };
 
   const mockPrecallConfig = {
@@ -53,6 +55,7 @@ describe('PreCallChecklist Page Component Tests', () => {
       sectionOrder: ['agent', 'call', 'phone'],
       fields: [
         { id: 'researcher_name', label: 'Researcher Name', type: 'text', section: 'agent', required: true },
+        { id: 'researcher_code', label: 'Researcher Code', type: 'text', section: 'agent', required: true },
         { id: 'age_years', label: 'Age', type: 'number', section: 'agent', required: true, min: 18 },
         { id: 'call_result', label: 'Call Result', type: 'select', section: 'call', required: true, options: [{ label: 'Contacted', value: 'contacted' }, { label: 'Busy', value: 'busy' }] },
         { id: 'interview_result', label: 'Interview Outcome', type: 'select', section: 'call', required: true, visibleWhen: { fieldId: 'call_result', value: 'contacted' }, options: [{ label: 'Completed', value: 'completed' }, { label: 'Postponed', value: 'postponed' }] },
@@ -117,10 +120,10 @@ describe('PreCallChecklist Page Component Tests', () => {
 
     await screen.findByText('Agent Checklist');
 
-    // Inputs value change
-    const nameInput = screen.getByTestId('precall-researcher_name-input');
-    fireEvent.change(nameInput, { target: { value: 'New Agent Name' } });
-    expect(nameInput.value).toBe('New Agent Name');
+    // Inputs value change (researcher_name is now readOnly, so test an editable field)
+    const ageInput = screen.getByTestId('precall-age_years-input');
+    fireEvent.change(ageInput, { target: { value: '30' } });
+    expect(ageInput.value).toBe('30');
 
     // Conditional field is hidden initially
     expect(screen.queryByTestId('precall-interview_result-select')).toBeNull();
@@ -226,5 +229,36 @@ describe('PreCallChecklist Page Component Tests', () => {
         surveyId: 'survey-123'
       }));
     });
+  });
+
+  it('AUTOFILL: researcher_name and researcher_code are auto-filled and readOnly', async () => {
+    render(
+      <MemoryRouter>
+        <UIContext.Provider value={uiValue}>
+          <AuthContext.Provider value={authValue}>
+            <PreCallChecklist />
+          </AuthContext.Provider>
+        </UIContext.Provider>
+      </MemoryRouter>
+    );
+
+    await screen.findByText('Agent Checklist');
+
+    const nameInput = screen.getByTestId('precall-researcher_name-input');
+    const codeInput = screen.getByTestId('precall-researcher_code-input');
+
+    // Values are auto-filled from AuthContext
+    expect(nameInput).toHaveValue('Agent John');
+    expect(codeInput).toHaveValue('RC-007');
+
+    // Both fields have readOnly attribute
+    expect(nameInput).toHaveAttribute('readonly');
+    expect(codeInput).toHaveAttribute('readonly');
+
+    // Attempting to type should not change the value (readOnly + setAnswer guard)
+    fireEvent.change(nameInput, { target: { value: 'Hacker' } });
+    fireEvent.change(codeInput, { target: { value: 'FAKE-001' } });
+    expect(nameInput).toHaveValue('Agent John');
+    expect(codeInput).toHaveValue('RC-007');
   });
 });

@@ -240,3 +240,51 @@ it('Step 7 [R1] — Agent on break receives 403 from GET /agent/next-number', as
     .catch(e => e.response);
   expect(res.status).toBe(403);
 });
+
+// ── Step 8: Number-type answer validation ──────────────────────────────────────
+
+it('Step 8 — Number-type question answers are validated and coerced', async () => {
+  const { createTestSurvey, createTestPrecall, getAuthToken, makeRequest } = require('./helpers/db');
+
+  // Create survey with a number-type question
+  const survey = await createTestSurvey({
+    isActive: true,
+    sections: [{
+      title: 'Numbers Section',
+      questions: [
+        { questionId: 'num_q1', text: 'How old are you?', type: 'number', required: true },
+        { questionId: 'txt_q2', text: 'Your name?', type: 'text' }
+      ]
+    }]
+  });
+
+  const { token, user } = await getAuthToken('agent');
+  await makeRequest('POST', '/auth/status', { status: 'active' }, token);
+  const updatedUser = await mongoose.model('User').findById(user._id);
+
+  const precall = await createTestPrecall(user._id, survey._id, {
+    statusStartedAt: updatedUser.statusStartedAt,
+    payload: { phone: '01099999999', age_years: 30 }
+  });
+
+  // Submit with valid numeric answer
+  const submitRes = await makeRequest('POST', '/response', {
+    surveyId: survey._id.toString(),
+    answers: [
+      { questionId: 'num_q1', value: '42' },
+      { questionId: 'txt_q2', value: 'Test Name' }
+    ],
+    interviewOutcome: 'completed',
+    precallSerialNumber: precall.serialNumber
+  }, token);
+
+  expect(submitRes.status).toBe(200);
+
+  // Check that the number answer was coerced to a number
+  const Response = mongoose.model('Response');
+  const saved = await Response.findOne({ serialNumber: precall.serialNumber, surveyId: survey._id });
+  expect(saved).not.toBeNull();
+  const numAnswer = saved.answers.find(a => a.questionId === 'num_q1');
+  expect(numAnswer).toBeDefined();
+  expect(numAnswer.value).toBe(42); // Coerced from string '42' to number 42
+});

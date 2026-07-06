@@ -1,0 +1,171 @@
+# ──────────────────────────────────────────────────────────────────
+# Baseera Call Center System — CI Pipeline
+# ──────────────────────────────────────────────────────────────────
+# Triggers on push/PR to main.
+#
+# Jobs:
+#   1. unit-integration  – Backend Jest (170 tests) + Frontend Vitest (31 tests)
+#   2. e2e-playwright    – Full Playwright E2E suite (4 specs, sequential)
+#
+# Database strategy:
+#   • Backend Jest tests spin up their own MongoMemoryReplSet in-process
+#     (see tests/globalSetup.js), so they need NO external MongoDB service.
+#   • Playwright E2E tests need a real MongoDB instance because the backend
+#     server.js connects via MONGO_URI. We use a GitHub Actions MongoDB
+#     service container for this.
+# ──────────────────────────────────────────────────────────────────
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_ENV: test
+
+jobs:
+  # ────────────────────────────────────────────────
+  # Job 1: Unit & Integration Tests
+  # ────────────────────────────────────────────────
+  unit-integration:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Node.js Setup ──
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            admin-ui/package-lock.json
+
+      # ── Install Dependencies ──
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: admin-ui
+
+      # ── Backend Jest Tests ──
+      # Uses mongodb-memory-server internally — no external DB needed.
+      - name: Run backend Jest tests
+        run: npm test
+
+      # ── Frontend Vitest Tests ──
+      - name: Run frontend Vitest tests
+        run: npm run test:ui
+
+  # ────────────────────────────────────────────────
+  # Job 2: E2E Playwright Tests
+  # ────────────────────────────────────────────────
+  e2e-playwright:
+    name: E2E Playwright Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: unit-integration  # Only run E2E if unit tests pass
+
+    services:
+      # MongoDB service container for the backend server
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ping:1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      MONGO_URI: mongodb://localhost:27017/baseera_e2e
+      JWT_SECRET: ci-e2e-jwt-secret-key-1234567890
+      PORT: 3000
+      HOST: 0.0.0.0
+      E2E_BACKEND_URL: http://localhost:3000
+      E2E_BASE_URL: http://localhost:3001
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Node.js Setup ──
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            admin-ui/package-lock.json
+
+      # ── Install Dependencies ──
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: admin-ui
+
+      # ── Install Playwright Browsers ──
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # ── Build Frontend for Serving ──
+      - name: Build frontend
+        run: npm run build
+        working-directory: admin-ui
+
+      # ── Start Backend Server ──
+      - name: Start backend server
+        run: |
+          node server.js &
+          echo "Waiting for backend to be ready..."
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:3000/auth/has-users > /dev/null 2>&1; then
+              echo "Backend is ready!"
+              break
+            fi
+            echo "Attempt $i: backend not ready yet..."
+            sleep 2
+          done
+
+      # ── Serve Frontend Build ──
+      - name: Serve frontend build
+        run: |
+          npx -y serve -s dist -l 3001 &
+          echo "Waiting for frontend to be ready..."
+          for i in $(seq 1 15); do
+            if curl -s http://localhost:3001 > /dev/null 2>&1; then
+              echo "Frontend is ready!"
+              break
+            fi
+            echo "Attempt $i: frontend not ready yet..."
+            sleep 2
+          done
+        working-directory: admin-ui
+
+      # ── Run Playwright E2E Tests ──
+      - name: Run Playwright E2E tests
+        run: npx playwright test --project=chromium --workers=1
+
+      # ── Upload Artifacts on Failure ──
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14

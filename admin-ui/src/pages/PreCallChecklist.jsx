@@ -127,7 +127,10 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
     case 'text':
       return (
         <div className="precall-field" key={field.id}>
-          <label className="precall-label">{label}</label>
+          <label className="precall-label" style={isReadOnly ? { display: 'flex', alignItems: 'center', gap: '0.35rem' } : undefined}>
+            {label}
+            {isReadOnly && <span style={{ fontSize: '0.7rem', background: 'var(--primary-low)', color: 'var(--primary)', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>AUTO</span>}
+          </label>
           <input
             className={`input-field ${hasError ? 'has-error' : ''}`}
             data-testid={`precall-${field.id}-input`}
@@ -135,6 +138,8 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
             onChange={(e) => onChange(field.id, e.target.value)}
             placeholder={field.placeholder || ''}
             readOnly={isReadOnly}
+            style={isReadOnly ? { background: 'var(--surface-2)', opacity: 0.85, cursor: 'default', pointerEvents: 'none' } : undefined}
+            tabIndex={isReadOnly ? -1 : undefined}
           />
           {errorText && (
             <span style={{ color: 'var(--danger)', fontSize: '0.8rem', marginTop: '0.25rem', display: 'block' }}>
@@ -278,7 +283,7 @@ export default function PreCallChecklist() {
   const [manualNumber, setManualNumber] = useState('');
   const [manualSaving, setManualSaving] = useState(false);
   const [config, setConfig] = useState(() => normalizeOutboundPrecall(null));
-  const [answers, setAnswers] = useState(() => buildInitialAnswers(normalizeOutboundPrecall(null).fields, user?.name));
+  const [answers, setAnswers] = useState(() => buildInitialAnswers(normalizeOutboundPrecall(null).fields, user?.name, user?.researcherCode));
   const [currentNumber, setCurrentNumber] = useState(null);
   const [numberLoading, setNumberLoading] = useState(false);
   const [configLoading, setConfigLoading] = useState(true);
@@ -440,7 +445,7 @@ export default function PreCallChecklist() {
         setConfig(norm);
         const nextNum = numberRes.data;
         setCurrentNumber(nextNum);
-        const initial = buildInitialAnswers(norm.fields, user?.name);
+        const initial = buildInitialAnswers(norm.fields, user?.name, user?.researcherCode);
 
         let merged = initial;
         if (nextNum && nextNum.number) merged.phone = nextNum.number;
@@ -475,7 +480,7 @@ export default function PreCallChecklist() {
         if (!cancelled) {
           const norm = normalizeOutboundPrecall(null);
           setConfig(norm);
-          setAnswers(buildInitialAnswers(norm.fields, user?.name));
+          setAnswers(buildInitialAnswers(norm.fields, user?.name, user?.researcherCode));
         }
       } finally {
         if (!cancelled) setConfigLoading(false);
@@ -505,6 +510,8 @@ export default function PreCallChecklist() {
   }, [answers, draftKey, configLoading]);
 
   const setAnswer = useCallback((id, val) => {
+    // Prevent client-side tampering of auto-filled agent identity fields
+    if (id === 'researcher_name' || id === 'researcher_code') return;
     setAnswers((prev) => ({ ...prev, [id]: val }));
   }, []);
 
@@ -649,7 +656,7 @@ export default function PreCallChecklist() {
     try {
       await completePrecallSubmission();
       if (draftKey) sessionStorage.removeItem(draftKey);
-      setAnswers(buildInitialAnswers(config.fields, user?.name));
+      setAnswers(buildInitialAnswers(config.fields, user?.name, user?.researcherCode));
       setTick(new Date());
 
       // Clear error highlights on reset
@@ -729,7 +736,6 @@ export default function PreCallChecklist() {
           setAnswers(prev => ({ ...prev, phone: '', serial_number: '' }));
           if (numberAssignmentMode === 'queue_then_manual' || numberAssignmentMode === 'manual_allowed') {
             setIsManualModalOpen(true);
-            toast.info('Queue is empty. Please enter the number manually.');
           } else {
             toast.warning('No numbers available for the selected region.');
           }
@@ -750,7 +756,6 @@ export default function PreCallChecklist() {
           setAnswers(prev => ({ ...prev, phone: '', serial_number: '' }));
           if (numberAssignmentMode === 'queue_then_manual' || numberAssignmentMode === 'manual_allowed') {
             setIsManualModalOpen(true);
-            toast.info('No offline numbers available. Please enter the number manually.');
           } else {
             toast.warning(t('noOfflineNumbers') || 'No cached numbers available offline for this region.');
           }
@@ -1076,17 +1081,6 @@ export default function PreCallChecklist() {
                               >
                                 {numberLoading ? <Loader2 size={16} className="spin-icon" /> : 'Get Number'}
                               </button>
-                              {numberAssignmentMode === 'manual_allowed' && (
-                                <button
-                                  type="button"
-                                  className="btn-secondary"
-                                  onClick={() => setIsManualModalOpen(true)}
-                                  disabled={numberLoading}
-                                  style={{ flex: 1 }}
-                                >
-                                  Enter Number Manually
-                                </button>
-                              )}
                             </div>
                           )}
                         </div>
@@ -1106,7 +1100,7 @@ export default function PreCallChecklist() {
                     {sectionFields.map((field) => {
                       if (!isFieldVisible(field, answers)) return null;
                       const v = answers[field.id];
-                      const isFieldReadOnly = (field.id === 'phone' || field.id === 'serial_number');
+                      const isFieldReadOnly = (field.id === 'phone' || field.id === 'serial_number' || field.id === 'researcher_name' || field.id === 'researcher_code');
                       const fullWidth = isFullWidthField(field);
                       const errorText = getFieldError(field);
 
@@ -1217,15 +1211,19 @@ export default function PreCallChecklist() {
             >
               <div style={{ padding: '1.5rem', borderBottom: 'var(--glass-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <h2 style={{ marginBottom: 0, fontSize: '1.25rem' }}>Enter Number Manually</h2>
+                  <Phone size={20} color="var(--primary)" />
+                  <h2 style={{ marginBottom: 0, fontSize: '1.25rem' }}>No Numbers Available</h2>
                 </div>
                 <button className="nav-action-btn" onClick={() => !manualSaving && setIsManualModalOpen(false)}><X size={20} /></button>
               </div>
 
               <form onSubmit={handleManualNumberSubmit}>
                 <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: 1.6 }}>
+                    No numbers are available in the campaign queue.
+                  </p>
                   <div>
-                    <label className="form-label" style={{ fontWeight: 600 }}>Phone Number</label>
+                    <label className="form-label" style={{ fontWeight: 600 }}>{t('precallPhone') || 'Phone Number'}</label>
                     <input
                       type="text"
                       className="input-field"
@@ -1240,10 +1238,10 @@ export default function PreCallChecklist() {
 
                 <div style={{ padding: '1.25rem', borderTop: 'var(--glass-border)', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', background: 'rgba(0,0,0,0.1)' }}>
                   <button type="button" className="btn-secondary" onClick={() => setIsManualModalOpen(false)} disabled={manualSaving}>
-                    Cancel
+                    {t('cancelManualEntry') || 'Cancel Manual Entry'}
                   </button>
                   <button type="submit" className="btn-primary" disabled={manualSaving || !manualNumber.trim()}>
-                    {manualSaving ? <Loader2 size={16} className="spin-icon" /> : 'Save'}
+                    {manualSaving ? <Loader2 size={16} className="spin-icon" /> : (t('enterNumberManually') || 'Enter Number Manually')}
                   </button>
                 </div>
               </form>

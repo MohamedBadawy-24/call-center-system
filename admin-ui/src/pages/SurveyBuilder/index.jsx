@@ -5,6 +5,7 @@ import SurveyToolbar from './components/SurveyToolbar';
 import SettingsTab from './tabs/SettingsTab';
 import PrecallTab from './tabs/PrecallTab';
 import BuilderTab from './tabs/BuilderTab';
+import GroupsTab from './tabs/GroupsTab';
 import PreviewTab from './tabs/PreviewTab';
 import { Loader2 } from 'lucide-react';
 
@@ -39,6 +40,7 @@ function SurveyBuilderContent() {
         {activeTab === 'settings' && <SettingsTab />}
         {activeTab === 'precall' && <PrecallTab />}
         {activeTab === 'builder' && <BuilderTab />}
+        {activeTab === 'groups' && <GroupsTab />}
         {activeTab === 'preview' && <PreviewTab />}
       </div>
     </div>

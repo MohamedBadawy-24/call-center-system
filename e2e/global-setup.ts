@@ -28,31 +28,49 @@ async function globalSetup(config: FullConfig) {
   let adminToken: string;
   let adminId: string;
 
-  if (!hasUsers.hasUsers) {
-    // First user becomes admin automatically
-    const regRes = await axios.post(`${BACKEND}/auth/register`, {
-      name: 'E2E Admin',
-      email: 'e2e-admin@baseera.test',
-      password: 'Admin123_test',
-      role: 'admin',
-    });
-    adminToken = regRes.data.token;
-    // Decode or fetch user from /auth/me
-    const meRes = await axios.get(`${BACKEND}/auth/me`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
-    });
-    adminId = meRes.data.user.id || meRes.data.user._id;
-  } else {
-    // Login as existing admin
+  try {
+    // Attempt to login first using seeded credentials
     const loginRes = await axios.post(`${BACKEND}/auth/login`, {
-      email: 'e2e-admin@baseera.test',
-      password: 'Admin123_test',
+      email: 'mohhamed242@gmail.com',
+      password: 'Baseera@123',
     });
     adminToken = loginRes.data.token;
     const meRes = await axios.get(`${BACKEND}/auth/me`, {
       headers: { Authorization: `Bearer ${adminToken}` },
     });
     adminId = meRes.data.user.id || meRes.data.user._id;
+  } catch (err: any) {
+    console.error("[E2E SETUP] Seed login failed:", err.response?.data || err.message);
+    // Fallback to e2e-admin@baseera.test login
+    try {
+      const loginRes = await axios.post(`${BACKEND}/auth/login`, {
+        email: 'e2e-admin@baseera.test',
+        password: 'Admin123_test',
+      });
+      adminToken = loginRes.data.token;
+      const meRes = await axios.get(`${BACKEND}/auth/me`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      adminId = meRes.data.user.id || meRes.data.user._id;
+    } catch (loginErr) {
+      // Fallback to registration if login fails
+      try {
+        const regRes = await axios.post(`${BACKEND}/auth/register`, {
+          name: 'E2E Admin',
+          email: 'e2e-admin@baseera.test',
+          password: 'Admin123_test',
+          role: 'admin',
+        });
+        adminToken = regRes.data.token;
+        const meRes = await axios.get(`${BACKEND}/auth/me`, {
+          headers: { Authorization: `Bearer ${adminToken}` },
+        });
+        adminId = meRes.data.user.id || meRes.data.user._id;
+      } catch (regErr: any) {
+        console.error("[E2E SETUP] Admin setup failed:", regErr.response?.data || regErr.message);
+        throw regErr;
+      }
+    }
   }
 
   // 2. Create an agent user
@@ -67,6 +85,7 @@ async function globalSetup(config: FullConfig) {
       email: agentEmail,
       password: 'Agent123_test',
       role: 'agent',
+      researcherCode: 'E2E-AG-123',
     },
     { headers: { Authorization: `Bearer ${adminToken}` } }
   );
@@ -86,7 +105,27 @@ async function globalSetup(config: FullConfig) {
   });
   agentId = agentMe.data.user.id || agentMe.data.user._id;
 
-  // 3. Create a test survey
+  // 3. Create a Quality Reviewer user
+  const qualityEmail = `e2e-quality-${Date.now()}@baseera.test`;
+  await axios.post(
+    `${BACKEND}/auth/register`,
+    {
+      name: 'E2E Quality Reviewer',
+      email: qualityEmail,
+      password: 'Quality123_test',
+      role: 'quality',
+    },
+    { headers: { Authorization: `Bearer ${adminToken}` } }
+  );
+
+  const qualityLoginRes = await axios.post(`${BACKEND}/auth/login`, {
+    email: qualityEmail,
+    password: 'Quality123_test',
+  });
+  const qualityToken = qualityLoginRes.data.token;
+  const qualityId = qualityLoginRes.data.user.id || qualityLoginRes.data.user._id;
+
+  // 4. Create a test survey
   const surveyRes = await axios.post(
     `${BACKEND}/survey`,
     {
@@ -125,9 +164,15 @@ async function globalSetup(config: FullConfig) {
   process.env.E2E_ADMIN_ID = adminId;
   process.env.E2E_AGENT_ID = agentId;
   process.env.E2E_SURVEY_ID = surveyId;
+  process.env.E2E_AGENT_EMAIL = agentEmail;
+  process.env.E2E_AGENT_PASSWORD = 'Agent123_test';
+  process.env.E2E_QUALITY_EMAIL = qualityEmail;
+  process.env.E2E_QUALITY_PASSWORD = 'Quality123_test';
+  process.env.E2E_QUALITY_TOKEN = qualityToken;
+  process.env.E2E_QUALITY_ID = qualityId;
 
   console.log('[E2E SETUP] Seeding complete.');
-  console.log(`  Admin: ${adminId}, Agent: ${agentId}, Survey: ${surveyId}`);
+  console.log(`  Admin: ${adminId}, Agent: ${agentId}, Quality: ${qualityId}, Survey: ${surveyId}, Agent Email: ${agentEmail}, Quality Email: ${qualityEmail}`);
 }
 
 export default globalSetup;

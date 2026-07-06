@@ -1046,15 +1046,15 @@ export default function AuditTakeSurvey() {
             <div className="modal-content glass-card fade-enter-active" style={{ maxWidth: '400px' }}>
               <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem', color: 'var(--danger)' }}>
                 <AlertTriangle size={24} />
-                <h2 style={{ margin: 0 }}>End Survey Audit?</h2>
+                <h2 style={{ margin: 0 }}>{t('endAuditConfirmTitle') || 'End Survey Audit?'}</h2>
               </div>
               <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                Are you sure you want to end this shadow audit session? You will be taken to the final quality evaluation form to submit.
+                {t('endAuditConfirmDesc') || 'Are you sure you want to end this shadow audit session? You will be taken to the final quality evaluation form to submit.'}
               </p>
               <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-                <button className="btn-secondary" onClick={() => setShowEndCallConfirm(false)}>Cancel</button>
+                <button className="btn-secondary" onClick={() => setShowEndCallConfirm(false)}>{t('stayInCall') || 'Stay in Call'}</button>
                 <button className="btn-primary" style={{ backgroundColor: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { setShowEndCallConfirm(false); goToInterviewStep(); }}>
-                  Yes, End Audit
+                  {t('endAuditYes') || 'Yes, End Audit'}
                 </button>
               </div>
             </div>

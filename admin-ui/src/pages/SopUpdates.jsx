@@ -5,6 +5,7 @@ import { BookOpen, Plus } from 'lucide-react';
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { toast } from 'react-toastify';
 
 export default function SopUpdates() {
   const { t } = useContext(UIContext);
@@ -30,7 +31,7 @@ export default function SopUpdates() {
       const res = await api.get('/sops');
       setSops(res.data);
     } catch (err) {
-      console.error(err);
+      toast.error(t('sopLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -42,9 +43,10 @@ export default function SopUpdates() {
       await api.post('/sops', formData);
       setFormData({ title: '', content: '' });
       setShowForm(false);
+      toast.success(t('sopSubmitSuccess'));
       fetchData();
     } catch (err) {
-      alert('Failed to add SOP update');
+      toast.error(t('sopSubmitFailed'));
     }
   };
 
@@ -87,14 +89,17 @@ export default function SopUpdates() {
                 onChange={e => setFormData({ ...formData, content: e.target.value })}
               ></textarea>
             </div>
-            <button type="submit" className="btn-primary" style={{ alignSelf: 'flex-start' }}>Submit</button>
+            <button type="submit" className="btn-primary" style={{ alignSelf: 'flex-start' }}>{t('addSopUpdate') || 'Publish Update'}</button>
           </form>
         </motion.div>
       )}
 
       <div className="glass-card">
         {sops.length === 0 ? (
-          <p style={{ color: 'var(--text-secondary)' }}>No SOP updates found.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2rem', color: 'var(--text-secondary)', gap: '0.5rem' }}>
+            <BookOpen size={36} style={{ opacity: 0.3 }} />
+            <p style={{ margin: 0, fontWeight: 600 }}>{t('emptyStateSop') || 'No SOP updates published yet.'}</p>
+          </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {sops.map(s => (
@@ -106,7 +111,7 @@ export default function SopUpdates() {
                   </span>
                 </div>
                 <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem', fontWeight: 'bold' }}>
-                  Posted by: {s.createdBy?.name || 'Admin'}
+                  {t('postedBy')}: {s.createdBy?.name || t('notAssigned')}
                 </div>
                 <p style={{ margin: 0, whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>{s.content}</p>
               </div>

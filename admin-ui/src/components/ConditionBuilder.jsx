@@ -88,7 +88,7 @@ function summarize(cond, fields) {
 }
 
 // ─── Root export ─────────────────────────────────────────────────────────────
-export default function ConditionBuilder({ condition, onChange, availableFields = [], readOnly = false }) {
+export default function ConditionBuilder({ condition, onChange, availableFields = [], readOnly = false, onAddQuestionToGroup }) {
   const summary = condition ? summarize(condition, availableFields) : '';
 
   if (!condition) {
@@ -126,6 +126,7 @@ export default function ConditionBuilder({ condition, onChange, availableFields 
         readOnly={readOnly}
         isRoot
         depth={0}
+        onAddQuestionToGroup={onAddQuestionToGroup}
       />
       {summary && (
         <div style={{
@@ -143,9 +144,10 @@ export default function ConditionBuilder({ condition, onChange, availableFields 
 }
 
 // ─── Group ────────────────────────────────────────────────────────────────────
-function ConditionGroup({ group, onChange, onRemove, availableFields, readOnly, isRoot, depth }) {
+function ConditionGroup({ group, onChange, onRemove, availableFields, readOnly, isRoot, depth, onAddQuestionToGroup }) {
   const { language } = useContext(UIContext) || { language: 'en' };
   const [collapsed, setCollapsed] = useState(false);
+  const [showGroupMenu, setShowGroupMenu] = useState(false);
   const col = dc(depth);
   const kids = group.conditions || [];
 
@@ -231,10 +233,63 @@ function ConditionGroup({ group, onChange, onRemove, availableFields, readOnly, 
               style={miniBtn(col.badge)}>
               <Plus size={11} /> Rule
             </button>
-            <button type="button" onClick={addGroup}
-              style={miniBtn(col.badge)}>
-              <Layers size={11} /> Group
-            </button>
+            {onAddQuestionToGroup ? (
+              <div style={{ position: 'relative', display: 'inline-block' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setShowGroupMenu(!showGroupMenu)}
+                  style={miniBtn(col.badge)}
+                >
+                  <Layers size={11} /> Group <ChevronDown size={10} style={{ marginLeft: '2px' }} />
+                </button>
+                {showGroupMenu && (
+                  <>
+                    <div 
+                      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }} 
+                      onClick={() => setShowGroupMenu(false)} 
+                    />
+                    <div style={{
+                      position: 'absolute', right: 0, top: '100%', marginTop: '4px',
+                      background: 'var(--surface, #fff)', border: '1px solid var(--border-color)',
+                      borderRadius: '6px', boxShadow: 'var(--shadow-md)', zIndex: 1000,
+                      display: 'flex', flexDirection: 'column', minWidth: '120px', overflow: 'hidden'
+                    }}>
+                      <button 
+                        type="button" 
+                        onClick={() => { addGroup(); setShowGroupMenu(false); }}
+                        style={{
+                          padding: '0.4rem 0.75rem', fontSize: '0.72rem', border: 'none',
+                          background: 'transparent', color: 'var(--text-primary)', textAlign: 'left',
+                          cursor: 'pointer'
+                        }}
+                        onMouseEnter={(e) => e.target.style.background = 'rgba(0,0,0,0.04)'}
+                        onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                      >
+                        Condition Group
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => { onAddQuestionToGroup(); setShowGroupMenu(false); }}
+                        style={{
+                          padding: '0.4rem 0.75rem', fontSize: '0.72rem', border: 'none',
+                          background: 'transparent', color: 'var(--text-primary)', textAlign: 'left',
+                          cursor: 'pointer'
+                        }}
+                        onMouseEnter={(e) => e.target.style.background = 'rgba(0,0,0,0.04)'}
+                        onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                      >
+                        Question Group
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <button type="button" onClick={addGroup}
+                style={miniBtn(col.badge)}>
+                <Layers size={11} /> Group
+              </button>
+            )}
             {!isRoot && (
               <button type="button" onClick={onRemove}
                 style={{ ...miniBtn('#ef4444'), background: 'none', border: 'none' }}>
@@ -272,7 +327,7 @@ function ConditionGroup({ group, onChange, onRemove, availableFields, readOnly, 
             <div key={i}>
               {child.type === 'group'
                 ? <ConditionGroup group={child} onChange={v => updChild(i, v)} onRemove={() => rmChild(i)}
-                    availableFields={availableFields} readOnly={readOnly} depth={depth + 1} />
+                    availableFields={availableFields} readOnly={readOnly} depth={depth + 1} onAddQuestionToGroup={onAddQuestionToGroup} />
                 : <ConditionRule  rule={child}  onChange={v => updChild(i, v)} onRemove={() => rmChild(i)}
                     availableFields={availableFields} readOnly={readOnly} />
               }

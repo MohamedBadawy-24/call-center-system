@@ -296,3 +296,42 @@ describe('GET /agent/precall-session-count', () => {
     expect(res.data.count).toBe(0);
   });
 });
+
+describe('Agent Identity Enforcement (researcher_name / researcher_code)', () => {
+  it('Backend overrides tampered researcher_name and researcher_code with JWT user identity', async () => {
+    const { token, user } = await getAuthToken('agent');
+
+    // Give the user a known researcherCode
+    await mongoose.model('User').findByIdAndUpdate(user._id, {
+      researcherCode: 'REAL-CODE-42',
+      currentStatus: 'active',
+      statusStartedAt: new Date()
+    });
+
+    const survey = await createTestSurvey({ isActive: false });
+
+    const res = await makeRequest('POST', '/agent/precall-complete', {
+      surveyId: survey._id.toString(),
+      payload: {
+        researcher_name: 'TAMPERED_NAME',
+        researcher_code: 'TAMPERED_CODE',
+        phone: '01012345678',
+        age_years: 25,
+        interview_result: 'completed'
+      },
+      interviewDate: '2026-06-30',
+      interviewStartedAt: new Date().toISOString()
+    }, token);
+
+    expect(res.status).toBe(200);
+
+    // Verify the saved document has the real user identity, not the tampered values
+    const PrecallCompletion = mongoose.model('PrecallCompletion');
+    const saved = await PrecallCompletion.findOne({ userId: user._id }).sort({ _id: -1 });
+    expect(saved).not.toBeNull();
+    expect(saved.payload.researcher_name).toBe(user.name);
+    expect(saved.payload.researcher_code).toBe('REAL-CODE-42');
+    expect(saved.payload.researcher_name).not.toBe('TAMPERED_NAME');
+    expect(saved.payload.researcher_code).not.toBe('TAMPERED_CODE');
+  });
+});

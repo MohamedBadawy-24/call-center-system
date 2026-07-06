@@ -24,6 +24,7 @@ import SopUpdates from './pages/SopUpdates';
 import ResponseHistory from './pages/ResponseHistory';
 import QualityAgentStats from './pages/QualityAgentStats';
 import QualityDropOff from './pages/QualityDropOff';
+import CampaignComparison from './pages/CampaignComparison';
 import PrivateRoute from './components/PrivateRoute';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import { UIProvider, UIContext } from './context/UIContext';
@@ -93,7 +94,7 @@ const StatusSelector = ({ user, updateStatus, t, timer }) => {
                     if (s.id === 'break') {
                       reason = window.prompt(t('enterBreakReason') || "Please enter your break reason (Lunch or Meeting):", "Lunch");
                       if (!reason || !['Lunch', 'Meeting'].includes(reason)) {
-                        alert("Invalid or empty break reason. Must be 'Lunch' or 'Meeting'.");
+                        toast.error(t('invalidBreakReason') || "Invalid or empty break reason. Must be 'Lunch' or 'Meeting'.");
                         return;
                       }
                     }
@@ -507,6 +508,7 @@ const AnimatedRoutes = () => {
         {/* Strictly Admin routes */}
         <Route path="/admin/requests" element={<PrivateRoute reqRole="admin"><PageWrapper><ProfileRequests /></PageWrapper></PrivateRoute>} />
         <Route path="/admin/builder/:id?" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><SurveyBuilder /></PageWrapper></PrivateRoute>} />
+        <Route path="/admin/compare" element={<PrivateRoute reqRole={['admin', 'quality']}><PageWrapper><CampaignComparison /></PageWrapper></PrivateRoute>} />
         <Route path="/admin/register" element={<PrivateRoute reqRole="admin"><PageWrapper><Register /></PageWrapper></PrivateRoute>} />
         <Route path="/admin/users" element={<PrivateRoute reqRole="admin"><PageWrapper><UserManagement /></PageWrapper></PrivateRoute>} />
       </Routes>

@@ -21,19 +21,32 @@ const ChoiceSchema = new mongoose.Schema({
 });
 
 const QuestionSchema = new mongoose.Schema({
-  questionId: { type: String, required: true }, // custom ID for logic refs
+  questionId: {
+    type: String,
+    required: function() {
+      return this.type !== 'group';
+    }
+  }, // custom ID for logic refs
   required: { type: Boolean, default: false },
   optional: { type: Boolean, default: false },
   text: String,
   script: String, // What the agent reads
   category: String, // intro, screening, demographic, main
-  type: String, // text, single_choice, multiple_choice, info
+  type: String, // text, single_choice, multiple_choice, info, group
   choices: [ChoiceSchema],
   allowOther: { type: Boolean, default: false },
   allowMultipleOther: { type: Boolean, default: false },
   minSelections: { type: Number },
   maxSelections: { type: Number },
   visibility: { type: mongoose.Schema.Types.Mixed, default: undefined }, // Advanced nested logic
+
+  // Group properties (if type === 'group')
+  groupId: String,
+  label: String,
+});
+
+QuestionSchema.add({
+  questions: [QuestionSchema]
 });
 
 const SectionSchema = new mongoose.Schema({
@@ -62,6 +75,13 @@ const SurveySchema = new mongoose.Schema({
     goal: Number
   }],
   numberAssignmentMode: { type: String, enum: ['queue_only', 'queue_then_manual', 'manual_allowed'], default: 'queue_only' },
+  targetAudience: { type: String, enum: ['agent', 'quality', 'both'], default: 'both' },
+  linkedCampaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'Survey', default: null },
+  comparisonMatchField: { type: String, default: 'serialNumber' },
+  groups: [{
+    label: String,
+    questionIds: [String]
+  }],
   isActive: { type: Boolean, default: true },
   draftData: { type: mongoose.Schema.Types.Mixed, default: undefined },
   createdAt: { type: Date, default: Date.now },

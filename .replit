@@ -13,7 +13,7 @@ MONGO_URI = "mongodb://127.0.0.1:27017/call-center"
 PORT = "3000"
 NODE_ENV = "development"
 CORS_ORIGIN = "https://your-replit-app-url.repl.co,http://localhost:5000""
-VITE_API_URL = ""
+VITE_API_URL = "http://localhost:3000"
 
 [workflows]
 runButton = "Project"

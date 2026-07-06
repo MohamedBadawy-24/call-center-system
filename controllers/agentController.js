@@ -1,579 +1,145 @@
-const mongoose = require('mongoose');
-const User = require('../models/User');
-const PrecallCompletion = require('../models/PrecallCompletion');
-const PostponedSerial = require('../models/PostponedSerial');
-const PhoneNumber = require('../models/PhoneNumber');
-const Survey = require('../models/Survey');
-const Draft = require('../models/Draft');
-const { getNextSerialNumber } = require('../services/serialService');
-const { categorizeInterviewOutcome, parseRespondentAgeYears } = require('../services/precallService');
-const { runTransaction } = require('../utils/runTransaction');
+const agentService = require('../services/agentService');
 
-exports.getPrecallSessionCount = async (req, res) => {
+exports.getPrecallSessionCount = async (req, res, next) => {
   try {
-    const isStaff = req.user.role === 'admin' || req.user.role === 'quality';
-    if (!isStaff && req.user.role !== 'agent') return res.status(403).json({ error: 'Agents only' });
-    const user = await User.findById(req.user.id);
-    if (!user || user.currentStatus !== 'active') return res.json({ count: 0 });
-    const count = await PrecallCompletion.countDocuments({
-      userId: user._id,
-      statusStartedAt: user.statusStartedAt,
-    });
+    const count = await agentService.getPrecallSessionCount(req.user.id, req.user.role);
     res.json({ count });
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
   }
 };
 
-exports.completePrecall = async (req, res) => {
+exports.completePrecall = async (req, res, next) => {
   try {
-    const isStaff = req.user.role === 'admin' || req.user.role === 'quality';
-    if (!isStaff && req.user.role !== 'agent') {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
-
-    const user = await User.findById(req.user.id);
-    if (!user || (user.role === 'agent' && user.currentStatus !== 'active')) {
-      return res.status(400).json({ error: 'You must be active to complete the checklist' });
-    }
-
-    let { surveyId, payload, interviewStartedAt, interviewDate, interviewStartDisplay } = req.body;
-    const startedAt = interviewStartedAt ? new Date(interviewStartedAt) : new Date();
-    if (Number.isNaN(startedAt.getTime())) {
-      return res.status(400).json({ error: 'Invalid interviewStartedAt' });
-    }
-
-    let doc;
-    await runTransaction(async (session) => {
-    payload = payload && typeof payload === 'object' ? { ...payload } : {};
-    const ageYears = parseRespondentAgeYears(payload);
-    let under18NotQualified = false;
-    if (Number.isFinite(ageYears) && ageYears < 18) {
-      under18NotQualified = true;
-      payload.interview_result = 'no_qualified';
-    }
-
-    const ir = String(payload.interview_result || '');
-    const { category, disqualified } = categorizeInterviewOutcome(ir);
-
-    let sid;
-    if (surveyId && mongoose.Types.ObjectId.isValid(surveyId)) {
-      sid = new mongoose.Types.ObjectId(surveyId);
-    }
-
-    // Normalise serialNumber: if payload contains no real serial (empty string / missing),
-    // we must NOT write "" to the DB. The unique sparse index ignores absent fields but
-    // treats "" as a concrete duplicate, so we keep it as null and only write it when real.
-    const rawSerial = payload.serial_number || '';
-    const serialNumber = rawSerial.trim() !== '' ? rawSerial.trim() : null;
-
-    const precallData = {
-      userId: user._id,
-      statusStartedAt: user.statusStartedAt,
-      surveyId: sid,
-      interviewDate: typeof interviewDate === 'string' ? interviewDate : '',
-      interviewStartedAt: startedAt,
-      interviewStartDisplay: typeof interviewStartDisplay === 'string' ? interviewStartDisplay : '',
-      payload,
-      interviewOutcome: ir,
-      outcomeCategory: category,
-      outcomeReason: payload.outcome_reason || '',
-      disqualified: disqualified || under18NotQualified,
-      under18NotQualified,
-    };
-    // Only attach serialNumber when it is a real value so the sparse index is not violated
-    if (serialNumber) precallData.serialNumber = serialNumber;
-
-    if (serialNumber) {
-      doc = await PrecallCompletion.findOneAndUpdate(
-        { serialNumber, userId: user._id },
-        { $set: precallData },
-        { upsert: true, returnDocument: 'after', session }
-      );
-    } else {
-      [doc] = await PrecallCompletion.create([precallData], { session });
-    }
-
-    // --- Serial Number & PhoneNumber sync ---
-    const phoneInPayload = String(payload.phone || '').trim();
-    let currentNumberDoc = await PhoneNumber.findOne({
-      agentId: user._id,
-      surveyId: sid,
-      status: 'pending',
-    }).sort({ assignedAt: -1 }).session(session);
-
-    if (phoneInPayload && (!currentNumberDoc || currentNumberDoc.number !== phoneInPayload)) {
-      const newSerial = payload.serial_number || await getNextSerialNumber('survey_numbers');
-      if (currentNumberDoc) {
-        currentNumberDoc.number = phoneInPayload;
-        currentNumberDoc.serialNumber = newSerial;
-        await currentNumberDoc.save({ session });
-      } else {
-        [currentNumberDoc] = await PhoneNumber.create([{
-          surveyId: sid,
-          number: phoneInPayload,
-          agentId: user._id,
-          status: 'pending',
-          serialNumber: newSerial,
-          assignedAt: new Date(),
-        }], { session });
-      }
-      payload.serial_number = newSerial;
-      doc.serialNumber = newSerial;
-      doc.payload.serial_number = newSerial;
-      doc.markModified('payload');
-      await doc.save({ session });
-    } else if (currentNumberDoc && !payload.serial_number) {
-      // If the phone number already has a serial use it; otherwise generate a fresh one
-      const existingSerial = currentNumberDoc.serialNumber;
-      const serial = existingSerial || await getNextSerialNumber('survey_numbers');
-      if (!existingSerial) {
-        currentNumberDoc.serialNumber = serial;
-        await currentNumberDoc.save({ session });
-      }
-      payload.serial_number = serial;
-      doc.serialNumber = serial;
-      doc.payload.serial_number = serial;
-      doc.markModified('payload');
-      await doc.save({ session });
-    }
-
-    // --- Postponed serial tracking ---
-    if (ir === 'postponed' && payload.serial_number != null && String(payload.serial_number).trim() !== '') {
-      await PostponedSerial.create([{
-        agentId: user._id,
-        surveyId: sid,
-        statusStartedAt: user.statusStartedAt,
-        serialNumber: String(payload.serial_number).trim(),
-        source: 'precall',
-        precallCompletionId: doc._id,
-      }], { session });
-    }
-
-    // --- PhoneNumber status update ---
-    const callOutcome = String(payload.call_result || '');
-    const intOutcome = ir || '';
-    let phoneStatus = 'called';
-    let outcomeReason = callOutcome;
-    if (callOutcome === 'contacted' && intOutcome) outcomeReason = `Contacted | ${intOutcome}`;
-    else if (!outcomeReason && intOutcome) outcomeReason = intOutcome;
-    if (under18NotQualified) outcomeReason = outcomeReason ? `${outcomeReason} (Under 18)` : 'Under 18';
-
-    const deadCallOutcomes = ['wrong_number', 'out_of_service', 'no_answer', 'busy', 'closed'];
-    const deadIntOutcomes = ['refused', 'no_qualified', 'not_contacted'];
-    if (deadCallOutcomes.includes(callOutcome) || deadIntOutcomes.includes(ir) || under18NotQualified) {
-      phoneStatus = 'disqualified';
-    } else if (ir === 'postponed') {
-      phoneStatus = 'postponed';
-    }
-
-    if (sid) {
-      await PhoneNumber.findOneAndUpdate(
-        { agentId: user._id, surveyId: sid, status: 'pending' },
-        { $set: { status: phoneStatus, calledAt: new Date(), outcomeReason } },
-        { sort: { assignedAt: -1 }, session }
-      );
-    }
-
-    await User.findByIdAndUpdate(
-      user._id,
-      { precallCompletedForActiveSession: true },
-      { session }
-    );
-    });
-
     const io = req.app.get('io');
-    if (io) io.emit('stats-update');
-
-    res.json({ ok: true, serialNumber: doc.serialNumber });
+    const serialNumber = await agentService.completePrecall(req.user.id, req.user.role, req.body, io);
+    res.json({ ok: true, serialNumber });
   } catch (err) {
-    console.error('Precall Complete Error:', err);
-    res.status(500).json({ error: 'Server error' });
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
   }
 };
 
-exports.getNextNumber = async (req, res) => {
+exports.getNextNumber = async (req, res, next) => {
   try {
-    const isStaff = req.user.role === 'admin' || req.user.role === 'quality';
-    if (!isStaff && req.user.role !== 'agent') return res.status(403).json({ error: 'Agents only' });
-
-    const user = await User.findById(req.user.id);
-    if (!user) return res.json(null);
-
-    const isStationActive = user.currentStatus === 'active';
-    let governorate = req.query.governorate;
-    const { surveyId } = req.query;
-    const query = {};
-    if (surveyId && mongoose.Types.ObjectId.isValid(surveyId)) {
-      query._id = new mongoose.Types.ObjectId(String(surveyId));
-    } else {
-      query.isActive = { $ne: false };
-    }
-
-    const targetSurveys = await Survey.find(query).sort({ createdAt: -1 });
-    if (!targetSurveys.length) return res.json(null);
-
-    if (req.user.role === 'agent') {
-      const activeSurvey = targetSurveys[0];
-      if (activeSurvey.targetGovernorate && activeSurvey.targetGovernorate !== 'All') {
-        governorate = activeSurvey.targetGovernorate;
-      }
-    }
-
-    let number = null;
-    for (const s of targetSurveys) {
-      let recoveredNumber = await PhoneNumber.findOne({
-        surveyId: s._id,
-        agentId: user._id,
-        status: 'pending',
-      });
-
-      if (recoveredNumber) {
-        if (governorate && governorate !== 'All' && recoveredNumber.governorate !== governorate) {
-          await PhoneNumber.findByIdAndUpdate(recoveredNumber._id, {
-            $unset: { agentId: 1, assignedAt: 1, sessionStatusStartedAt: 1 },
-          });
-          recoveredNumber = null;
-        } else {
-          number = recoveredNumber;
-          const assignedCount = await PhoneNumber.countDocuments({ agentId: user._id, status: 'pending' });
-          console.log(`[Offline Inventory] Recovered existing pending number ${number.number} for agent ${user.email || user.name}. Total pre-allocated pending numbers in DB for agent: ${assignedCount}`);
-        }
-      }
-
-      if (!number && isStationActive) {
-        const assignQuery = { surveyId: s._id, status: 'pending', agentId: { $exists: false } };
-        if (governorate && governorate !== 'All') assignQuery.governorate = governorate;
-        number = await PhoneNumber.findOneAndUpdate(
-          assignQuery,
-          {
-            agentId: user._id,
-            sessionStatusStartedAt: user.statusStartedAt,
-            assignedAt: new Date(),
-          },
-          { returnDocument: 'after' }
-        );
-        if (number) {
-          const assignedCount = await PhoneNumber.countDocuments({ agentId: user._id, status: 'pending' });
-          console.log(`[Offline Inventory] Assigned new pending number ${number.number} to agent ${user.email || user.name}. Total pre-allocated pending numbers in DB for agent: ${assignedCount}`);
-        }
-      }
-
-      if (number) break;
-    }
+    const { governorate, surveyId } = req.query;
+    const number = await agentService.getNextNumber(req.user.id, req.user.role, governorate, surveyId);
     res.json(number);
   } catch (err) {
-    console.error('Next Number Error:', err);
-    res.status(500).json({ error: 'Failed to assign number' });
+    next(err);
   }
 };
 
-exports.markNumberCalled = async (req, res) => {
+exports.markNumberCalled = async (req, res, next) => {
   try {
-    if (req.user.role !== 'agent') return res.status(403).json({ error: 'Agents only' });
     const { status } = req.body;
-    if (!['called', 'completed', 'disqualified', 'postponed'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid status' });
-    }
-    const number = await PhoneNumber.findOneAndUpdate(
-      { _id: req.params.id, agentId: req.user.id },
-      { status, calledAt: new Date() },
-      { returnDocument: 'after' }
-    );
-    if (!number) return res.status(404).json({ error: 'Number not found' });
+    const number = await agentService.markNumberCalled(req.params.id, req.user.id, req.user.role, status);
     res.json(number);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update number' });
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
   }
 };
 
-exports.getPendingSerials = async (req, res) => {
+exports.getPendingSerials = async (req, res, next) => {
   try {
-    if (req.user.role !== 'agent') return res.status(403).json({ error: 'Agents only' });
-    const user = await User.findById(req.user.id);
-    if (!user || user.currentStatus !== 'active') return res.json([]);
-    const serials = await PostponedSerial.find({
-      agentId: user._id,
-      statusStartedAt: user.statusStartedAt,
-    }).sort({ createdAt: -1 }).limit(50).lean();
+    const serials = await agentService.getPendingSerials(req.user.id, req.user.role);
     res.json(serials);
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-};
-
-exports.getNextSerial = async (req, res) => {
-  try {
-    const serialNumber = await getNextSerialNumber('survey_numbers');
-    res.json({ serialNumber });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to generate serial' });
-  }
-};
-
-exports.listHandoverCandidates = async (req, res) => {
-  try {
-    if (!['agent', 'quality'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Agents only' });
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
     }
-    const rows = await User.find(
-      { _id: { $ne: req.user.id }, role: { $in: ['agent', 'quality'] } },
-      'name email role currentStatus'
-    )
-      .sort({ name: 1 })
-      .limit(300)
-      .lean();
+    next(err);
+  }
+};
+
+exports.getNextSerial = async (req, res, next) => {
+  try {
+    const result = await agentService.getNextSerial();
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.listHandoverCandidates = async (req, res, next) => {
+  try {
+    const rows = await agentService.listHandoverCandidates(req.user.id, req.user.role);
     res.json(rows);
   } catch (err) {
-    console.error('Handover candidates error:', err);
-    res.status(500).json({ error: 'Server error' });
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
   }
 };
 
-exports.searchBySerial = async (req, res) => {
+exports.searchBySerial = async (req, res, next) => {
   try {
     const { serial } = req.params;
-
-    // 1. Check Responses first
-    const query = { serialNumber: serial };
-    if (req.user.role === 'agent') query.agentId = req.user.id;
-    const Response = require('../models/Response');
-    const response = await Response.findOne(query).sort({ completedAt: -1 }).lean();
-    if (response) {
-      const phoneNumber = await PhoneNumber.findOne({ serialNumber: serial }).lean();
-      return res.json({
-        surveyId: response.surveyId,
-        answers: response.answers.reduce((acc, a) => ({ ...acc, [a.questionId]: a.value }), {}),
-        phoneNumber: phoneNumber || { number: response.answers.find(a => a.questionId === 'phone')?.value || '' },
-        status: response.status,
-        interviewOutcome: response.interviewOutcome,
-        outcomeReason: response.outcomeReason,
-        isEditMode: true,
-      });
-    }
-
-    // 2. Check PrecallCompletions
-    const precallQuery = { serialNumber: serial };
-    if (req.user.role === 'agent') precallQuery.userId = req.user.id;
-    const precall = await PrecallCompletion.findOne(precallQuery).sort({ completedAt: -1 }).lean();
-    if (precall) {
-      const phoneNumber = await PhoneNumber.findOne({ serialNumber: serial }).lean();
-      return res.json({
-        surveyId: precall.surveyId,
-        answers: precall.payload,
-        phoneNumber,
-        status: precall.interviewOutcome || 'pending',
-        interviewOutcome: precall.interviewOutcome,
-        outcomeReason: precall.outcomeReason,
-        isEditMode: true,
-      });
-    }
-
-    // 3. Check PhoneNumbers
-    const phoneQuery = { serialNumber: serial };
-    if (req.user.role === 'agent') phoneQuery.agentId = req.user.id;
-    const phone = await PhoneNumber.findOne(phoneQuery).lean();
-    if (phone) {
-      return res.json({
-        surveyId: phone.surveyId,
-        phoneNumber: phone,
-        answers: { phone: phone.number, serial_number: phone.serialNumber },
-        status: phone.status,
-        isEditMode: false,
-      });
-    }
-
-    res.json(null);
+    const result = await agentService.searchBySerial(serial, req.user.id, req.user.role);
+    res.json(result);
   } catch (err) {
-    console.error('Search Serial Error:', err);
-    res.status(500).json({ error: 'Failed to search serial' });
+    next(err);
   }
 };
 
-exports.handoverCall = async (req, res) => {
+exports.handoverCall = async (req, res, next) => {
   try {
     const { serialNumber, targetAgentId } = req.body;
-    if (!serialNumber || !targetAgentId) {
-      return res.status(400).json({ error: 'SerialNumber and TargetAgentId are required' });
-    }
-
-    const targetAgent = await User.findById(targetAgentId);
-    if (!targetAgent || !['agent', 'quality'].includes(targetAgent.role)) {
-      return res.status(404).json({ error: 'Target agent not found or invalid role' });
-    }
-
-    const precall = await PrecallCompletion.findOne({ serialNumber, userId: req.user.id });
-    if (!precall) {
-      const phone = await PhoneNumber.findOne({ serialNumber, agentId: req.user.id });
-      if (!phone) {
-        return res.status(403).json({ error: 'You do not own this call or serial number.' });
-      }
-    }
-
-    const ResponseModel = require('../models/Response');
-    await runTransaction(async (session) => {
-      await PrecallCompletion.updateMany(
-        { serialNumber, userId: req.user.id },
-        { $set: { userId: targetAgentId } },
-        { session }
-      );
-      await ResponseModel.updateMany(
-        { serialNumber, agentId: req.user.id },
-        { $set: { agentId: targetAgentId } },
-        { session }
-      );
-      await PhoneNumber.updateMany(
-        { serialNumber, agentId: req.user.id },
-        { $set: { agentId: targetAgentId } },
-        { session }
-      );
-      await Draft.updateMany(
-        { serialNumber, agentId: req.user.id },
-        { $set: { agentId: targetAgentId } },
-        { session }
-      );
-      await PostponedSerial.updateMany(
-        { serialNumber, agentId: req.user.id },
-        { $set: { agentId: targetAgentId } },
-        { session }
-      );
-    });
-
     const io = req.app.get('io');
-    if (io) io.emit('stats-update');
-
-    res.json({ message: `Successfully handed over to ${targetAgent.name}` });
+    const targetAgentName = await agentService.handoverCall(req.user.id, targetAgentId, serialNumber, io);
+    res.json({ message: `Successfully handed over to ${targetAgentName}` });
   } catch (err) {
-    console.error('Handover Error:', err);
-    res.status(500).json({ error: 'Failed to perform handover' });
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
   }
 };
 
-exports.saveDraft = async (req, res) => {
+exports.saveDraft = async (req, res, next) => {
   try {
     const { surveyId, serialNumber, answers, currentIdx } = req.body;
-    if (!surveyId || !serialNumber) {
-      return res.status(400).json({ error: 'surveyId and serialNumber are required' });
-    }
-
-    const draft = await Draft.findOneAndUpdate(
-      { agentId: req.user.id, serialNumber },
-      {
-        $set: {
-          surveyId,
-          answers: answers || {},
-          currentIdx: currentIdx || 0,
-          updatedAt: new Date()
-        }
-      },
-      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
-    );
-
+    const draft = await agentService.saveDraft(req.user.id, surveyId, serialNumber, answers, currentIdx);
     res.json({ success: true, draft });
   } catch (err) {
-    console.error('Save Draft Error:', err);
-    res.status(500).json({ error: 'Failed to save draft' });
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
   }
 };
 
-exports.getDraft = async (req, res) => {
+exports.getDraft = async (req, res, next) => {
   try {
     const { serialNumber } = req.params;
-    if (!serialNumber) {
-      return res.status(400).json({ error: 'serialNumber is required' });
-    }
-
-    const draft = await Draft.findOne({ agentId: req.user.id, serialNumber }).lean();
-    if (!draft) {
-      return res.json({ answers: {}, currentIdx: 0 });
-    }
-
-    res.json({ answers: draft.answers, currentIdx: draft.currentIdx });
+    const result = await agentService.getDraft(req.user.id, serialNumber);
+    res.json(result);
   } catch (err) {
-    console.error('Get Draft Error:', err);
-    res.status(500).json({ error: 'Failed to get draft' });
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
   }
 };
 
-exports.assignManualNumber = async (req, res) => {
+exports.assignManualNumber = async (req, res, next) => {
   try {
-    const isStaff = req.user.role === 'admin' || req.user.role === 'quality';
-    if (!isStaff && req.user.role !== 'agent') {
-      return res.status(403).json({ error: 'Agents only' });
-    }
-
-    const { surveyId, number } = req.body;
-    if (!surveyId || !mongoose.Types.ObjectId.isValid(surveyId)) {
-      return res.status(400).json({ error: 'Valid Survey ID is required' });
-    }
-    if (!number || typeof number !== 'string' || !number.trim()) {
-      return res.status(400).json({ error: 'Phone number is required' });
-    }
-
-    const cleanNumber = number.trim();
-    // Validate format: e.g. at least 7 digits, maximum 15 digits
-    const digitsOnly = cleanNumber.replace(/\D/g, '');
-    if (digitsOnly.length < 7 || digitsOnly.length > 15) {
-      return res.status(400).json({ error: 'Invalid phone number format (must be 7-15 digits)' });
-    }
-
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ error: 'Agent not found' });
-    }
-
-    const survey = await Survey.findById(surveyId);
-    if (!survey) {
-      return res.status(404).json({ error: 'Survey not found' });
-    }
-
-    // Check assignment mode
-    const mode = survey.numberAssignmentMode || 'queue_only';
-    if (mode === 'queue_only') {
-      return res.status(400).json({ error: 'Manual number entry is not allowed for this campaign' });
-    }
-
-    if (mode === 'queue_then_manual') {
-      // Check if there are active numbers in the queue for this campaign
-      let governorate = req.body.governorate;
-      if (req.user.role === 'agent') {
-        if (survey.targetGovernorate && survey.targetGovernorate !== 'All') {
-          governorate = survey.targetGovernorate;
-        }
-      }
-      const assignQuery = { surveyId: survey._id, status: 'pending', agentId: { $exists: false } };
-      if (governorate && governorate !== 'All') assignQuery.governorate = governorate;
-
-      const queueCount = await PhoneNumber.countDocuments(assignQuery);
-      if (queueCount > 0) {
-        return res.status(400).json({ error: 'The queue still has available numbers. Please get numbers from the queue.' });
-      }
-    }
-
-    // Check duplication of this manual number within the campaign
-    const existing = await PhoneNumber.findOne({ surveyId: survey._id, number: cleanNumber });
-    if (existing) {
-      return res.status(400).json({ error: 'This phone number has already been added/used in this campaign' });
-    }
-
-    // Get the next serial number
-    const serialNumber = await getNextSerialNumber('survey_numbers');
-
-    // Create and assign the PhoneNumber doc
-    const newPhoneDoc = await PhoneNumber.create({
-      surveyId: survey._id,
-      number: cleanNumber,
-      agentId: user._id,
-      status: 'pending',
-      serialNumber,
-      numberSource: 'manual',
-      assignedAt: new Date(),
-    });
-
+    const { surveyId, number, governorate } = req.body;
+    const newPhoneDoc = await agentService.assignManualNumber(req.user.id, req.user.role, surveyId, number, governorate);
     res.json(newPhoneDoc);
   } catch (err) {
-    console.error('Assign Manual Number Error:', err);
-    res.status(500).json({ error: 'Failed to assign manual number' });
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
   }
 };
-

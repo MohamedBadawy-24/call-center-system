@@ -2,6 +2,7 @@ import React, { useState, useContext } from 'react';
 import { api } from '../api/client';
 import { Link, useNavigate } from 'react-router-dom';
 import { UIContext } from '../context/UIContext';
+import { toast } from 'react-toastify';
 
 export default function ForgotPassword() {
   const { t } = useContext(UIContext);
@@ -32,7 +33,7 @@ export default function ForgotPassword() {
       setError('');
       setMessage('');
       const res = await api.post('/auth/reset-password', { email, code, newPassword });
-      alert(res.data.message);
+      toast.success(res.data.message || 'Password reset successfully');
       navigate('/login');
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to reset password');
@@ -59,7 +60,7 @@ export default function ForgotPassword() {
         ) : (
           <form onSubmit={handleResetPassword}>
             <div className="form-group">
-              <label className="form-label">Verification Code</label>
+              <label className="form-label">{t('verificationCode')}</label>
               <input required className="input-field" placeholder="6-digit code" value={code} onChange={e => setCode(e.target.value)} />
             </div>
             <div className="form-group">

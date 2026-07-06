@@ -67,7 +67,7 @@ export default function Login() {
             <ShieldCheck size={32} color="white" />
           </motion.div>
           <h1 style={{ marginBottom: '0.5rem' }}>{t('login')}</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 600 }}>Welcome back! Please enter your details.</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 600 }}>{t('welcomeBack')}</p>
         </div>
 
         {error && (
@@ -145,7 +145,7 @@ export default function Login() {
           
           {!hasUsers && (
             <Link to="/register" style={{ display: 'block', textAlign: 'center', color: 'var(--primary)', fontWeight: 'bold', textDecoration: 'none' }}>
-              Create Initial Admin Account
+              {t('createInitialAdmin')}
             </Link>
           )}
         </form>

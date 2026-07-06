@@ -44,7 +44,7 @@
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.1",
-    "exceljs": "^3.4.0",
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "express-rate-limit": "^7.5.0",
     "express-validator": "^7.3.2",
@@ -53,9 +53,12 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.4.1",
     "multer": "^2.1.1",
-    "nodemailer": "^8.0.5",
+    "nodemailer": "^9.0.3",
     "sav-writer": "^1.0.0",
     "socket.io": "^4.8.3",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.1/xlsx-0.20.1.tgz"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
   }
 }

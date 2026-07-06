@@ -134,6 +134,27 @@ app.use(
 );
 app.use(express.json({ limit: '10mb' }));
 
+// Recursive helper to sanitize NoSQL operator injection keys (starting with $)
+function nosqlSanitize(obj) {
+  if (obj && typeof obj === "object") {
+    for (const key in obj) {
+      if (key.startsWith("$")) {
+        delete obj[key];
+      } else {
+        nosqlSanitize(obj[key]);
+      }
+    }
+  }
+}
+
+// Register global NoSQL sanitization middleware
+app.use((req, _res, next) => {
+  if (req.body) nosqlSanitize(req.body);
+  if (req.query) nosqlSanitize(req.query);
+  if (req.params) nosqlSanitize(req.params);
+  next();
+});
+
 app.get("/", (req, res) => {
   res.send("API is running 🚀");
 });

@@ -1,8 +1,15 @@
 require('dotenv').config();
 
+const isProduction = (process.env.NODE_ENV || 'development') === 'production';
+const jwtSecret = process.env.JWT_SECRET || (isProduction ? undefined : 'development_fallback_jwt_secret_key_1234567890');
+
+if (isProduction && !jwtSecret) {
+  throw new Error("CRITICAL CONFIGURATION ERROR: JWT_SECRET environment variable is required in production!");
+}
+
 const env = {
   MONGO_URI: process.env.MONGO_URI || '',
-  JWT_SECRET: process.env.JWT_SECRET || 'baseera_se-cure_prod_key_2026_99x3',
+  JWT_SECRET: jwtSecret,
   PORT: parseInt(process.env.PORT || '3000', 10),
   HOST: process.env.HOST || '0.0.0.0',
   NODE_ENV: process.env.NODE_ENV || 'development',

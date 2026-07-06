@@ -17,12 +17,12 @@ test.describe('Agent Workflow (Happy Path)', () => {
 
   test('Admin dashboard loads with campaign cards', async ({ page }) => {
     // Verify the E2E test campaign is visible
-    await expect(page.getByText('E2E Test Campaign')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('E2E Test Campaign').first()).toBeVisible({ timeout: 10_000 });
   });
 
   test('Admin can navigate to Survey Builder', async ({ page }) => {
     // Click on Edit for the test campaign
-    const campaignCard = page.locator('.glass-card', { hasText: 'E2E Test Campaign' });
+    const campaignCard = page.locator('.glass-card', { hasText: 'E2E Test Campaign' }).first();
     const editButton = campaignCard.getByRole('link', { name: /Edit/i });
 
     if (await editButton.isVisible()) {
@@ -33,7 +33,7 @@ test.describe('Agent Workflow (Happy Path)', () => {
   });
 
   test('Admin can toggle campaign status', async ({ page }) => {
-    const campaignCard = page.locator('.glass-card', { hasText: 'E2E Test Campaign' });
+    const campaignCard = page.locator('.glass-card', { hasText: 'E2E Test Campaign' }).first();
 
     // Find the toggle/pause button
     const toggleBtn = campaignCard.getByRole('button').last();

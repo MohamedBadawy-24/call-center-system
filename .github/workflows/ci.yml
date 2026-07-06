@@ -75,20 +75,8 @@ jobs:
     timeout-minutes: 20
     needs: unit-integration  # Only run E2E if unit tests pass
 
-    services:
-      # MongoDB service container for the backend server
-      mongo:
-        image: mongo:7
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --eval 'db.runCommand({ping:1})'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     env:
-      MONGO_URI: mongodb://localhost:27017/baseera_e2e
+      MONGO_URI: mongodb://localhost:27017/baseera_e2e?replicaSet=rs0
       JWT_SECRET: ci-e2e-jwt-secret-key-1234567890
       PORT: 3000
       HOST: 0.0.0.0
@@ -112,6 +100,13 @@ jobs:
       # ── Install Dependencies ──
       - name: Install backend dependencies
         run: npm ci
+
+      # ── Start MongoDB Replica Set ──
+      - name: Start MongoDB Replica Set
+        run: |
+          docker run -d -p 27017:27017 --name mongo mongo:7 mongod --replSet rs0
+          sleep 5
+          docker exec mongo mongosh --eval "rs.initiate()"
 
       - name: Install frontend dependencies
         run: npm ci

@@ -55,13 +55,18 @@ async function globalSetup(config: FullConfig) {
     } catch (loginErr) {
       // Fallback to registration if login fails
       try {
-        const regRes = await axios.post(`${BACKEND}/auth/register`, {
+        await axios.post(`${BACKEND}/auth/register`, {
           name: 'E2E Admin',
           email: 'e2e-admin@baseera.test',
           password: 'Admin123_test',
           role: 'admin',
         });
-        adminToken = regRes.data.token;
+        // Explicitly login to retrieve token
+        const loginRes = await axios.post(`${BACKEND}/auth/login`, {
+          email: 'e2e-admin@baseera.test',
+          password: 'Admin123_test',
+        });
+        adminToken = loginRes.data.token;
         const meRes = await axios.get(`${BACKEND}/auth/me`, {
           headers: { Authorization: `Bearer ${adminToken}` },
         });
@@ -106,24 +111,49 @@ async function globalSetup(config: FullConfig) {
   agentId = agentMe.data.user.id || agentMe.data.user._id;
 
   // 3. Create a Quality Reviewer user
+  let qualityToken: string;
+  let qualityId: string;
   const qualityEmail = `e2e-quality-${Date.now()}@baseera.test`;
-  await axios.post(
-    `${BACKEND}/auth/register`,
-    {
-      name: 'E2E Quality Reviewer',
+
+  try {
+    // Attempt login first
+    const qualityLoginRes = await axios.post(`${BACKEND}/auth/login`, {
       email: qualityEmail,
       password: 'Quality123_test',
-      role: 'quality',
-    },
-    { headers: { Authorization: `Bearer ${adminToken}` } }
-  );
-
-  const qualityLoginRes = await axios.post(`${BACKEND}/auth/login`, {
-    email: qualityEmail,
-    password: 'Quality123_test',
-  });
-  const qualityToken = qualityLoginRes.data.token;
-  const qualityId = qualityLoginRes.data.user.id || qualityLoginRes.data.user._id;
+    });
+    qualityToken = qualityLoginRes.data.token;
+    const qualityMe = await axios.get(`${BACKEND}/auth/me`, {
+      headers: { Authorization: `Bearer ${qualityToken}` },
+    });
+    qualityId = qualityMe.data.user.id || qualityMe.data.user._id;
+  } catch (err) {
+    // Register then login
+    try {
+      await axios.post(
+        `${BACKEND}/auth/register`,
+        {
+          name: 'E2E Quality Reviewer',
+          email: qualityEmail,
+          password: 'Quality123_test',
+          role: 'quality',
+        },
+        { headers: { Authorization: `Bearer ${adminToken}` } }
+      );
+      // Explicitly login to retrieve token
+      const qualityLoginRes = await axios.post(`${BACKEND}/auth/login`, {
+        email: qualityEmail,
+        password: 'Quality123_test',
+      });
+      qualityToken = qualityLoginRes.data.token;
+      const qualityMe = await axios.get(`${BACKEND}/auth/me`, {
+        headers: { Authorization: `Bearer ${qualityToken}` },
+      });
+      qualityId = qualityMe.data.user.id || qualityMe.data.user._id;
+    } catch (regErr: any) {
+      console.error("[E2E SETUP] Quality Reviewer setup failed:", regErr.response?.data || regErr.message);
+      throw regErr;
+    }
+  }
 
   // 4. Create a test survey
   const surveyRes = await axios.post(

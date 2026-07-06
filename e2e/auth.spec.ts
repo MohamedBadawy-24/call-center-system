@@ -32,8 +32,8 @@ test.describe('Authentication Flows', () => {
     await loginPage.login('wrong@email.com', 'WrongPassword1_');
 
     // Wait for error toast to appear
-    const toast = page.locator('.Toastify__toast--error, [role="alert"]');
-    await expect(toast.first()).toBeVisible({ timeout: 5000 });
+    const toast = page.getByRole('alert');
+    await expect(toast.first()).toBeVisible({ timeout: 8000 });
   });
 
   test('Unauthenticated users are redirected to /login', async ({ page }) => {

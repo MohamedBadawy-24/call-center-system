@@ -175,6 +175,9 @@ jobs:
           done
         working-directory: admin-ui
 
+      - name: Wait for backend and frontend to be ready
+        run: npx wait-on http://localhost:3000/health http://localhost:3001 --timeout 60000
+
       # ── Run Playwright E2E Tests ──
       - name: Run Playwright E2E tests
         run: npx playwright test --project=chromium --workers=1

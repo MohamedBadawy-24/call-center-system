@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
+import * as path from 'path';
 
 test.describe('E2E Production Simulation: Agent Workflow Lifecycle', () => {
 
@@ -41,7 +42,7 @@ test.describe('E2E Production Simulation: Agent Workflow Lifecycle', () => {
     test.setTimeout(60000);
 
     // 0. Load the temporary survey config generated in Phase 1
-    const configPath = '/Users/mohamedbadawy/Desktop/call-center-system/e2e-temp-survey.json';
+    const configPath = path.join(__dirname, '../e2e-temp-survey.json');
     if (!fs.existsSync(configPath)) {
       throw new Error(`Temp survey config not found at ${configPath}. Run survey-creation E2E spec first!`);
     }

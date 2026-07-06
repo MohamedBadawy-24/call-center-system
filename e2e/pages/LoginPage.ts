@@ -16,7 +16,7 @@ export class LoginPage {
     this.emailInput = page.getByTestId('baseera-email-input');
     this.passwordInput = page.getByTestId('baseera-password-input');
     this.loginButton = page.getByTestId('baseera-login-button');
-    this.errorMessage = page.locator('.Toastify__toast--error');
+    this.errorMessage = page.getByRole('alert');
   }
 
   async goto() {

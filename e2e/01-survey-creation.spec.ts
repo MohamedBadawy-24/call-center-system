@@ -153,7 +153,8 @@ test.describe('E2E Production Simulation: Survey Creation & Publishing', () => {
 
     // Save configuration details to temp file for subsequent spec
     const fs = require('fs');
-    fs.writeFileSync('/Users/mohamedbadawy/Desktop/call-center-system/e2e-temp-survey.json', JSON.stringify({ id: surveyId, title }));
+    const path = require('path');
+    fs.writeFileSync(path.join(__dirname, '../e2e-temp-survey.json'), JSON.stringify({ id: surveyId, title }));
 
     // Verify UI reflects the published state
     await page.waitForURL('**/admin', { timeout: 10000 });

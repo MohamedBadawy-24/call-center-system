@@ -30,3 +30,4 @@ data/db/
 
 coverage/
 scratch/
+e2e-temp-survey.json

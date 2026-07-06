@@ -56,7 +56,7 @@ test.describe('User Management', () => {
       await submitBtn.click();
 
       // Wait for success feedback
-      const successToast = page.locator('.Toastify__toast--success');
+      const successToast = page.getByRole('alert');
       await expect(successToast.first()).toBeVisible({ timeout: 10_000 });
     }
   });

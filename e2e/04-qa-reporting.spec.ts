@@ -64,8 +64,8 @@ test.describe('E2E Production Simulation: QA & Reporting', () => {
     await page.goto('/login');
 
     // 7. Log back in as an Admin / Researcher
-    await page.getByTestId('baseera-email-input').fill('mohhamed242@gmail.com');
-    await page.getByTestId('baseera-password-input').fill('Baseera@123');
+    await page.getByTestId('baseera-email-input').fill('e2e-admin@baseera.test');
+    await page.getByTestId('baseera-password-input').fill('Admin123_test');
     await page.getByTestId('baseera-login-button').click();
 
     // Wait for redirect to /admin dashboard

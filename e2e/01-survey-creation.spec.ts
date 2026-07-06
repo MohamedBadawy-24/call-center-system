@@ -7,8 +7,8 @@ test.describe('E2E Production Simulation: Survey Creation & Publishing', () => {
 
     // 1. Login
     await page.goto('/login');
-    await page.getByTestId('baseera-email-input').fill('mohhamed242@gmail.com');
-    await page.getByTestId('baseera-password-input').fill('Baseera@123');
+    await page.getByTestId('baseera-email-input').fill('e2e-admin@baseera.test');
+    await page.getByTestId('baseera-password-input').fill('Admin123_test');
     await page.getByTestId('baseera-login-button').click();
 
     // Wait for redirect to /admin or check dashboard elements

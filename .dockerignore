@@ -1,6 +1,7 @@
 node_modules
 admin-ui/node_modules
 .git
+.github
 .env
 admin-ui/.env
 uploads/*
@@ -12,3 +13,10 @@ test-email.js
 seed-test.js
 e2e_results.json
 .cursor
+tests
+e2e
+playwright-report
+test-results
+dist
+admin-ui/dist
+*.log

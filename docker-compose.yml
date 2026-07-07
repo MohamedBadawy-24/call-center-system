@@ -1,8 +1,30 @@
 version: '3.8'
+
 services:
-  mongo:
+  # Helper to automatically generate keyfile for MongoDB replica set on startup
+  mongo-keyfile-generator:
+    image: alpine
+    user: "root"
+    volumes:
+      - mongo_keyfile:/etc/mongo-keyfile-vol
+    entrypoint:
+      - sh
+      - -c
+      - |
+        if [ ! -f /etc/mongo-keyfile-vol/keyfile ]; then
+          echo "Generating MongoDB replica set keyfile..."
+          dd if=/dev/urandom bs=1 count=756 of=/etc/mongo-keyfile-vol/keyfile
+          chmod 400 /etc/mongo-keyfile-vol/keyfile
+          chown 999:999 /etc/mongo-keyfile-vol/keyfile
+        fi
+
+  # Single-node MongoDB Replica Set service
+  mongodb:
     image: mongo:8
     restart: unless-stopped
+    depends_on:
+      mongo-keyfile-generator:
+        condition: service_completed_successfully
     ports:
       - '27017:27017'
     environment:
@@ -11,8 +33,43 @@ services:
       MONGO_INITDB_DATABASE: baseera
     volumes:
       - mongo_data:/data/db
+      - mongo_keyfile:/etc/mongo-keyfile-vol
+    command: >
+      mongod --replSet rs0 --bind_ip_all --keyFile /etc/mongo-keyfile-vol/keyfile
+    healthcheck:
+      test: mongosh --port 27017 --eval 'db.adminCommand("ping")'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
-  app:
+  # Helper to automatically initiate MongoDB Replica Set after database starts
+  mongo-rs-init:
+    image: mongo:8
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      MONGO_INIT_USERNAME: ${MONGO_INIT_USERNAME:-admin}
+      MONGO_INIT_PASSWORD: ${MONGO_INIT_PASSWORD}
+    entrypoint:
+      - bash
+      - -c
+      - |
+        echo "Waiting to initiate replica set..."
+        mongosh --host mongodb:27017 -u "$MONGO_INIT_USERNAME" -p "$MONGO_INIT_PASSWORD" --authenticationDatabase admin --eval '
+          try {
+            if (!rs.status().ok) {
+              rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongodb:27017"}]});
+            }
+          } catch (e) {
+            rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongodb:27017"}]});
+          }
+        '
+        echo "Replica set successfully initialized!"
+
+  # Node.js backend API
+  backend:
     build:
       context: .
       dockerfile: Dockerfile
@@ -22,25 +79,28 @@ services:
     env_file:
       - .env
     environment:
-      MONGO_URI: mongodb://admin:${MONGO_INIT_PASSWORD}@mongo:27017/baseera?authSource=admin
+      MONGO_URI: mongodb://${MONGO_INIT_USERNAME:-admin}:${MONGO_INIT_PASSWORD}@mongodb:27017/baseera?authSource=admin&replicaSet=rs0
       NODE_ENV: production
       PORT: 3000
-      CORS_ORIGIN: https://admin.yourdomain.com
-      SOCKET_IO_CORS_ORIGIN: https://admin.yourdomain.com
     depends_on:
-      - mongo
+      mongodb:
+        condition: service_healthy
+      mongo-rs-init:
+        condition: service_completed_successfully
     volumes:
       - ./uploads:/app/uploads
 
-  admin-ui:
-    build: ./admin-ui
+  # Frontend Nginx server (exposed on host port 80)
+  frontend:
+    build:
+      context: ./admin-ui
+      dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - '3001:3001'
-    volumes:
-      - ./admin-ui:/app
-      - /app/node_modules
+      - '80:80'
+    depends_on:
+      - backend
 
 volumes:
   mongo_data:
-
+  mongo_keyfile:

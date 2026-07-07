@@ -28,13 +28,13 @@ export default function QuestionCard({
   removeChoice,
   duplicateQ,
   deleteQ,
+  selected,
+  onToggleSelect,
 }) {
-  const { surveyState, isAdmin, addQuestionToGroup, removeQuestionFromGroup, createQuestionGroup } = useContext(SurveyBuilderContext);
+  const { surveyState, isAdmin } = useContext(SurveyBuilderContext);
   const { language } = useContext(UIContext);
   const isRtl = language === 'ar';
   const [collapsed, setCollapsed] = useState(false);
-  const [showQuestionGroupPanel, setShowQuestionGroupPanel] = useState(false);
-  const [newGroupName, setNewGroupName] = useState('');
 
   const {
     attributes,
@@ -82,6 +82,17 @@ export default function QuestionCard({
         <div {...attributes} {...listeners} style={{ cursor: 'grab', padding: '0.25rem', color: 'var(--text-secondary)' }}>
           <GripVertical size={16} />
         </div>
+        {onToggleSelect && (
+          <div style={{ padding: '0 0.5rem', display: 'flex', alignItems: 'center' }}>
+            <input 
+              type="checkbox" 
+              checked={!!selected} 
+              onChange={onToggleSelect} 
+              style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
+              data-testid={`select-q-${question.questionId}`}
+            />
+          </div>
+        )}
 
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '1rem', marginLeft: '0.5rem' }}>
           <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--primary)' }}>Q{qIdx + 1}</span>
@@ -89,44 +100,8 @@ export default function QuestionCard({
             {question.text || <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>Untitled Question</span>}
           </div>
           {question.visibility && (
-            <span style={{ fontSize: '0.75rem', background: '#fef3c7', color: '#b45309', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>
-              Has Logic
-            </span>
-          )}
-          {question._groupId && (
-            <span 
-              style={{ 
-                fontSize: '0.75rem', 
-                background: 'var(--primary-low, rgba(59, 130, 246, 0.1))', 
-                color: 'var(--primary)', 
-                padding: '0.2rem 0.5rem', 
-                borderRadius: '4px', 
-                fontWeight: 700, 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '0.25rem' 
-              }}
-            >
-              📦 {question._groupLabel || 'Grouped'}
-              {isAdmin && (
-                <button 
-                  type="button" 
-                  onClick={(e) => { e.stopPropagation(); removeQuestionFromGroup(question.questionId); }} 
-                  style={{ 
-                    border: 'none', 
-                    background: 'transparent', 
-                    color: 'var(--danger, #ef4444)', 
-                    cursor: 'pointer', 
-                    padding: 0, 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    marginLeft: '4px' 
-                  }}
-                  title="Remove from group"
-                >
-                  ✕
-                </button>
-              )}
+            <span style={{ fontSize: '0.75rem', background: 'var(--danger, #ef4444)', color: 'white', padding: '0.2rem 0.6rem', borderRadius: '4px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+              Skip Logic Active
             </span>
           )}
         </div>
@@ -291,75 +266,7 @@ export default function QuestionCard({
               onChange={cond => updateQ({ visibility: cond })}
               availableFields={allAvailableFieldsForLogic}
               readOnly={!isAdmin}
-              onAddQuestionToGroup={() => setShowQuestionGroupPanel(true)}
             />
-
-            {showQuestionGroupPanel && (
-              <div style={{
-                marginTop: '1rem', padding: '1rem', border: '1px solid var(--border-color)',
-                borderRadius: '8px', background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: '0.75rem'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-primary)' }}>Assign to Question Group</span>
-                  <button 
-                    type="button" 
-                    onClick={() => setShowQuestionGroupPanel(false)}
-                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--text-secondary)' }}
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <label className="form-label" style={{ fontSize: '0.76rem', margin: 0 }}>Select Existing Group</label>
-                  <select
-                    className="input-field"
-                    value={question._groupId || ''}
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        addQuestionToGroup(question.questionId, e.target.value);
-                        setShowQuestionGroupPanel(false);
-                      }
-                    }}
-                    style={{ margin: 0 }}
-                  >
-                    <option value="">-- Choose a group --</option>
-                    {(surveyState.groups || []).map(grp => (
-                      <option key={grp._id} value={grp._id}>{grp.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ borderTop: '1px solid var(--border-color)', margin: '0.25rem 0' }} />
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <label className="form-label" style={{ fontSize: '0.76rem', margin: 0 }}>+ Create New Group</label>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input
-                      type="text"
-                      className="input-field"
-                      placeholder="Enter new group name..."
-                      value={newGroupName}
-                      onChange={e => setNewGroupName(e.target.value)}
-                      style={{ margin: 0, flex: 1 }}
-                    />
-                    <button
-                      type="button"
-                      className="btn-primary"
-                      onClick={() => {
-                        if (!newGroupName.trim()) return;
-                        createQuestionGroup(newGroupName.trim(), question.questionId);
-                        setNewGroupName('');
-                        setShowQuestionGroupPanel(false);
-                      }}
-                      style={{ padding: '0.5rem 1rem' }}
-                    >
-                      Create
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}

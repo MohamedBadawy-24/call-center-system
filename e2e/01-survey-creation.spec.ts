@@ -94,18 +94,20 @@ test.describe('E2E Production Simulation: Survey Creation & Publishing', () => {
     await q4Card.locator('select').first().selectOption('text');
 
     // 6. Creates a 'Question Group' (e.g. 'Demographics') and groups Q3 & Q4
-    // Q3 -> Click Build Visibility Logic -> Group -> Question Group -> Name: 'Demographics'
-    await q3Card.getByRole('button', { name: /Build Visibility Logic/i }).click();
-    await q3Card.getByRole('button', { name: /Group/i }).click();
-    await page.getByRole('button', { name: /Question Group/i }).click();
-    await q3Card.getByPlaceholder('Enter new group name...').fill('Demographics');
-    await q3Card.getByRole('button', { name: /Create/i }).click();
+    // Select Q3 and Q4 via checkboxes
+    await page.getByTestId('select-q-q3').check();
+    await page.getByTestId('select-q-q4').check();
+    
+    // Handle the prompt dialog for group name
+    page.once('dialog', async dialog => {
+      await dialog.accept('Demographics');
+    });
 
-    // Q4 -> Click Build Visibility Logic -> Group -> Question Group -> Select existing: 'Demographics'
-    await q4Card.getByRole('button', { name: /Build Visibility Logic/i }).click();
-    await q4Card.getByRole('button', { name: /Group/i }).click();
-    await page.getByRole('button', { name: /Question Group/i }).click();
-    await q4Card.locator('select').nth(2).selectOption({ label: 'Demographics' });
+    // Click 'Create Group' on the sticky bar
+    await page.getByRole('button', { name: /Create Group/i }).click();
+    
+    // Verify the group container is rendered
+    await expect(page.getByTestId(/group-label-/).filter({ hasText: 'Demographics' })).toBeVisible();
 
     // 7. Add simple routing logic: If Q1 == 'No', skip Q2 (skip to Q3)
     // Q2 -> Click Build Visibility Logic -> set action to 'skip' -> add Rule -> select 'No'

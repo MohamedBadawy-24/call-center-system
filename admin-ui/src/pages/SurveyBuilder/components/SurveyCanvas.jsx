@@ -1,11 +1,29 @@
-import React, { useContext, useCallback } from 'react';
+import React, { useContext, useCallback, useState } from 'react';
 import { SurveyBuilderContext } from '../SurveyBuilderContext';
 import QuestionCard from './QuestionCard';
+import GroupContainer from './GroupContainer';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { Plus } from 'lucide-react';
+import { Plus, Layers } from 'lucide-react';
 
 export default function SurveyCanvas() {
-  const { surveyState, updateState, isAdmin } = useContext(SurveyBuilderContext);
+  const { surveyState, updateState, isAdmin, createQuestionGroup } = useContext(SurveyBuilderContext);
+
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState([]);
+
+  const toggleSelect = (qId) => {
+    setSelectedQuestionIds(prev => 
+      prev.includes(qId) ? prev.filter(id => id !== qId) : [...prev, qId]
+    );
+  };
+
+  const handleCreateGroup = () => {
+    if (selectedQuestionIds.length < 2) return;
+    const name = prompt("Enter a name for the new question group:");
+    if (name && name.trim()) {
+      createQuestionGroup(name.trim(), selectedQuestionIds);
+      setSelectedQuestionIds([]);
+    }
+  };
 
   // ─── Section-level mutations ──────────────────────────────────────────────
 
@@ -219,20 +237,66 @@ export default function SurveyCanvas() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <SortableContext items={questionIds} strategy={verticalListSortingStrategy}>
-                {sec.questions.map((q, qIdx) => (
-                  <QuestionCard
-                    key={`${sIdx}-${qIdx}-${q.questionId}`}
-                    question={q}
-                    sIdx={sIdx}
-                    qIdx={qIdx}
-                    updateQ={makeUpdateQ(sIdx, q.questionId)}
-                    updateChoice={makeUpdateChoice(sIdx, q.questionId)}
-                    addChoice={makeAddChoice(sIdx, q.questionId)}
-                    removeChoice={makeRemoveChoice(sIdx, q.questionId)}
-                    duplicateQ={makeDuplicateQ(sIdx, q.questionId)}
-                    deleteQ={makeDeleteQ(sIdx, q.questionId)}
-                  />
-                ))}
+                {(() => {
+                  const blocks = [];
+                  let currentGroup = null;
+                  
+                  sec.questions.forEach((q, qIdx) => {
+                    if (q._groupId) {
+                      if (!currentGroup || currentGroup.id !== q._groupId) {
+                        currentGroup = { id: q._groupId, label: q._groupLabel, questions: [] };
+                        blocks.push({ type: 'group', group: currentGroup });
+                      }
+                      currentGroup.questions.push({ q, qIdx });
+                    } else {
+                      currentGroup = null;
+                      blocks.push({ type: 'single', q, qIdx });
+                    }
+                  });
+
+                  return blocks.map((block, idx) => {
+                    if (block.type === 'single') {
+                      const { q, qIdx } = block;
+                      return (
+                        <QuestionCard
+                          key={`${sIdx}-${qIdx}-${q.questionId}`}
+                          question={q}
+                          sIdx={sIdx}
+                          qIdx={qIdx}
+                          updateQ={makeUpdateQ(sIdx, q.questionId)}
+                          updateChoice={makeUpdateChoice(sIdx, q.questionId)}
+                          addChoice={makeAddChoice(sIdx, q.questionId)}
+                          removeChoice={makeRemoveChoice(sIdx, q.questionId)}
+                          duplicateQ={makeDuplicateQ(sIdx, q.questionId)}
+                          deleteQ={makeDeleteQ(sIdx, q.questionId)}
+                          selected={selectedQuestionIds.includes(q.questionId)}
+                          onToggleSelect={() => toggleSelect(q.questionId)}
+                        />
+                      );
+                    } else {
+                      return (
+                        <GroupContainer key={`group-${block.group.id}-${idx}`} group={{ _id: block.group.id, label: block.group.label }}>
+                          {block.group.questions.map(({ q, qIdx }) => (
+                            <QuestionCard
+                              key={`${sIdx}-${qIdx}-${q.questionId}`}
+                              question={q}
+                              sIdx={sIdx}
+                              qIdx={qIdx}
+                              updateQ={makeUpdateQ(sIdx, q.questionId)}
+                              updateChoice={makeUpdateChoice(sIdx, q.questionId)}
+                              addChoice={makeAddChoice(sIdx, q.questionId)}
+                              removeChoice={makeRemoveChoice(sIdx, q.questionId)}
+                              duplicateQ={makeDuplicateQ(sIdx, q.questionId)}
+                              deleteQ={makeDeleteQ(sIdx, q.questionId)}
+                              selected={false}
+                              onToggleSelect={null}
+                            />
+                          ))}
+                        </GroupContainer>
+                      );
+                    }
+                  });
+                })()}
               </SortableContext>
             </div>
 
@@ -249,6 +313,40 @@ export default function SurveyCanvas() {
           </div>
         );
       })}
+
+      {selectedQuestionIds.length > 0 && (
+        <div style={{
+          position: 'fixed',
+          bottom: '2rem',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'var(--surface)',
+          padding: '1rem 2rem',
+          borderRadius: '16px',
+          boxShadow: 'var(--shadow-xl)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1.5rem',
+          zIndex: 100,
+          border: '1px solid var(--border-color)'
+        }}>
+          <span style={{ fontWeight: 600 }}>{selectedQuestionIds.length} question(s) selected</span>
+          <button
+            className="btn-primary"
+            onClick={handleCreateGroup}
+            disabled={selectedQuestionIds.length < 2}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+          >
+            <Layers size={16} /> Create Group
+          </button>
+          <button
+            className="btn-secondary"
+            onClick={() => setSelectedQuestionIds([])}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
     </div>
   );
 }

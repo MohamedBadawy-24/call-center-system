@@ -1,4 +1,5 @@
 import React, { useContext, useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { SurveyBuilderContext } from '../SurveyBuilderContext';
 import { EGYPTIAN_GOVERNORATES } from '../../../utils/governorates';
 import { api } from '../../../api/client';
@@ -10,16 +11,39 @@ const AgentMultiSelect = ({ agents, assignedAgents, setAssignedAgents, disabled 
   const [search, setSearch] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
+  const [dropdownCoords, setDropdownCoords] = useState(null);
 
   useEffect(() => {
     function handleClickOutside(event) {
       if (containerRef.current && !containerRef.current.contains(event.target)) {
+        const portalNode = document.getElementById('agent-multiselect-portal');
+        if (portalNode && portalNode.contains(event.target)) return;
         setIsOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const updateCoords = () => {
+        const rect = containerRef.current.getBoundingClientRect();
+        setDropdownCoords({
+          top: rect.bottom,
+          left: rect.left,
+          width: rect.width
+        });
+      };
+      updateCoords();
+      window.addEventListener('resize', updateCoords);
+      window.addEventListener('scroll', updateCoords, true);
+      return () => {
+        window.removeEventListener('resize', updateCoords);
+        window.removeEventListener('scroll', updateCoords, true);
+      };
+    }
+  }, [isOpen]);
 
   const filteredAgents = agents.filter(a => 
     (a.name || '').toLowerCase().includes(search.toLowerCase()) || 
@@ -102,9 +126,9 @@ const AgentMultiSelect = ({ agents, assignedAgents, setAssignedAgents, disabled 
           )}
         </div>
 
-        {isOpen && !disabled && (
-          <div style={{
-            position: 'absolute', top: '100%', left: 0, right: 0, width: '100%', zIndex: 999,
+        {isOpen && !disabled && dropdownCoords && createPortal(
+          <div id="agent-multiselect-portal" style={{
+            position: 'fixed', top: `${dropdownCoords.top}px`, left: `${dropdownCoords.left}px`, width: `${dropdownCoords.width}px`, zIndex: 99999,
             marginTop: '0.4rem', backgroundColor: 'var(--surface)', border: '1px solid var(--border)',
             borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', maxHeight: '220px', overflowY: 'auto'
           }}>
@@ -136,7 +160,8 @@ const AgentMultiSelect = ({ agents, assignedAgents, setAssignedAgents, disabled 
                 );
               })
             )}
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </div>
@@ -273,7 +298,7 @@ export default function SettingsTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      <div className="glass-card" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem', overflow: 'visible' }}>
+      <div className="glass-card" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem', overflow: 'visible', zIndex: 20 }}>
         {/* Row 1 */}
         <div style={{ width: '100%' }}>
           <label className="form-label">Campaign Title</label>

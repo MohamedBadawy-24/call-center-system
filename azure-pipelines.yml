@@ -15,7 +15,14 @@ steps:
     versionSpec: '20.x'
   displayName: 'Install Node.js'
 
+# 1. Install Backend Dependencies
+- script: |
+    npm install
+  displayName: 'Install Backend Dependencies'
+
+# 2. Install and Build Frontend
 - script: |
     npm install
     npm run build
-  displayName: 'npm install and build'
+  workingDirectory: 'admin-ui'
+  displayName: 'Install and Build Frontend (admin-ui)'

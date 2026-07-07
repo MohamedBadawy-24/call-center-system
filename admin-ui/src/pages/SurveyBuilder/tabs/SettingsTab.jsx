@@ -129,8 +129,9 @@ const AgentMultiSelect = ({ agents, assignedAgents, setAssignedAgents, disabled 
         {isOpen && !disabled && dropdownCoords && createPortal(
           <div id="agent-multiselect-portal" style={{
             position: 'fixed', top: `${dropdownCoords.top}px`, left: `${dropdownCoords.left}px`, width: `${dropdownCoords.width}px`, zIndex: 99999,
-            marginTop: '0.4rem', backgroundColor: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', maxHeight: '220px', overflowY: 'auto'
+            marginTop: '0.4rem', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border)',
+            borderRadius: '8px', boxShadow: 'var(--shadow-md)', maxHeight: '220px', overflowY: 'auto',
+            backdropFilter: 'none', WebkitBackdropFilter: 'none'
           }}>
             {filteredAgents.length === 0 ? (
               <div style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem', textAlign: 'center' }}>No agents found.</div>
@@ -148,7 +149,7 @@ const AgentMultiSelect = ({ agents, assignedAgents, setAssignedAgents, disabled 
                       borderBottom: '1px solid var(--border)',
                       transition: 'background-color 0.15s ease'
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isSelected ? 'rgba(59, 130, 246, 0.12)' : 'rgba(0,0,0,0.03)'}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isSelected ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.08)'}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isSelected ? 'rgba(59, 130, 246, 0.08)' : 'transparent'}
                   >
                     <div>

@@ -91,12 +91,6 @@ export default function SurveyToolbar() {
             </button>
           </div>
           
-          {isLocked && (
-            <span style={{ fontSize: '0.85rem', color: 'var(--warning)', fontWeight: 600, marginRight: '0.5rem' }}>
-              {t('activeCampaignWarning')}
-            </span>
-          )}
-          
           <button type="button" className="btn-primary" onClick={() => publish()} disabled={isSaving || isLocked} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             {isSaving ? <span className="spin-icon">↻</span> : <Save size={18} />}
             Publish / Save

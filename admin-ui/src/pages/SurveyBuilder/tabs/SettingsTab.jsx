@@ -113,49 +113,82 @@ export default function SettingsTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      <div className="glass-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '2rem', flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 300px' }}>
+      <div className="glass-card" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
+        {/* Row 1 */}
+        <div style={{ width: '100%' }}>
           <label className="form-label">Campaign Title</label>
-          <input className="input-field" value={surveyState.title} onChange={e => updateState({ title: e.target.value })} placeholder="e.g. Health Awareness Poll 2026" readOnly={!isAdmin} />
+          <input className="input-field" value={surveyState.title} onChange={e => updateState({ title: e.target.value })} placeholder="e.g. Health Awareness Poll 2026" readOnly={!isAdmin} style={{ margin: 0 }} />
         </div>
-        <div style={{ width: '120px' }}>
-          <label className="form-label">Campaign Goal</label>
-          <input type="number" className="input-field" value={surveyState.goal} onChange={e => updateState({ goal: Number(e.target.value) })} placeholder="Target count" readOnly={!isAdmin} />
+
+        {/* Row 2 */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
+          <div>
+            <label className="form-label">Campaign Goal</label>
+            <input type="number" className="input-field" value={surveyState.goal} onChange={e => updateState({ goal: Number(e.target.value) })} placeholder="Target count" readOnly={!isAdmin} style={{ margin: 0 }} />
+          </div>
+          <div>
+            <label className="form-label">Target Governorate</label>
+            <select className="input-field" value={surveyState.targetGovernorate} onChange={e => updateState({ targetGovernorate: e.target.value })} disabled={!isAdmin} style={{ margin: 0 }}>
+              <option value="All">All Governorates</option>
+              {EGYPTIAN_GOVERNORATES.map(g => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Survey Layout Mode</label>
+            <select className="input-field" value={surveyState.layoutMode || 'single'} onChange={e => updateState({ layoutMode: e.target.value })} disabled={!isAdmin} style={{ margin: 0 }}>
+              <option value="single">Single Question Per Screen</option>
+              <option value="multi">Multiple Questions (Page-by-Section)</option>
+            </select>
+          </div>
         </div>
-        <div style={{ width: '200px' }}>
-          <label className="form-label">Target Governorate</label>
-          <select className="input-field" value={surveyState.targetGovernorate} onChange={e => updateState({ targetGovernorate: e.target.value })} disabled={!isAdmin}>
-            <option value="All">All Governorates</option>
-            {EGYPTIAN_GOVERNORATES.map(g => (
-              <option key={g} value={g}>{g}</option>
-            ))}
-          </select>
-        </div>
-        <div style={{ width: '200px' }}>
-          <label className="form-label">Survey Layout Mode</label>
-          <select className="input-field" value={surveyState.layoutMode || 'single'} onChange={e => updateState({ layoutMode: e.target.value })} disabled={!isAdmin}>
-            <option value="single">Single Question Per Screen</option>
-            <option value="multi">Multiple Questions (Page-by-Section)</option>
-          </select>
-        </div>
-        <div style={{ width: '220px' }}>
-          <label className="form-label">Number Assignment Mode</label>
-          <select className="input-field" value={surveyState.numberAssignmentMode || 'queue_only'} onChange={e => updateState({ numberAssignmentMode: e.target.value })} disabled={!isAdmin}>
-            <option value="queue_only">Queue Only</option>
-            <option value="queue_then_manual">Queue then Manual</option>
-            <option value="manual_allowed">Manual Allowed</option>
-          </select>
-        </div>
-        <div>
-          <label className="form-label" style={{ display: 'block', marginBottom: '0.5rem' }}>Campaign Status</label>
-          <button 
-            type="button"
-            className={surveyState.isActive ? "btn-primary" : "btn-secondary"}
-            onClick={isAdmin ? toggleCampaignStatus : undefined}
-            disabled={!isAdmin}
-          >
-            {surveyState.isActive ? 'Active' : 'Inactive'}
-          </button>
+
+        {/* Row 3 */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem' }}>
+          <div>
+            <label className="form-label">Number Assignment Mode</label>
+            <select className="input-field" value={surveyState.numberAssignmentMode || 'queue_only'} onChange={e => updateState({ numberAssignmentMode: e.target.value })} disabled={!isAdmin} style={{ margin: 0 }}>
+              <option value="queue_only">Queue Only</option>
+              <option value="queue_then_manual">Queue then Manual</option>
+              <option value="manual_allowed">Manual Allowed</option>
+            </select>
+          </div>
+          <div>
+            <label className="form-label" style={{ display: 'block', marginBottom: '0.4rem' }}>Campaign Status</label>
+            <button 
+              type="button"
+              onClick={isAdmin ? toggleCampaignStatus : undefined}
+              disabled={!isAdmin}
+              style={{
+                padding: '0.65rem 1.2rem',
+                borderRadius: '8px',
+                border: 'none',
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                cursor: isAdmin ? 'pointer' : 'not-allowed',
+                backgroundColor: surveyState.isActive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                color: surveyState.isActive ? 'var(--success)' : 'var(--danger)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                width: '100%',
+                transition: 'all 0.2s ease',
+                boxShadow: surveyState.isActive ? 'inset 0 0 0 1px rgba(16, 185, 129, 0.3)' : 'inset 0 0 0 1px rgba(239, 68, 68, 0.3)',
+                margin: 0
+              }}
+            >
+              <div style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: surveyState.isActive ? 'var(--success)' : 'var(--danger)',
+                boxShadow: surveyState.isActive ? '0 0 8px var(--success)' : '0 0 8px var(--danger)'
+              }}></div>
+              {surveyState.isActive ? 'ACTIVE' : 'INACTIVE'}
+            </button>
+          </div>
         </div>
       </div>
 

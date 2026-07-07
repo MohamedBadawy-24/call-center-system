@@ -104,9 +104,9 @@ const AgentMultiSelect = ({ agents, assignedAgents, setAssignedAgents, disabled 
 
         {isOpen && !disabled && (
           <div style={{
-            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+            position: 'absolute', top: '100%', left: 0, right: 0, width: '100%', zIndex: 999,
             marginTop: '0.4rem', backgroundColor: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', maxHeight: '220px', overflowY: 'auto'
+            borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', maxHeight: '220px', overflowY: 'auto'
           }}>
             {filteredAgents.length === 0 ? (
               <div style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem', textAlign: 'center' }}>No agents found.</div>
@@ -273,7 +273,7 @@ export default function SettingsTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      <div className="glass-card" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
+      <div className="glass-card" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem', overflow: 'visible' }}>
         {/* Row 1 */}
         <div style={{ width: '100%' }}>
           <label className="form-label">Campaign Title</label>

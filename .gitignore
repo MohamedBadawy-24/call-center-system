@@ -31,3 +31,10 @@ data/db/
 coverage/
 scratch/
 e2e-temp-survey.json
+
+# Test artifacts and reports
+playwright-report/
+test-results/
+blob-report/
+.playwright-artifacts/
+*.log

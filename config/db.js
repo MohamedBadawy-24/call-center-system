@@ -8,7 +8,8 @@ const connectDB = async () => {
       throw new Error("MONGO_URI is missing");
     }
 
-    logger.info("Connecting to MongoDB...");
+    const maskedUri = (env.MONGO_URI || '').replace(/:([^:@]{1,})@/, ':****@');
+    logger.info(`Connecting to MongoDB... URL: ${maskedUri}`);
     await mongoose.connect(env.MONGO_URI, {
       serverSelectionTimeoutMS: 10000,
       connectTimeoutMS: 10000,

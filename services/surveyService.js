@@ -26,7 +26,7 @@ exports.updateSurvey = async (surveyId, data) => {
   return survey;
 };
 
-exports.getAllSurveys = async (userRole) => {
+exports.getAllSurveys = async (userRole, userId) => {
   let filter = {};
   if (userRole === 'agent') {
     filter.isActive = { $ne: false };
@@ -34,6 +34,15 @@ exports.getAllSurveys = async (userRole) => {
       { targetAudience: { $in: ['agent', 'both'] } },
       { targetAudience: { $exists: false } },
       { targetAudience: null }
+    ];
+    filter.$and = [
+      {
+        $or: [
+          { assignedAgents: { $exists: false } },
+          { assignedAgents: { $size: 0 } },
+          { assignedAgents: userId }
+        ]
+      }
     ];
   } else if (userRole === 'quality') {
     filter.isActive = { $ne: false };
@@ -43,7 +52,7 @@ exports.getAllSurveys = async (userRole) => {
       { targetAudience: null }
     ];
   }
-  return await Survey.find(filter, 'title description isActive createdAt').sort({ createdAt: -1 });
+  return await Survey.find(filter, 'title description isActive createdAt assignedAgents').sort({ createdAt: -1 });
 };
 
 exports.toggleSurveyStatus = async (surveyId) => {
@@ -86,7 +95,7 @@ exports.getSurveyEligibility = async (userId, userRole, surveyId, serial) => {
   };
 };
 
-exports.getOutboundPrecall = async (userRole, surveyId) => {
+exports.getOutboundPrecall = async (userRole, surveyId, userId) => {
   const isStaff = userRole === 'admin' || userRole === 'quality';
   if (!isStaff && userRole !== 'agent') {
     throw createError('Agents only', 403);
@@ -96,7 +105,19 @@ exports.getOutboundPrecall = async (userRole, surveyId) => {
   if (surveyId && mongoose.Types.ObjectId.isValid(surveyId)) {
     survey = await Survey.findById(surveyId).lean();
   } else {
-    survey = await Survey.findOne({ isActive: { $ne: false } }).sort({ createdAt: -1 }).lean();
+    const filter = { isActive: { $ne: false } };
+    if (userRole === 'agent') {
+      filter.$and = [
+        {
+          $or: [
+            { assignedAgents: { $exists: false } },
+            { assignedAgents: { $size: 0 } },
+            { assignedAgents: userId }
+          ]
+        }
+      ];
+    }
+    survey = await Survey.findOne(filter).sort({ createdAt: -1 }).lean();
   }
   
   if (!survey) return { surveyId: null, outboundPrecall: null, surveyTitle: null };

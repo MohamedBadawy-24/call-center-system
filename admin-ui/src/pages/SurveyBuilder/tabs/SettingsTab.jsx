@@ -18,7 +18,18 @@ export default function SettingsTab() {
   const [uploadStatus, setUploadStatus] = useState('idle'); // idle | uploading | success | error
   const [uploadResult, setUploadResult] = useState(null);
   const [uploadError, setUploadError] = useState('');
+  const [agents, setAgents] = useState([]);
   const uploadFileInputRef = useRef();
+
+  React.useEffect(() => {
+    if (isAdmin) {
+      api.get('/admin/users')
+        .then(res => {
+          setAgents(res.data.filter(u => u.role === 'agent'));
+        })
+        .catch(console.error);
+    }
+  }, [isAdmin]);
 
   const toggleCampaignStatus = async () => {
     if (!surveyId) {
@@ -190,6 +201,30 @@ export default function SettingsTab() {
             </button>
           </div>
         </div>
+
+        {/* Row 4 */}
+        {isAdmin && (
+          <div style={{ width: '100%' }}>
+            <label className="form-label">Assigned Agents (Empty = All Agents)</label>
+            <select 
+              multiple
+              className="input-field" 
+              value={surveyState.assignedAgents || []}
+              onChange={e => {
+                const values = Array.from(e.target.selectedOptions, option => option.value);
+                updateState({ assignedAgents: values });
+              }}
+              style={{ minHeight: '100px', margin: 0 }}
+            >
+              {agents.map(a => (
+                <option key={a._id} value={a._id}>{a.name} ({a.email})</option>
+              ))}
+            </select>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem', marginBottom: 0 }}>
+              Hold Ctrl/Cmd to select multiple agents.
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="glass-card">

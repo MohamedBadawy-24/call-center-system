@@ -82,6 +82,7 @@ const SurveySchema = new mongoose.Schema({
     label: String,
     questionIds: [String]
   }],
+  assignedAgents: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   isActive: { type: Boolean, default: true },
   draftData: { type: mongoose.Schema.Types.Mixed, default: undefined },
   createdAt: { type: Date, default: Date.now },

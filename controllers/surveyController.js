@@ -24,7 +24,7 @@ exports.updateSurvey = async (req, res, next) => {
 
 exports.getAllSurveys = async (req, res, next) => {
   try {
-    const surveys = await surveyService.getAllSurveys(req.user.role);
+    const surveys = await surveyService.getAllSurveys(req.user.role, req.user._id);
     res.json(surveys);
   } catch (err) {
     res.status(500).json({ error: 'Server Error' });
@@ -80,7 +80,7 @@ exports.getSurveyEligibility = async (req, res, next) => {
 exports.getOutboundPrecall = async (req, res, next) => {
   try {
     const { surveyId } = req.query;
-    const precall = await surveyService.getOutboundPrecall(req.user.role, surveyId);
+    const precall = await surveyService.getOutboundPrecall(req.user.role, surveyId, req.user._id);
     res.json(precall);
   } catch (err) {
     if (err.status) {

@@ -9,34 +9,52 @@ import { useCallback } from 'react';
  */
 export function useQuestionGroups(updateState) {
 
-  const createQuestionGroup = useCallback((name, autoAddQuestionId = null) => {
+  const createQuestionGroup = useCallback((name, questionIdsToGroup = []) => {
     const newGroupId = Array.from({ length: 24 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
     updateState(prev => {
       const newGroup = {
         _id: newGroupId,
         label: name,
-        questionIds: autoAddQuestionId ? [autoAddQuestionId] : []
+        questionIds: questionIdsToGroup
       };
       let updatedGroups = [...(prev.groups || []), newGroup];
       let updatedSections = prev.sections;
       
-      if (autoAddQuestionId) {
+      if (questionIdsToGroup.length > 0) {
         updatedGroups = updatedGroups.map(grp => {
           if (grp._id !== newGroupId) {
             return {
               ...grp,
-              questionIds: grp.questionIds.filter(id => id !== autoAddQuestionId)
+              questionIds: grp.questionIds.filter(id => !questionIdsToGroup.includes(id))
             };
           }
           return grp;
         });
 
-        updatedSections = prev.sections.map(sec => ({
-          ...sec,
-          questions: sec.questions.map(q => 
-            q.questionId === autoAddQuestionId ? { ...q, _groupId: newGroupId, _groupLabel: name } : q
-          )
-        }));
+        updatedSections = prev.sections.map(sec => {
+          const secQuestions = [...sec.questions];
+          let earliestIndex = -1;
+          const qsToGroup = [];
+          
+          for (let i = 0; i < secQuestions.length; i++) {
+            if (questionIdsToGroup.includes(secQuestions[i].questionId)) {
+              if (earliestIndex === -1) earliestIndex = i;
+              qsToGroup.push({
+                ...secQuestions[i],
+                _groupId: newGroupId,
+                _groupLabel: name
+              });
+            }
+          }
+          
+          if (earliestIndex !== -1) {
+            const filteredQs = secQuestions.filter(q => !questionIdsToGroup.includes(q.questionId));
+            filteredQs.splice(earliestIndex, 0, ...qsToGroup);
+            return { ...sec, questions: filteredQs };
+          }
+          
+          return sec;
+        });
       }
 
       return {
@@ -47,21 +65,23 @@ export function useQuestionGroups(updateState) {
     });
   }, [updateState]);
 
-  const addQuestionToGroup = useCallback((questionId, groupId) => {
+  const addQuestionToGroup = useCallback((questionIds, groupId) => {
+    const idsToAdd = Array.isArray(questionIds) ? questionIds : [questionIds];
+    if (idsToAdd.length === 0) return;
+
     updateState(prev => {
       let updatedGroups = (prev.groups || []).map(grp => ({
         ...grp,
-        questionIds: grp.questionIds.filter(id => id !== questionId)
+        questionIds: grp.questionIds.filter(id => !idsToAdd.includes(id))
       }));
 
       updatedGroups = updatedGroups.map(grp => {
         if (grp._id === groupId || String(grp._id) === String(groupId)) {
-          if (!grp.questionIds.includes(questionId)) {
-            return {
-              ...grp,
-              questionIds: [...grp.questionIds, questionId]
-            };
-          }
+          const newIds = idsToAdd.filter(id => !grp.questionIds.includes(id));
+          return {
+            ...grp,
+            questionIds: [...grp.questionIds, ...newIds]
+          };
         }
         return grp;
       });
@@ -69,12 +89,42 @@ export function useQuestionGroups(updateState) {
       const targetGroup = updatedGroups.find(grp => grp._id === groupId || String(grp._id) === String(groupId));
       const groupLabel = targetGroup ? targetGroup.label : 'Question Group';
 
-      const updatedSections = prev.sections.map(sec => ({
-        ...sec,
-        questions: sec.questions.map(q => 
-          q.questionId === questionId ? { ...q, _groupId: groupId, _groupLabel: groupLabel } : q
-        )
-      }));
+      const updatedSections = prev.sections.map(sec => {
+        const secQuestions = [...sec.questions];
+        const qsToGroup = [];
+        
+        let earliestIndex = -1;
+        
+        for (let i = 0; i < secQuestions.length; i++) {
+          if (idsToAdd.includes(secQuestions[i].questionId)) {
+            if (earliestIndex === -1) earliestIndex = i;
+            qsToGroup.push({
+              ...secQuestions[i],
+              _groupId: groupId,
+              _groupLabel: groupLabel
+            });
+          }
+        }
+        
+        if (qsToGroup.length === 0) return sec;
+
+        const filteredQs = secQuestions.filter(q => !idsToAdd.includes(q.questionId));
+        
+        let groupLastIndex = -1;
+        for (let i = 0; i < filteredQs.length; i++) {
+          if (filteredQs[i]._groupId === groupId) {
+            groupLastIndex = i;
+          }
+        }
+        
+        if (groupLastIndex !== -1) {
+          filteredQs.splice(groupLastIndex + 1, 0, ...qsToGroup);
+        } else {
+          filteredQs.splice(earliestIndex, 0, ...qsToGroup);
+        }
+        
+        return { ...sec, questions: filteredQs };
+      });
 
       return {
         ...prev,

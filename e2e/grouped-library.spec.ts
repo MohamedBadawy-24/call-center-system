@@ -33,44 +33,27 @@ test.describe('Campaign Group Library E2E', () => {
     const qTextInput = page.locator('div:has(> label:has-text("Question Text")) >> input').first();
     await qTextInput.fill('What is your gender?');
 
-    // Click "Build Visibility Logic" button to initialize logic
-    const buildLogicBtn = page.getByRole('button', { name: /Build Visibility Logic/i });
-    await expect(buildLogicBtn).toBeVisible();
-    await buildLogicBtn.click();
-
-    // Now click the Group dropdown button inside ConditionBuilder
-    // The button has text "Group" with a chevron
-    const groupBtn = page.getByRole('button', { name: 'Group', exact: true });
-    await expect(groupBtn).toBeVisible();
-    await groupBtn.click();
-
-    // Click "Question Group" from the dropdown menu
-    const questionGroupOption = page.getByRole('button', { name: 'Question Group' });
-    await expect(questionGroupOption).toBeVisible();
-    await questionGroupOption.click();
-
-    // Fill new group name in the sub-panel
-    const groupNameInput = page.getByPlaceholder('Enter new group name...');
-    await expect(groupNameInput).toBeVisible();
-    await groupNameInput.fill('E2E Demographics Group');
-
-    // Click "Create" button next to input
-    const createBtn = page.getByRole('button', { name: 'Create' });
-    await createBtn.click();
-
-    // Verify tag/badge "📦 E2E Demographics Group" appears on the question card
-    const groupBadge = page.locator('span', { hasText: '📦 E2E Demographics Group' });
-    await expect(groupBadge).toBeVisible();
-
+    // With the new UI, groups are created from the Groups tab or by selecting multiple questions.
+    // We will navigate directly to the Groups tab to create it.
+    
     // Click "Groups" tab at the top
     const groupsTabBtn = page.getByRole('button', { name: /Groups/i });
     await expect(groupsTabBtn).toBeVisible();
     await groupsTabBtn.click();
 
-    // Verify "E2E Demographics Group" is listed in the Campaign Group Library list
+    // Verify "Campaign Group Library" title
     const libraryTitle = page.getByText('Campaign Group Library');
     await expect(libraryTitle).toBeVisible();
+
+    // Create group from the sidebar
+    const groupNameInput = page.getByPlaceholder('e.g. Demographics Block');
+    await expect(groupNameInput).toBeVisible();
+    await groupNameInput.fill('E2E Demographics Group');
     
+    const addLibraryBtn = page.getByRole('button', { name: 'Add to Library' });
+    await addLibraryBtn.click();
+
+    // Verify "E2E Demographics Group" is listed in the Campaign Group Library list
     const groupLibraryItem = page.getByText('E2E Demographics Group').first();
     await expect(groupLibraryItem).toBeVisible();
   });

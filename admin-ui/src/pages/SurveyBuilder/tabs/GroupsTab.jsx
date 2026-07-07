@@ -79,8 +79,8 @@ export default function GroupsTab() {
     const qs = [];
     surveyState.sections.forEach(sec => {
       sec.questions.forEach(item => {
-        if (item.type === 'group' && (item.groupId === groupId || String(item.groupId) === String(groupId))) {
-          qs.push(...(item.questions || []));
+        if (item._groupId === groupId || String(item._groupId) === String(groupId)) {
+          qs.push(item);
         }
       });
     });
@@ -90,7 +90,7 @@ export default function GroupsTab() {
   const getGroupSections = (groupId) => {
     const secs = [];
     surveyState.sections.forEach(sec => {
-      const hasGrp = sec.questions.some(item => item.type === 'group' && (item.groupId === groupId || String(item.groupId) === String(groupId)));
+      const hasGrp = sec.questions.some(item => item._groupId === groupId || String(item._groupId) === String(groupId));
       if (hasGrp) secs.push(sec.title || 'Untitled Section');
     });
     return secs;
@@ -209,7 +209,7 @@ export default function GroupsTab() {
                   {/* Drag and Drop list of Questions */}
                   {groupQuestions.length === 0 ? (
                     <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.78rem', fontStyle: 'italic', border: '1px dashed var(--border-color)', borderRadius: '8px' }}>
-                      No questions in this group. Open a question card's logic settings to add questions.
+                      No questions in this group. Select questions in the Builder canvas and add them to this group.
                     </div>
                   ) : (
                     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(event) => handleDragEnd(event, grp._id, groupQuestions)}>

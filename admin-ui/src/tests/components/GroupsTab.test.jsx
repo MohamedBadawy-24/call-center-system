@@ -19,12 +19,11 @@ describe('GroupsTab Component Tests', () => {
         title: 'Main Questions',
         questions: [
           {
-            type: 'group',
-            groupId: 'grp_1',
-            label: 'Demographics Block',
-            questions: [
-              { questionId: 'q_1', text: 'What is your age?', type: 'text' }
-            ]
+            questionId: 'q_1',
+            text: 'What is your age?',
+            type: 'text',
+            _groupId: 'grp_1',
+            _groupLabel: 'Demographics Block'
           }
         ]
       }]

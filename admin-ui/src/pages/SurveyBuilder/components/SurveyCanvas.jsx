@@ -6,7 +6,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Plus, Layers } from 'lucide-react';
 
 export default function SurveyCanvas() {
-  const { surveyState, updateState, isAdmin, createQuestionGroup } = useContext(SurveyBuilderContext);
+  const { surveyState, updateState, isAdmin, createQuestionGroup, addQuestionToGroup } = useContext(SurveyBuilderContext);
 
   const [selectedQuestionIds, setSelectedQuestionIds] = useState([]);
 
@@ -331,6 +331,7 @@ export default function SurveyCanvas() {
           border: '1px solid var(--border-color)'
         }}>
           <span style={{ fontWeight: 600 }}>{selectedQuestionIds.length} question(s) selected</span>
+          
           <button
             className="btn-primary"
             onClick={handleCreateGroup}
@@ -339,6 +340,26 @@ export default function SurveyCanvas() {
           >
             <Layers size={16} /> Create Group
           </button>
+          
+          {surveyState.groups && surveyState.groups.length > 0 && (
+            <select 
+              className="input-field" 
+              style={{ margin: 0, padding: '0.45rem', width: 'auto', minWidth: '180px' }}
+              onChange={(e) => {
+                if(e.target.value) {
+                  addQuestionToGroup(selectedQuestionIds, e.target.value);
+                  setSelectedQuestionIds([]);
+                }
+              }}
+              value=""
+            >
+              <option value="" disabled>Add to Existing Group...</option>
+              {surveyState.groups.map(grp => (
+                <option key={grp._id} value={grp._id}>{grp.label}</option>
+              ))}
+            </select>
+          )}
+
           <button
             className="btn-secondary"
             onClick={() => setSelectedQuestionIds([])}

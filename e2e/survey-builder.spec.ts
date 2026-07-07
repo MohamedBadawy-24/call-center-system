@@ -35,8 +35,8 @@ test.describe('Survey Builder', () => {
     const builder = new SurveyBuilderPage(page);
 
     // Deactivate campaign to enable editing/saving
-    await page.getByRole('button', { name: 'Active', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Inactive', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: /^active$/i }).click();
+    await expect(page.getByRole('button', { name: /^inactive$/i })).toBeVisible();
 
     await builder.setTitle(`E2E Created Survey ${Date.now()}`);
     await builder.setGoal(75);
@@ -52,8 +52,8 @@ test.describe('Survey Builder', () => {
     const builder = new SurveyBuilderPage(page);
 
     // Deactivate campaign to enable editing/saving
-    await page.getByRole('button', { name: 'Active', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Inactive', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: /^active$/i }).click();
+    await expect(page.getByRole('button', { name: /^inactive$/i })).toBeVisible();
 
     // Switch to Builder tab where section controls reside
     await page.getByRole('button', { name: /Builder/i }).click();

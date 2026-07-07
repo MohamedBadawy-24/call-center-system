@@ -28,8 +28,8 @@ test.describe('E2E Production Simulation: Survey Creation & Publishing', () => {
     await expect(page.getByText('Survey Layout Mode')).toBeVisible({ timeout: 10000 });
 
     // Deactivate campaign to enable editing
-    await page.getByRole('button', { name: 'Active', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Inactive', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: /^active$/i }).click();
+    await expect(page.getByRole('button', { name: /^inactive$/i })).toBeVisible();
 
     // Select multi layout so that it's multi-section page-by-section
     const layoutSelect = page.locator('select:has(option[value="multi"])').first();
@@ -49,10 +49,10 @@ test.describe('E2E Production Simulation: Survey Creation & Publishing', () => {
     await page.waitForURL('**/admin/builder/*', { timeout: 15000 });
 
     // Toggles the campaign to Inactive (when loaded it might default to Active)
-    const activeBtn = page.getByRole('button', { name: 'Active', exact: true });
+    const activeBtn = page.getByRole('button', { name: /^active$/i });
     if (await activeBtn.isVisible()) {
       await activeBtn.click();
-      await expect(page.getByRole('button', { name: 'Inactive', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: /^inactive$/i })).toBeVisible();
     }
 
     // 4. Click 'Builder' tab

@@ -356,6 +356,7 @@ export default function SettingsTab() {
             <label className="form-label" style={{ display: 'block', marginBottom: '0.4rem' }}>Campaign Status</label>
             <button 
               type="button"
+              aria-label={surveyState.isActive ? 'ACTIVE' : 'INACTIVE'}
               onClick={isAdmin ? toggleCampaignStatus : undefined}
               disabled={!isAdmin}
               style={{

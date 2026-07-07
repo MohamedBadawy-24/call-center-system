@@ -81,11 +81,8 @@ describe('AuthContext Unit Tests', () => {
       </MemoryRouter>
     );
 
-    // Wait for the loader to finish (bootstrap resolves immediately)
-    await waitFor(() => {
-      expect(screen.queryByTestId('loading')).not.toBeInTheDocument();
-    });
-    expect(screen.getByTestId('user-name')).toHaveTextContent('Guest');
+    const userNameEl = await screen.findByTestId('user-name', {}, { timeout: 2000 });
+    expect(userNameEl).toHaveTextContent('Guest');
   });
 
   it('bootstraps user info when token is present', async () => {
@@ -107,11 +104,8 @@ describe('AuthContext Unit Tests', () => {
       </MemoryRouter>
     );
 
-    await waitFor(() => {
-      expect(screen.queryByTestId('loading')).not.toBeInTheDocument();
-    });
-
-    expect(screen.getByTestId('user-name')).toHaveTextContent('Bootstrapped User');
+    const userNameEl = await screen.findByTestId('user-name', {}, { timeout: 2000 });
+    expect(userNameEl).toHaveTextContent('Bootstrapped User');
   });
 
   it('logs in successfully and redirects', async () => {
@@ -133,11 +127,8 @@ describe('AuthContext Unit Tests', () => {
       </MemoryRouter>
     );
 
-    await waitFor(() => {
-      expect(screen.queryByTestId('loading')).not.toBeInTheDocument();
-    });
+    const loginButton = await screen.findByTestId('login-btn', {}, { timeout: 2000 });
 
-    const loginButton = screen.getByTestId('login-btn');
     await act(async () => {
       loginButton.click();
     });
@@ -169,11 +160,8 @@ describe('AuthContext Unit Tests', () => {
       </MemoryRouter>
     );
 
-    await waitFor(() => {
-      expect(screen.queryByTestId('loading')).not.toBeInTheDocument();
-    });
+    const logoutButton = await screen.findByTestId('logout-btn', {}, { timeout: 2000 });
 
-    const logoutButton = screen.getByTestId('logout-btn');
     await act(async () => {
       logoutButton.click();
     });

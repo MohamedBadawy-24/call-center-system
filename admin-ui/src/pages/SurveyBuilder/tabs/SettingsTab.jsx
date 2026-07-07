@@ -6,6 +6,143 @@ import { toast } from 'react-toastify';
 import { motion } from 'framer-motion';
 import { UploadCloud, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
+const AgentMultiSelect = ({ agents, assignedAgents, setAssignedAgents, disabled }) => {
+  const [search, setSearch] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredAgents = agents.filter(a => 
+    (a.name || '').toLowerCase().includes(search.toLowerCase()) || 
+    (a.email || '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleToggleAgent = (agentId) => {
+    if (assignedAgents.includes(agentId)) {
+      setAssignedAgents(assignedAgents.filter(id => id !== agentId));
+    } else {
+      setAssignedAgents([...assignedAgents, agentId]);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', width: '100%' }}>
+      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <button type="button" className="btn-secondary" disabled={disabled || agents.length === 0} style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => setAssignedAgents(agents.map(a => a._id))}>
+          Select All
+        </button>
+        <button type="button" className="btn-secondary" disabled={disabled || assignedAgents.length === 0} style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => setAssignedAgents([])}>
+          Clear All
+        </button>
+      </div>
+
+      <div style={{ position: 'relative' }} ref={containerRef}>
+        <div 
+          className="input-field" 
+          style={{ 
+            minHeight: '44px', 
+            height: 'auto', 
+            padding: '0.4rem 0.6rem', 
+            display: 'flex', 
+            flexWrap: 'wrap', 
+            gap: '0.5rem',
+            alignItems: 'center',
+            cursor: disabled ? 'not-allowed' : 'text',
+            backgroundColor: disabled ? 'var(--surface)' : 'var(--bg-primary)'
+          }}
+          onClick={() => {
+            if (!disabled) setIsOpen(true);
+          }}
+        >
+          {assignedAgents.map(id => {
+            const agent = agents.find(a => a._id === id);
+            if (!agent) return null;
+            return (
+              <span key={id} style={{
+                display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                color: 'var(--primary)',
+                padding: '0.25rem 0.6rem',
+                borderRadius: '16px',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                border: '1px solid rgba(59, 130, 246, 0.2)'
+              }}>
+                {agent.name}
+                {!disabled && (
+                  <button type="button" style={{
+                    background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', padding: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.7
+                  }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.7} onClick={(e) => { e.stopPropagation(); handleToggleAgent(id); }}>✕</button>
+                )}
+              </span>
+            );
+          })}
+          {!disabled && (
+            <input 
+              type="text" 
+              value={search} 
+              onChange={e => setSearch(e.target.value)} 
+              placeholder={assignedAgents.length === 0 ? "Search and assign agents..." : ""}
+              style={{
+                flex: 1, minWidth: '150px', border: 'none', outline: 'none', background: 'transparent',
+                color: 'var(--text-primary)', fontSize: '0.9rem', padding: '0.25rem'
+              }}
+              onFocus={() => setIsOpen(true)}
+            />
+          )}
+        </div>
+
+        {isOpen && !disabled && (
+          <div style={{
+            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+            marginTop: '0.4rem', backgroundColor: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', maxHeight: '220px', overflowY: 'auto'
+          }}>
+            {filteredAgents.length === 0 ? (
+              <div style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem', textAlign: 'center' }}>No agents found.</div>
+            ) : (
+              filteredAgents.map(agent => {
+                const isSelected = assignedAgents.includes(agent._id);
+                return (
+                  <div 
+                    key={agent._id}
+                    onClick={() => handleToggleAgent(agent._id)}
+                    style={{
+                      padding: '0.75rem 1rem', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
+                      borderBottom: '1px solid var(--border)',
+                      transition: 'background-color 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isSelected ? 'rgba(59, 130, 246, 0.12)' : 'rgba(0,0,0,0.03)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isSelected ? 'rgba(59, 130, 246, 0.08)' : 'transparent'}
+                  >
+                    <div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)' }}>{agent.name}</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{agent.email}</div>
+                    </div>
+                    {isSelected && <CheckCircle size={18} color="var(--primary)" />}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default function SettingsTab() {
   const { 
     surveyId, isAdmin, surveyState, updateState, 
@@ -19,6 +156,18 @@ export default function SettingsTab() {
   const [uploadResult, setUploadResult] = useState(null);
   const [uploadError, setUploadError] = useState('');
   const [agents, setAgents] = useState([]);
+  
+  const [assignmentMode, setAssignmentMode] = useState(
+    (surveyState.assignedAgents && surveyState.assignedAgents.length > 0) ? 'custom' : 'public'
+  );
+
+  // Sync mode if surveyState.assignedAgents updates externally (e.g., initial load)
+  React.useEffect(() => {
+    if (surveyState.assignedAgents && surveyState.assignedAgents.length > 0) {
+      setAssignmentMode('custom');
+    }
+  }, [surveyState.assignedAgents]);
+
   const uploadFileInputRef = useRef();
 
   React.useEffect(() => {
@@ -204,25 +353,46 @@ export default function SettingsTab() {
 
         {/* Row 4 */}
         {isAdmin && (
-          <div style={{ width: '100%' }}>
-            <label className="form-label">Assigned Agents (Empty = All Agents)</label>
-            <select 
-              multiple
-              className="input-field" 
-              value={surveyState.assignedAgents || []}
-              onChange={e => {
-                const values = Array.from(e.target.selectedOptions, option => option.value);
-                updateState({ assignedAgents: values });
-              }}
-              style={{ minHeight: '100px', margin: 0 }}
-            >
-              {agents.map(a => (
-                <option key={a._id} value={a._id}>{a.name} ({a.email})</option>
-              ))}
-            </select>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem', marginBottom: 0 }}>
-              Hold Ctrl/Cmd to select multiple agents.
-            </p>
+          <div style={{ width: '100%', padding: '1.25rem', background: 'var(--bg-primary)', borderRadius: '12px', border: '1px solid var(--border)' }}>
+            <label className="form-label" style={{ fontSize: '1rem', marginBottom: '1rem' }}>Agent Visibility Assignment</label>
+            
+            <div style={{ display: 'flex', gap: '2rem', marginBottom: '1.25rem', alignItems: 'center' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600, color: 'var(--text-primary)' }}>
+                <input 
+                  type="radio" 
+                  name="visibilityMode" 
+                  checked={assignmentMode === 'public'}
+                  onChange={() => {
+                    setAssignmentMode('public');
+                    updateState({ assignedAgents: [] });
+                  }}
+                  style={{ accentColor: 'var(--primary)', transform: 'scale(1.1)' }}
+                />
+                All Agents (Public)
+              </label>
+              
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600, color: 'var(--text-primary)' }}>
+                <input 
+                  type="radio" 
+                  name="visibilityMode" 
+                  checked={assignmentMode === 'custom'}
+                  onChange={() => {
+                    setAssignmentMode('custom');
+                  }}
+                  style={{ accentColor: 'var(--primary)', transform: 'scale(1.1)' }}
+                />
+                Specific Agents (Custom)
+              </label>
+            </div>
+
+            {assignmentMode === 'custom' && (
+              <AgentMultiSelect 
+                agents={agents} 
+                assignedAgents={surveyState.assignedAgents || []} 
+                setAssignedAgents={(updatedAgents) => updateState({ assignedAgents: updatedAgents })} 
+                disabled={!isAdmin} 
+              />
+            )}
           </div>
         )}
       </div>

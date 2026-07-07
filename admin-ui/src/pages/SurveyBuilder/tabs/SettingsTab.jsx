@@ -127,41 +127,53 @@ const AgentMultiSelect = ({ agents, assignedAgents, setAssignedAgents, disabled 
         </div>
 
         {isOpen && !disabled && dropdownCoords && createPortal(
-          <div id="agent-multiselect-portal" style={{
-            position: 'fixed', top: `${dropdownCoords.top}px`, left: `${dropdownCoords.left}px`, width: `${dropdownCoords.width}px`, zIndex: 99999,
-            marginTop: '0.4rem', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border)',
-            borderRadius: '8px', boxShadow: 'var(--shadow-md)', maxHeight: '220px', overflowY: 'auto',
-            backdropFilter: 'none', WebkitBackdropFilter: 'none'
-          }}>
-            {filteredAgents.length === 0 ? (
-              <div style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem', textAlign: 'center' }}>No agents found.</div>
-            ) : (
-              filteredAgents.map(agent => {
-                const isSelected = assignedAgents.includes(agent._id);
-                return (
-                  <div 
-                    key={agent._id}
-                    onClick={() => handleToggleAgent(agent._id)}
-                    style={{
-                      padding: '0.75rem 1rem', cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
-                      borderBottom: '1px solid var(--border)',
-                      transition: 'background-color 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isSelected ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.08)'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isSelected ? 'rgba(59, 130, 246, 0.08)' : 'transparent'}
-                  >
-                    <div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)' }}>{agent.name}</div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{agent.email}</div>
+          <>
+            <style>{`
+              .agent-multiselect-dropdown {
+                background-color: var(--bg-color, #ffffff) !important;
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+                border: 1px solid var(--border-color, #ccc) !important;
+              }
+              .agent-multiselect-item {
+                border-bottom: 1px solid var(--border-color, #ccc) !important;
+              }
+            `}</style>
+            <div id="agent-multiselect-portal" className="agent-multiselect-dropdown" style={{
+              position: 'fixed', top: `${dropdownCoords.top}px`, left: `${dropdownCoords.left}px`, width: `${dropdownCoords.width}px`, zIndex: 99999,
+              marginTop: '0.4rem', borderRadius: '8px', maxHeight: '220px', overflowY: 'auto'
+            }}>
+              {filteredAgents.length === 0 ? (
+                <div style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem', textAlign: 'center' }}>No agents found.</div>
+              ) : (
+                filteredAgents.map(agent => {
+                  const isSelected = assignedAgents.includes(agent._id);
+                  return (
+                    <div 
+                      key={agent._id}
+                      className="agent-multiselect-item"
+                      onClick={() => handleToggleAgent(agent._id)}
+                      style={{
+                        padding: '0.75rem 1rem', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
+                        transition: 'background-color 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isSelected ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.08)'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isSelected ? 'rgba(59, 130, 246, 0.08)' : 'transparent'}
+                    >
+                      <div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)' }}>{agent.name}</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{agent.email}</div>
+                      </div>
+                      {isSelected && <CheckCircle size={18} color="var(--primary)" />}
                     </div>
-                    {isSelected && <CheckCircle size={18} color="var(--primary)" />}
-                  </div>
-                );
-              })
-            )}
-          </div>,
+                  );
+                })
+              )}
+            </div>
+          </>,
           document.body
         )}
       </div>

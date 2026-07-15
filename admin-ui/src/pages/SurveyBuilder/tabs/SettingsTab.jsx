@@ -350,6 +350,7 @@ export default function SettingsTab() {
               <option value="queue_only">Queue Only</option>
               <option value="queue_then_manual">Queue then Manual</option>
               <option value="manual_allowed">Manual Allowed</option>
+              <option value="no_phone_required">No Phone Required (Auto-Serial)</option>
             </select>
           </div>
           <div>

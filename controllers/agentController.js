@@ -25,6 +25,20 @@ exports.completePrecall = async (req, res, next) => {
   }
 };
 
+exports.startNoPhoneSession = async (req, res, next) => {
+  try {
+    const { surveyId } = req.body;
+    const io = req.app.get('io');
+    const serialNumber = await agentService.startNoPhoneSession(req.user.id, req.user.role, surveyId, io);
+    res.json({ ok: true, serialNumber });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
+  }
+};
+
 exports.getNextNumber = async (req, res, next) => {
   try {
     const { governorate, surveyId } = req.query;

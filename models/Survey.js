@@ -90,7 +90,7 @@ const SurveySchema = new mongoose.Schema({
     governorate: String,
     goal: Number
   }],
-  numberAssignmentMode: { type: String, enum: ['queue_only', 'queue_then_manual', 'manual_allowed'], default: 'queue_only' },
+  numberAssignmentMode: { type: String, enum: ['queue_only', 'queue_then_manual', 'manual_allowed', 'no_phone_required'], default: 'queue_only' },
   targetAudience: { type: String, enum: ['agent', 'quality', 'both'], default: 'both' },
   linkedCampaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'Survey', default: null },
   comparisonMatchField: { type: String, default: 'serialNumber' },

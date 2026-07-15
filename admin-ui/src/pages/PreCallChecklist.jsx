@@ -830,6 +830,23 @@ export default function PreCallChecklist() {
     }
   };
 
+  const [startingNoPhone, setStartingNoPhone] = useState(false);
+
+  const handleNoPhoneStart = async () => {
+    setStartingNoPhone(true);
+    try {
+      const res = await api.post('/agent/start-no-phone-session', { surveyId });
+      if (res.data && res.data.serialNumber) {
+        toast.success(t('sessionStarted') || 'Session started successfully');
+        navigate(`/take-survey/${surveyId}?serial=${res.data.serialNumber}`);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || 'Failed to start session');
+      setStartingNoPhone(false);
+    }
+  };
+
   const hintText = useMemo(() => {
     if (canProceed) return '';
     const callResult = answers.call_result;
@@ -899,6 +916,35 @@ export default function PreCallChecklist() {
       <div className="precall-shell" style={{ display: 'flex', justifyContent: 'center', paddingTop: '4rem' }}>
         <Loader2 className="spin-icon" size={40} color="var(--primary)" />
       </div>
+    );
+  }
+
+  if (numberAssignmentMode === 'no_phone_required') {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+        className="precall-shell"
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: '1.5rem' }}
+      >
+        <div className="glass-card" style={{ padding: '3rem 2rem', textAlign: 'center', maxWidth: '500px', width: '100%' }}>
+          <ClipboardList size={48} color="var(--primary)" style={{ marginBottom: '1.5rem' }} />
+          <h1 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>{metaLine(config.meta, 'title', t)}</h1>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', lineHeight: 1.6 }}>
+            {t('noPhoneRequiredDesc') || 'This campaign does not require a phone number. A unique serial number will be automatically generated for your session.'}
+          </p>
+          <button
+            type="button"
+            className="btn-primary"
+            style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', fontWeight: 600 }}
+            onClick={handleNoPhoneStart}
+            disabled={startingNoPhone}
+          >
+            {startingNoPhone ? <Loader2 size={20} className="spin-icon mx-auto" /> : (t('startSurveyGenSerial') || 'Start Survey (Generate Serial)')}
+          </button>
+        </div>
+      </motion.div>
     );
   }
 

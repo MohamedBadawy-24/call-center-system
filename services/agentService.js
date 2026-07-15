@@ -538,3 +538,78 @@ exports.assignManualNumber = async (userId, userRole, surveyId, number, governor
 
   return newPhoneDoc;
 };
+
+exports.startNoPhoneSession = async (userId, userRole, surveyId, io) => {
+  const isStaff = userRole === 'admin' || userRole === 'quality';
+  if (!isStaff && userRole !== 'agent') {
+    throw createError('Agents only', 403);
+  }
+
+  if (!surveyId || !mongoose.Types.ObjectId.isValid(surveyId)) {
+    throw createError('Valid Survey ID is required', 400);
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw createError('Agent not found', 404);
+  }
+
+  const survey = await Survey.findById(surveyId);
+  if (!survey) {
+    throw createError('Survey not found', 404);
+  }
+
+  const mode = survey.numberAssignmentMode || 'queue_only';
+  if (mode !== 'no_phone_required') {
+    throw createError('Survey does not support no-phone assignment', 400);
+  }
+
+  const serialNumber = await getNextSerialNumber('survey_numbers');
+  const dummyPhone = `AUTO-${serialNumber}`;
+  const now = new Date();
+
+  // Create a PhoneNumber doc so reports don't break
+  const newPhoneDoc = new PhoneNumber({
+    surveyId: survey._id,
+    number: dummyPhone,
+    agentId: userId,
+    status: 'called',
+    serialNumber,
+    numberSource: 'manual',
+    assignedAt: now,
+    calledAt: now,
+  });
+
+  // Create a PrecallCompletion directly so we can jump straight into the survey
+  const precall = new PrecallCompletion({
+    userId,
+    statusStartedAt: user.statusStartedAt || now,
+    surveyId: survey._id,
+    serialNumber,
+    completedAt: now,
+    interviewStartedAt: now,
+    payload: { phone: dummyPhone, serial_number: serialNumber },
+    outcomeCategory: 'qualified'
+  });
+
+  newPhoneDoc.precallCompletionId = precall._id;
+  
+  await Promise.all([
+    newPhoneDoc.save(),
+    precall.save(),
+    User.findByIdAndUpdate(userId, { precallCompletedForActiveSession: true })
+  ]);
+
+  if (io) {
+    io.emit('precall-completed', {
+      agentId: userId,
+      agentName: user.name,
+      surveyId: survey._id,
+      surveyTitle: survey.title,
+      serialNumber,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  return serialNumber;
+};

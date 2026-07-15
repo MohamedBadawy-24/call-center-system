@@ -74,6 +74,7 @@ router.get('/survey-eligibility', auth, async (req, res) => {
 });
 
 router.post('/precall-complete', [auth, agentActiveAuth, validatePrecallComplete], agentController.completePrecall);
+router.post('/start-no-phone-session', [auth, agentActiveAuth], agentController.startNoPhoneSession);
 router.get('/next-serial', auth, agentController.getNextSerial);
 router.get('/search-serial/:serial', auth, agentController.searchBySerial);
 router.get('/draft/:serialNumber', auth, agentController.getDraft);

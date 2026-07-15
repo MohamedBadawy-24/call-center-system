@@ -1822,15 +1822,29 @@ function socketIoAllowedOrigins() {
   return ["http://localhost:3001", "http://127.0.0.1:3001"];
 }
 
-// Serve static frontend files
-app.use(express.static(path.join(__dirname, 'admin-ui', 'dist')));
+// 1. Use absolute path resolution for IISNode
+const frontendPath = path.resolve(__dirname, 'admin-ui', 'dist');
 
-// SPA Catch-all (for frontend routing)
+// 2. Explicitly serve the assets folder FIRST to prevent catch-all interference
+app.use('/assets', express.static(path.join(frontendPath, 'assets')));
+
+// 3. Serve the rest of the static files (manifest, vite.svg, etc.)
+app.use(express.static(frontendPath));
+
+// 4. React SPA Catch-all Route
 app.get(/.*/, (req, res, next) => {
-  if (req.originalUrl.startsWith('/api/')) {
-    return next(); // Let the API 404 handler handle it
+  // Bypass API and other backend routes
+  if (req.path.startsWith('/auth') || req.path.startsWith('/admin') || req.path.startsWith('/agent') || req.path.startsWith('/api')) {
+    return next();
   }
-  res.sendFile(path.join(__dirname, 'admin-ui', 'dist', 'index.html'));
+  
+  // Protect against asset fallthrough (if a .js/.css file is missing, return 404, NOT index.html)
+  if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|json)$/)) {
+    return res.status(404).send('Asset not found');
+  }
+
+  // Serve the React index.html for all other navigation routes
+  res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
 app.use((_req, res) => {

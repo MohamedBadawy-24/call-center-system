@@ -157,6 +157,19 @@ app.use((req, _res, next) => {
 
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
+// ── Static Frontend Serving (MUST be before any API routes) ──────────────
+const frontendPath = path.resolve(__dirname, 'admin-ui', 'dist');
+
+// Serve /assets explicitly first (Vite JS/CSS bundles)
+app.use('/assets', express.static(path.join(frontendPath, 'assets'), {
+  maxAge: '1y',
+  immutable: true,
+  fallthrough: false  // Return 404 immediately if file not found, don't fall through
+}));
+
+// Serve other static files (favicon, manifest, robots.txt, etc.)
+app.use(express.static(frontendPath));
+
 // Strip /api prefix if present so that all downstream routes match correctly
 app.use((req, res, next) => {
   if (req.url.startsWith('/api/')) {
@@ -1822,41 +1835,16 @@ function socketIoAllowedOrigins() {
   return ["http://localhost:3001", "http://127.0.0.1:3001"];
 }
 
-// 1. Use absolute path resolution for IISNode
-const frontendPath = path.resolve(__dirname, 'admin-ui', 'dist');
-
-// 2. Explicitly serve the assets folder FIRST to prevent catch-all interference
-app.use('/assets', express.static(path.join(frontendPath, 'assets')));
-
-// 3. Serve the rest of the static files (manifest, vite.svg, etc.)
-app.use(express.static(frontendPath));
-
-// 4. React SPA Catch-all Route
+// React SPA Catch-all Route (serves index.html for client-side routing)
 app.get(/.*/, (req, res, next) => {
   // Bypass API and other backend routes
   if (req.path.startsWith('/auth') || req.path.startsWith('/admin') || req.path.startsWith('/agent') || req.path.startsWith('/api')) {
     return next();
   }
-  
-  // Protect against asset fallthrough (if a .js/.css file is missing, return 404, NOT index.html)
+  // Don't serve index.html for missing static assets
   if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|json|woff|woff2|ttf|svg)$/)) {
-    const fs = require('fs');
-    // IISNode sometimes prepends /server.js to the path. Find the actual relative path.
-    const relativePath = req.path.includes('/assets/') 
-        ? req.path.substring(req.path.indexOf('/assets/') + 1) 
-        : req.path.replace(/^\/?(server\.js\/)?/, '');
-        
-    const assetPath = path.join(frontendPath, relativePath);
-    
-    if (fs.existsSync(assetPath)) {
-        return res.sendFile(assetPath);
-    }
-    
-    // Provide a helpful 404 error showing paths for debugging if it still fails
-    return res.status(404).send(`Asset not found. <br> req.path: ${req.path} <br> mapped to: ${assetPath}`);
+    return res.status(404).send('Asset not found');
   }
-
-  // Serve the React index.html for all other navigation routes
   res.sendFile(path.join(frontendPath, 'index.html'));
 });
 

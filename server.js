@@ -564,7 +564,7 @@ app.get("/admin/responses", staffAuth, async (req, res) => {
 // EXPORT SURVEY DATA (CSV)
 app.get("/admin/export-survey/:id", staffAuth, responseController.exportCsv);
 
-app.get("/admin/export-advanced", responseController.exportAdvanced);
+app.get("/admin/export-advanced", staffAuth, responseController.exportAdvanced);
 
 // QUALITY OTHER ANSWERS CODING TOOL (Feature 4)
 const otherCodingController = require('./controllers/otherCodingController');

@@ -17,6 +17,7 @@ Thumbs.db
 
 ### builds
 admin-ui/build/
+admin-ui/dist/
 
 ### uploads
 uploads/

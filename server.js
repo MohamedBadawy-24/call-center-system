@@ -93,6 +93,70 @@ app.use(
   })
 );
 
+// ── Static Frontend Serving (BEFORE CORS — Vite adds crossorigin attr to tags) ──
+const frontendPath = path.resolve(__dirname, 'admin-ui', 'dist');
+
+// VERSION TAG: v5-before-cors
+app.get('/debug-static', (req, res) => {
+  const assetsDir = path.join(frontendPath, 'assets');
+  let files = [];
+  try { files = fs.readdirSync(assetsDir); } catch (e) { files = ['ERROR: ' + e.message]; }
+  res.json({
+    version: 'v5-before-cors',
+    __dirname: __dirname,
+    frontendPath: frontendPath,
+    assetsDir: assetsDir,
+    assetsDirExists: fs.existsSync(assetsDir),
+    frontendDirExists: fs.existsSync(frontendPath),
+    indexHtmlExists: fs.existsSync(path.join(frontendPath, 'index.html')),
+    filesInAssets: files,
+    reqUrl: req.url,
+    reqPath: req.path,
+    reqOriginalUrl: req.originalUrl
+  });
+});
+
+const MIME_TYPES = {
+  '.js': 'application/javascript',
+  '.css': 'text/css',
+  '.html': 'text/html',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.map': 'application/json'
+};
+
+app.use((req, res, next) => {
+  const urlPath = req.path || req.url;
+  
+  if (urlPath.startsWith('/assets/') || urlPath === '/favicon.ico' || urlPath === '/manifest.json' || urlPath === '/robots.txt' || urlPath === '/sw.js' || urlPath === '/logo192.png' || urlPath === '/logo512.png') {
+    const filePath = path.join(frontendPath, urlPath);
+    
+    try {
+      if (fs.existsSync(filePath)) {
+        const ext = path.extname(filePath).toLowerCase();
+        const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+        const fileContent = fs.readFileSync(filePath);
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        return res.status(200).send(fileContent);
+      }
+    } catch (err) {
+      return res.status(500).send('Error reading file: ' + err.message);
+    }
+    return res.status(404).send('Static file not found: ' + urlPath);
+  }
+  
+  next();
+});
+
 const corsOrigins = env.CORS_ORIGIN;
 const allowedOrigins = corsOrigins
   ? corsOrigins.split(",").map((o) => o.trim()).filter(Boolean)
@@ -157,72 +221,7 @@ app.use((req, _res, next) => {
 
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
-// ── Static Frontend Serving (MUST be before any API routes) ──────────────
-const frontendPath = path.resolve(__dirname, 'admin-ui', 'dist');
 
-// VERSION TAG: v4-manual-serve
-// Debug endpoint — navigate to /debug-static on production to diagnose
-app.get('/debug-static', (req, res) => {
-  const assetsDir = path.join(frontendPath, 'assets');
-  let files = [];
-  try { files = fs.readdirSync(assetsDir); } catch (e) { files = ['ERROR: ' + e.message]; }
-  res.json({
-    version: 'v4-manual-serve',
-    __dirname: __dirname,
-    frontendPath: frontendPath,
-    assetsDir: assetsDir,
-    assetsDirExists: fs.existsSync(assetsDir),
-    frontendDirExists: fs.existsSync(frontendPath),
-    indexHtmlExists: fs.existsSync(path.join(frontendPath, 'index.html')),
-    filesInAssets: files,
-    reqUrl: req.url,
-    reqPath: req.path,
-    reqOriginalUrl: req.originalUrl
-  });
-});
-
-// Manual middleware to serve /assets/* files with correct MIME types
-const MIME_TYPES = {
-  '.js': 'application/javascript',
-  '.css': 'text/css',
-  '.html': 'text/html',
-  '.json': 'application/json',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-  '.ttf': 'font/ttf',
-  '.map': 'application/json'
-};
-
-app.use((req, res, next) => {
-  // Only intercept requests that look like static assets
-  const urlPath = req.path || req.url;
-  
-  if (urlPath.startsWith('/assets/') || urlPath === '/favicon.ico' || urlPath === '/manifest.json' || urlPath === '/robots.txt' || urlPath === '/sw.js') {
-    const filePath = path.join(frontendPath, urlPath);
-    
-    try {
-      if (fs.existsSync(filePath)) {
-        const ext = path.extname(filePath).toLowerCase();
-        const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-        const fileContent = fs.readFileSync(filePath);
-        res.setHeader('Content-Type', contentType);
-        return res.status(200).send(fileContent);
-      }
-    } catch (err) {
-      return res.status(500).send('Error reading file: ' + err.message);
-    }
-    // If file doesn't exist, return 404 (don't fall through to API routes)
-    return res.status(404).send('Static file not found: ' + urlPath);
-  }
-  
-  next();
-});
 
 // Strip /api prefix if present so that all downstream routes match correctly
 app.use((req, res, next) => {

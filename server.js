@@ -1839,8 +1839,21 @@ app.get(/.*/, (req, res, next) => {
   }
   
   // Protect against asset fallthrough (if a .js/.css file is missing, return 404, NOT index.html)
-  if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|json)$/)) {
-    return res.status(404).send('Asset not found');
+  if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|json|woff|woff2|ttf|svg)$/)) {
+    const fs = require('fs');
+    // IISNode sometimes prepends /server.js to the path. Find the actual relative path.
+    const relativePath = req.path.includes('/assets/') 
+        ? req.path.substring(req.path.indexOf('/assets/') + 1) 
+        : req.path.replace(/^\/?(server\.js\/)?/, '');
+        
+    const assetPath = path.join(frontendPath, relativePath);
+    
+    if (fs.existsSync(assetPath)) {
+        return res.sendFile(assetPath);
+    }
+    
+    // Provide a helpful 404 error showing paths for debugging if it still fails
+    return res.status(404).send(`Asset not found. <br> req.path: ${req.path} <br> mapped to: ${assetPath}`);
   }
 
   // Serve the React index.html for all other navigation routes

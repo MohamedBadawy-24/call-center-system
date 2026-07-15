@@ -155,10 +155,6 @@ app.use((req, _res, next) => {
   next();
 });
 
-app.get("/", (req, res) => {
-  res.send("API is running 🚀");
-});
-
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
 // Strip /api prefix if present so that all downstream routes match correctly
@@ -1825,6 +1821,17 @@ function socketIoAllowedOrigins() {
   }
   return ["http://localhost:3001", "http://127.0.0.1:3001"];
 }
+
+// Serve static frontend files
+app.use(express.static(path.join(__dirname, 'admin-ui', 'dist')));
+
+// SPA Catch-all (for frontend routing)
+app.get(/.*/, (req, res, next) => {
+  if (req.originalUrl.startsWith('/api/')) {
+    return next(); // Let the API 404 handler handle it
+  }
+  res.sendFile(path.join(__dirname, 'admin-ui', 'dist', 'index.html'));
+});
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });

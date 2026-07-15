@@ -160,15 +160,64 @@ app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 // ── Static Frontend Serving (MUST be before any API routes) ──────────────
 const frontendPath = path.resolve(__dirname, 'admin-ui', 'dist');
 
-// Serve /assets explicitly first (Vite JS/CSS bundles)
-app.use('/assets', express.static(path.join(frontendPath, 'assets'), {
-  maxAge: '1y',
-  immutable: true,
-  fallthrough: false  // Return 404 immediately if file not found, don't fall through
-}));
+// VERSION TAG: v4-manual-serve
+// Debug endpoint — navigate to /debug-static on production to diagnose
+app.get('/debug-static', (req, res) => {
+  const assetsDir = path.join(frontendPath, 'assets');
+  let files = [];
+  try { files = fs.readdirSync(assetsDir); } catch (e) { files = ['ERROR: ' + e.message]; }
+  res.json({
+    version: 'v4-manual-serve',
+    __dirname: __dirname,
+    frontendPath: frontendPath,
+    assetsDir: assetsDir,
+    assetsDirExists: fs.existsSync(assetsDir),
+    frontendDirExists: fs.existsSync(frontendPath),
+    indexHtmlExists: fs.existsSync(path.join(frontendPath, 'index.html')),
+    filesInAssets: files,
+    reqUrl: req.url,
+    reqPath: req.path,
+    reqOriginalUrl: req.originalUrl
+  });
+});
 
-// Serve other static files (favicon, manifest, robots.txt, etc.)
-app.use(express.static(frontendPath));
+// Manual middleware to serve /assets/* files with correct MIME types
+const MIME_TYPES = {
+  '.js': 'application/javascript',
+  '.css': 'text/css',
+  '.html': 'text/html',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.map': 'application/json'
+};
+
+app.use((req, res, next) => {
+  // Only intercept requests that look like static assets
+  const urlPath = req.path || req.url;
+  
+  if (urlPath.startsWith('/assets/') || urlPath === '/favicon.ico' || urlPath === '/manifest.json' || urlPath === '/robots.txt' || urlPath === '/sw.js') {
+    const filePath = path.join(frontendPath, urlPath);
+    
+    if (fs.existsSync(filePath)) {
+      const ext = path.extname(filePath).toLowerCase();
+      const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+      res.setHeader('Content-Type', contentType);
+      return res.sendFile(filePath);
+    }
+    // If file doesn't exist, return 404 (don't fall through to API routes)
+    return res.status(404).send('Static file not found: ' + urlPath);
+  }
+  
+  next();
+});
 
 // Strip /api prefix if present so that all downstream routes match correctly
 app.use((req, res, next) => {

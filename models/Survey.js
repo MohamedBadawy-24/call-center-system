@@ -39,6 +39,22 @@ const QuestionSchema = new mongoose.Schema({
   minSelections: { type: Number },
   maxSelections: { type: Number },
   visibility: { type: mongoose.Schema.Types.Mixed, default: undefined }, // Advanced nested logic
+  
+  // Cross-Question Validation (e.g. Sum of inputs must equal another question's answer)
+  crossValidation: {
+    targetQuestionIds: [{ type: String }],
+    ruleType: { type: String, enum: ['sum_equals'] },
+    errorMessage: String,
+  },
+
+  // For multi_input type
+  subInputs: [{
+    id: String,
+    label: String,
+    inputType: { type: String, enum: ['short_text', 'number', 'date', 'dropdown'] },
+    options: [String],
+    required: { type: Boolean, default: false }
+  }],
 
   // Group properties (if type === 'group')
   groupId: String,

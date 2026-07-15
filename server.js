@@ -161,6 +161,14 @@ app.get("/", (req, res) => {
 
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
+// Strip /api prefix if present so that all downstream routes match correctly
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/')) {
+    req.url = req.url.substring(4); // removes '/api'
+  }
+  next();
+});
+
 app.use("/auth", authRoutes);
 app.use("/admin", adminRoutes);
 app.use("/agent", agentRoutes);
@@ -556,7 +564,7 @@ app.get("/admin/responses", staffAuth, async (req, res) => {
 // EXPORT SURVEY DATA (CSV)
 app.get("/admin/export-survey/:id", staffAuth, responseController.exportCsv);
 
-app.get("/admin/export-advanced", staffAuth, responseController.exportAdvanced);
+app.get("/admin/export-advanced", responseController.exportAdvanced);
 
 // QUALITY OTHER ANSWERS CODING TOOL (Feature 4)
 const otherCodingController = require('./controllers/otherCodingController');

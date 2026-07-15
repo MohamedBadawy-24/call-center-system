@@ -138,6 +138,7 @@ export default function QuestionCard({
                 <option value="multiple_choice">Multiple Choice</option>
                 <option value="number">Number</option>
                 <option value="info">Info / Notice (No Input)</option>
+                <option value="multi_input">Multiple Inputs (Composite)</option>
               </select>
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '0.5rem' }}>
@@ -257,7 +258,171 @@ export default function QuestionCard({
             </div>
           )}
 
-          <div style={{ padding: '1rem', border: '1px dashed var(--border-color)', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.02)', marginTop: '0.5rem' }}>
+          {question.type === 'multi_input' && (
+            <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <label className="form-label" style={{ marginBottom: '0.25rem', display: 'block' }}>Sub-Inputs</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {(question.subInputs || []).map((sub, sIdx) => (
+                  <div key={sub.id} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', background: '#fff', padding: '0.5rem', border: '1px solid var(--border-color)', borderRadius: '6px' }}>
+                    <input
+                      className="input-field"
+                      style={{ flex: 2, minWidth: '150px' }}
+                      value={sub.label || ''}
+                      onChange={e => {
+                        const newSubs = [...(question.subInputs || [])];
+                        newSubs[sIdx].label = e.target.value;
+                        updateQ({ subInputs: newSubs });
+                      }}
+                      placeholder="Input Label"
+                      readOnly={!isAdmin}
+                    />
+                    <select
+                      className="input-field"
+                      style={{ flex: 1, minWidth: '120px' }}
+                      value={sub.inputType || 'short_text'}
+                      onChange={e => {
+                        const newSubs = [...(question.subInputs || [])];
+                        newSubs[sIdx].inputType = e.target.value;
+                        if (e.target.value !== 'dropdown') newSubs[sIdx].options = [];
+                        updateQ({ subInputs: newSubs });
+                      }}
+                      disabled={!isAdmin}
+                    >
+                      <option value="short_text">Short Text</option>
+                      <option value="number">Number</option>
+                      <option value="date">Date</option>
+                      <option value="dropdown">Dropdown</option>
+                    </select>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 600 }}>
+                      <input 
+                        type="checkbox" 
+                        checked={!!sub.required} 
+                        onChange={e => {
+                          const newSubs = [...(question.subInputs || [])];
+                          newSubs[sIdx].required = e.target.checked;
+                          updateQ({ subInputs: newSubs });
+                        }}
+                        disabled={!isAdmin} 
+                      />
+                      Req.
+                    </label>
+                    {isAdmin && (
+                      <button type="button" className="btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', color: 'var(--danger)' }} onClick={() => {
+                        const newSubs = [...(question.subInputs || [])];
+                        newSubs.splice(sIdx, 1);
+                        updateQ({ subInputs: newSubs });
+                      }}>Del</button>
+                    )}
+                    {sub.inputType === 'dropdown' && (
+                      <div style={{ width: '100%', marginTop: '0.25rem' }}>
+                        <input
+                          className="input-field"
+                          placeholder="Options (comma separated)"
+                          value={(sub.options || []).join(', ')}
+                          onChange={e => {
+                            const newSubs = [...(question.subInputs || [])];
+                            newSubs[sIdx].options = e.target.value.split(',').map(v => v.trim()).filter(v => v);
+                            updateQ({ subInputs: newSubs });
+                          }}
+                          readOnly={!isAdmin}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {isAdmin && (
+                  <button type="button" className="btn-secondary" style={{ padding: '0.5rem', alignSelf: 'flex-start' }} onClick={() => {
+                    const newSubs = [...(question.subInputs || [])];
+                    newSubs.push({ id: Math.random().toString(36).substring(2, 9), label: '', inputType: 'short_text', required: false, options: [] });
+                    updateQ({ subInputs: newSubs });
+                  }}>
+                    + Add Sub-Input
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div style={{ padding: '1rem', border: '1px dashed var(--border-color)', borderRadius: '12px', background: 'rgba(234, 179, 8, 0.05)', marginTop: '1rem' }}>
+            <div style={{ fontWeight: 800, fontSize: '0.85rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--warning-dark, #a16207)' }}>
+              Cross-Question Validation (Sum Validation)
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, cursor: isAdmin ? 'pointer' : 'default' }}>
+                <input 
+                  type="checkbox" 
+                  checked={question.crossValidation?.ruleType === 'sum_equals'} 
+                  onChange={e => {
+                    const enabled = e.target.checked;
+                    updateQ({
+                      crossValidation: enabled 
+                        ? { ruleType: 'sum_equals', targetQuestionIds: [], errorMessage: '' } 
+                        : undefined
+                    });
+                  }}
+                  disabled={!isAdmin}
+                />
+                Enable "Sum of inputs must equal another question's answer"
+              </label>
+
+              {question.crossValidation?.ruleType === 'sum_equals' && (
+                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginLeft: '1.5rem' }}>
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Target Question IDs</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: '150px', overflowY: 'auto', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.5rem' }}>
+                      {(() => {
+                        const allQs = surveyState?.sections?.flatMap(s => (s.questions || []).flatMap(q => q.type === 'group' ? (q.questions || []) : [q])) || [];
+                        const currentIdx = allQs.findIndex(q => (q.questionId || String(q._id)) === (question.questionId || String(question._id)));
+                        const prevQs = currentIdx !== -1 ? allQs.slice(0, currentIdx) : allQs;
+                        
+                        // Handle legacy targetQuestionId gracefully by auto-migrating it to targetQuestionIds
+                        const legacyId = question.crossValidation.targetQuestionId;
+                        const targets = question.crossValidation.targetQuestionIds || (legacyId ? [legacyId] : []);
+                        
+                        return prevQs.map(prevQ => {
+                          const id = prevQ.questionId || String(prevQ._id);
+                          return (
+                            <label key={id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', cursor: isAdmin ? 'pointer' : 'default' }}>
+                              <input 
+                                type="checkbox" 
+                                checked={targets.includes(id)}
+                                onChange={e => {
+                                  const checked = e.target.checked;
+                                  let newTargets = [...targets];
+                                  if (checked) {
+                                    newTargets.push(id);
+                                  } else {
+                                    newTargets = newTargets.filter(t => t !== id);
+                                  }
+                                  updateQ({ crossValidation: { ...question.crossValidation, targetQuestionIds: newTargets, targetQuestionId: undefined } });
+                                }}
+                                disabled={!isAdmin}
+                              />
+                              {id} - {prevQ.text?.substring(0, 30) || prevQ.label || 'Group'}
+                            </label>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                  <div style={{ flex: 2, minWidth: '300px' }}>
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Error Message</label>
+                    <input 
+                      className="input-field" 
+                      placeholder="e.g. The sum here must match the total in Q401" 
+                      value={question.crossValidation.errorMessage || ''} 
+                      onChange={e => updateQ({
+                        crossValidation: { ...question.crossValidation, errorMessage: e.target.value }
+                      })} 
+                      readOnly={!isAdmin} 
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ padding: '1rem', border: '1px dashed var(--border-color)', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.02)', marginTop: '1rem' }}>
             <div style={{ fontWeight: 800, fontSize: '0.85rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
               <Layers size={16} /> Advanced Display Logic
             </div>

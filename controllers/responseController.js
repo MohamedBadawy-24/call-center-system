@@ -52,7 +52,15 @@ exports.exportCsv = async (req, res, next) => {
     survey.sections.forEach(section => {
       section.questions.forEach(q => {
         const id = q.questionId || (q._id ? q._id.toString() : undefined);
-        if (id) questions.push({ id, text: q.text });
+        if (id) {
+          if (q.type === 'multi_input' && q.subInputs && q.subInputs.length > 0) {
+            q.subInputs.forEach(sub => {
+              questions.push({ id, subId: sub.id, text: `${q.text || ''} - ${sub.label}` });
+            });
+          } else {
+            questions.push({ id, text: q.text || '' });
+          }
+        }
       });
     });
 
@@ -95,7 +103,14 @@ exports.exportCsv = async (req, res, next) => {
       ];
       questions.forEach((q, idx) => {
         const answer = (r.answers || []).find(a => a.questionId === q.id);
-        const rawValue = answer ? answer.value : null;
+        let rawValue = null;
+        if (answer) {
+          if (q.subId && typeof answer.value === 'object' && answer.value !== null) {
+            rawValue = answer.value[q.subId];
+          } else if (!q.subId) {
+            rawValue = answer.value;
+          }
+        }
         const resolvedBase = typeof rawValue === 'string' && !rawValue.startsWith('other:')
           ? resolveAnswerValue(q.id, rawValue, choiceValueMap)
           : rawValue;
@@ -142,14 +157,22 @@ exports.exportAdvanced = async (req, res, next) => {
 
       const filenameBase = `export_${survey.title.replace(/\s+/g, '_')}_${Date.now()}`;
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename=${filenameBase}.csv`);
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filenameBase + '.csv')}`);
       res.write('\uFEFF'); // BOM
 
       const questions = [];
       survey.sections.forEach(section => {
         section.questions.forEach(q => {
           const id = q.questionId || (q._id ? q._id.toString() : undefined);
-          if (id) questions.push({ id, text: q.text, type: q.type, options: q.options || [] });
+          if (id) {
+            if (q.type === 'multi_input' && q.subInputs && q.subInputs.length > 0) {
+              q.subInputs.forEach(sub => {
+                questions.push({ id, subId: sub.id, text: `${q.text || ''} - ${sub.label}`, type: sub.inputType, options: sub.options || [] });
+              });
+            } else {
+              questions.push({ id, text: q.text || '', type: q.type, options: q.options || [] });
+            }
+          }
         });
       });
 
@@ -191,7 +214,14 @@ exports.exportAdvanced = async (req, res, next) => {
         ];
         questions.forEach((q, idx) => {
           const answer = (r.answers || []).find(a => a.questionId === q.id);
-          const rawValue = answer ? answer.value : null;
+          let rawValue = null;
+          if (answer) {
+            if (q.subId && typeof answer.value === 'object' && answer.value !== null) {
+              rawValue = answer.value[q.subId];
+            } else if (!q.subId) {
+              rawValue = answer.value;
+            }
+          }
           const resolvedBase = typeof rawValue === 'string' && !rawValue.startsWith('other:')
             ? resolveAnswerValue(q.id, rawValue, choiceValueMap)
             : rawValue;
@@ -225,7 +255,15 @@ exports.exportAdvanced = async (req, res, next) => {
     survey.sections.forEach(section => {
       section.questions.forEach(q => {
         const id = q.questionId || (q._id ? q._id.toString() : undefined);
-        if (id) questions.push({ id, text: q.text, type: q.type, options: q.options || [] });
+        if (id) {
+          if (q.type === 'multi_input' && q.subInputs && q.subInputs.length > 0) {
+            q.subInputs.forEach(sub => {
+              questions.push({ id, subId: sub.id, text: `${q.text || ''} - ${sub.label}`, type: sub.inputType, options: sub.options || [] });
+            });
+          } else {
+            questions.push({ id, text: q.text || '', type: q.type, options: q.options || [] });
+          }
+        }
       });
     });
 
@@ -285,7 +323,14 @@ exports.exportAdvanced = async (req, res, next) => {
 
         questions.forEach((q, idx) => {
           const answer = (r.answers || []).find(a => a.questionId === q.id);
-          const rawValue = answer ? answer.value : null;
+          let rawValue = null;
+          if (answer) {
+            if (q.subId && typeof answer.value === 'object' && answer.value !== null) {
+              rawValue = answer.value[q.subId];
+            } else if (!q.subId) {
+              rawValue = answer.value;
+            }
+          }
           const resolvedBase = typeof rawValue === 'string' && !rawValue.startsWith('other:')
             ? resolveAnswerValue(q.id, rawValue, choiceValueMap)
             : rawValue;
@@ -302,7 +347,7 @@ exports.exportAdvanced = async (req, res, next) => {
       });
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename=${filenameBase}.xlsx`);
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filenameBase + '.xlsx')}`);
       await workbook.xlsx.write(res);
       return res.end();
     }
@@ -354,8 +399,15 @@ exports.exportAdvanced = async (req, res, next) => {
           r.numberSource || 'queue',
         ];
         questions.forEach(q => {
-          const answer = r.answers.find(a => a.questionId === q.id);
-          const rawValue = answer ? answer.value : null;
+          const answer = (r.answers || []).find(a => a.questionId === q.id);
+          let rawValue = null;
+          if (answer) {
+            if (q.subId && typeof answer.value === 'object' && answer.value !== null) {
+              rawValue = answer.value[q.subId];
+            } else if (!q.subId) {
+              rawValue = answer.value;
+            }
+          }
           const resolvedBase = typeof rawValue === 'string' && !rawValue.startsWith('other:')
             ? resolveAnswerValue(q.id, rawValue, choiceValueMap)
             : rawValue;

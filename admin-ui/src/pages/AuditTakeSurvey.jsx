@@ -190,6 +190,10 @@ export default function AuditTakeSurvey() {
   };
 
   const getQuestionValidationError = (q, providedAnswers = answers) => {
+    // Explicitly bypass validation for informational questions requiring no input
+    if (q.type === 'notice' || q.type === 'info') {
+      return null;
+    }
     const qId = q.questionId || String(q._id);
     const val = providedAnswers[qId];
 
@@ -445,7 +449,7 @@ export default function AuditTakeSurvey() {
 
     visibleQuestionsInSec.forEach(q => {
       const qId = q.questionId || String(q._id);
-      if (q.type === 'info' || q.optional === true) {
+      if (q.type === 'info' || q.type === 'notice' || q.optional === true) {
         return;
       }
 

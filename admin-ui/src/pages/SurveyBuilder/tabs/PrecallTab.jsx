@@ -106,10 +106,7 @@ export default function PrecallTab() {
 
   const removeField = (idx) => {
     const field = outboundConfig.fields[idx];
-    if (field && field.id === 'phone') {
-      toast.warning('The phone number field is system-managed and cannot be removed.');
-      return;
-    }
+
     if (!window.confirm("Are you sure you want to remove this field?")) return;
     updateState(prev => ({
       ...prev,
@@ -234,7 +231,7 @@ export default function PrecallTab() {
             {outboundConfig.fields.map((field, fIdx) => (
               <div key={`${field.id}-${fIdx}`} style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', background: 'var(--input-bg)' }}>
                 {isAdmin && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.75rem' }}>
                     <button type="button" className="btn-secondary" style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }} onClick={() => moveField(fIdx, -1)} disabled={fIdx === 0}>↑</button>
                     <button type="button" className="btn-secondary" style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }} onClick={() => moveField(fIdx, 1)} disabled={fIdx === outboundConfig.fields.length - 1}>↓</button>
                     <button type="button" className="btn-secondary" style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }} onClick={() => removeField(fIdx)}>Remove</button>

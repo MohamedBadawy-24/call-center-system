@@ -57,7 +57,7 @@ export default function TakeSurvey({ mockSurvey }) {
   const [eligibility, setEligibility] = useState({ checked: false, canStart: false, reason: '' });
   const [eligLoading, setEligLoading] = useState(true);
   const [isHandoverOpen, setIsHandoverOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(() => typeof window !== 'undefined' && window.innerWidth > 768);
   const [showEndCallConfirm, setShowEndCallConfirm] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
   const [defaultOpenSectionIdx, setDefaultOpenSectionIdx] = useState(0);
@@ -99,6 +99,7 @@ export default function TakeSurvey({ mockSurvey }) {
       return visibleQuestions[gqId] !== false;
     });
     return visibleGroupQs.every(gq => {
+      if (gq.type === 'info' || gq.type === 'notice' || gq.optional === true) return true;
       const gqId = gq.questionId || String(gq._id);
       const val = answers[gqId];
       return val !== undefined && val !== null && val !== '';
@@ -113,7 +114,7 @@ export default function TakeSurvey({ mockSurvey }) {
       // Flatten groups into individual questions for completion tracking
       const rawQs = sec.questions || [];
       const questionsInSec = rawQs.flatMap(item =>
-        item.type === 'group' ? (item.questions || []) : [item]
+        item.type === 'group' ? (item.questions || []).map(inner => ({ ...inner, _groupCrossValidation: item.crossValidation })) : [item]
       );
       const visibleQuestionsInSec = questionsInSec.filter((q) => {
         const qId = q.questionId || String(q._id);
@@ -126,6 +127,7 @@ export default function TakeSurvey({ mockSurvey }) {
       }
 
       const allAnswered = visibleQuestionsInSec.every((q) => {
+        if (q.type === 'info' || q.type === 'notice' || q.optional === true) return true;
         const qId = q.questionId || String(q._id);
         const val = answers[qId];
         return val !== undefined && val !== null && val !== '';
@@ -235,7 +237,7 @@ export default function TakeSurvey({ mockSurvey }) {
           (sec.questions || []).forEach(item => {
             if (item.type === 'group') {
               (item.questions || []).forEach(innerQ => {
-                allQ.push({ ...innerQ, _groupId: item.groupId, _groupLabel: item.label });
+                allQ.push({ ...innerQ, _groupId: item.groupId, _groupLabel: item.label, _groupCrossValidation: item.crossValidation });
               });
             } else {
               allQ.push(item);
@@ -275,7 +277,7 @@ export default function TakeSurvey({ mockSurvey }) {
               (sec.questions || []).forEach(item => {
                 if (item.type === 'group') {
                   (item.questions || []).forEach(innerQ => {
-                    allQ.push({ ...innerQ, _groupId: item.groupId, _groupLabel: item.label });
+                    allQ.push({ ...innerQ, _groupId: item.groupId, _groupLabel: item.label, _groupCrossValidation: item.crossValidation });
                   });
                 } else {
                   allQ.push(item);
@@ -702,6 +704,11 @@ export default function TakeSurvey({ mockSurvey }) {
   };
 
   const getQuestionValidationError = (q, providedAnswers = answers) => {
+    // Explicitly bypass validation for informational questions requiring no input
+    if (q.type === 'notice' || q.type === 'info') {
+      return null;
+    }
+
     const qId = q.questionId || String(q._id);
     const val = providedAnswers[qId];
 
@@ -749,6 +756,50 @@ export default function TakeSurvey({ mockSurvey }) {
       }
     }
 
+    // Composite Multi-Input check
+    if (q.type === 'multi_input') {
+      const objVal = typeof val === 'object' && val !== null ? val : {};
+      for (const sub of (q.subInputs || [])) {
+        if (sub.required) {
+          const subVal = objVal[sub.id];
+          if (subVal === undefined || subVal === null || String(subVal).trim() === '') {
+            return t('questionRequired') || 'Please fill all required sub-inputs';
+          }
+        }
+      }
+    }
+
+    if (q.crossValidation && q.crossValidation.ruleType === 'sum_equals') {
+      const targetIds = q.crossValidation.targetQuestionIds || (q.crossValidation.targetQuestionId ? [q.crossValidation.targetQuestionId] : []);
+      if (targetIds.length > 0) {
+        let expected = 0;
+        let hasValidTarget = false;
+        for (const tid of targetIds) {
+          const tVal = providedAnswers[tid];
+          if (tVal !== undefined && tVal !== null && tVal !== '') {
+            hasValidTarget = true;
+            if (typeof tVal === 'object') {
+              expected += Object.values(tVal).reduce((acc, v) => acc + (parseFloat(v) || 0), 0);
+            } else {
+              expected += parseFloat(tVal) || 0;
+            }
+          }
+        }
+        
+        if (hasValidTarget) {
+          let sumVal = 0;
+          if (q.type === 'multi_input' && typeof val === 'object' && val !== null) {
+            sumVal = Object.values(val).reduce((acc, v) => acc + (parseFloat(v) || 0), 0);
+          } else {
+            sumVal = parseFloat(val) || 0;
+          }
+          if (sumVal !== expected) {
+            return q.crossValidation.errorMessage || `The sum must equal ${expected}`;
+          }
+        }
+      }
+    }
+
     return null;
   };
 
@@ -757,8 +808,8 @@ export default function TakeSurvey({ mockSurvey }) {
     // Exception 1: hidden by branching logic — never reached, but guard anyway
     if (!visibleQuestions[qId]) return true;
 
-    // Exception 2: info/display type — always passable
-    if (question.type === 'info') return true;
+    // Exception 2: info/notice display type — always passable
+    if (question.type === 'info' || question.type === 'notice') return true;
 
     // Exception 3: explicitly marked optional in builder
     if (question.optional === true) return true;
@@ -818,36 +869,77 @@ export default function TakeSurvey({ mockSurvey }) {
     // If this question is in a group, validate ALL group members and jump past the entire group
     if (currentQ._groupId) {
       const groupQs = questions.filter(q => q._groupId === currentQ._groupId);
-      // Only act on the first question of the group (since all are shown together)
-      const firstInGroup = questions.findIndex(q => q._groupId === currentQ._groupId);
-      if (currentIdx === firstInGroup) {
-        // Validate all group questions
-        let hasError = false;
-        const newErrors = { ...fieldErrors };
-        for (const gq of groupQs) {
-          const gqId = gq.questionId || String(gq._id);
-          if (visibleQuestions[gqId] !== false) {
-            const err = getQuestionValidationError(gq, providedAnswers);
-            if (err) {
-              newErrors[gqId] = err;
-              hasError = true;
+      // Validate all group questions
+      let hasError = false;
+      const newErrors = { ...fieldErrors };
+      for (const gq of groupQs) {
+        const gqId = gq.questionId || String(gq._id);
+        if (visibleQuestions[gqId] !== false) {
+          const err = getQuestionValidationError(gq, providedAnswers);
+          if (err) {
+            newErrors[gqId] = err;
+            hasError = true;
+          }
+        }
+      }
+      
+      // Cross-Question Validation for Group
+      const firstGq = groupQs[0];
+      if (!hasError && firstGq?._groupCrossValidation && firstGq._groupCrossValidation.ruleType === 'sum_equals') {
+        const targetIds = firstGq._groupCrossValidation.targetQuestionIds || (firstGq._groupCrossValidation.targetQuestionId ? [firstGq._groupCrossValidation.targetQuestionId] : []);
+        if (targetIds.length > 0) {
+          let expected = 0;
+          let hasValidTarget = false;
+          for (const tid of targetIds) {
+            const tVal = providedAnswers[tid];
+            if (tVal !== undefined && tVal !== null && tVal !== '') {
+              hasValidTarget = true;
+              if (typeof tVal === 'object') {
+                expected += Object.values(tVal).reduce((acc, v) => acc + (parseFloat(v) || 0), 0);
+              } else {
+                expected += parseFloat(tVal) || 0;
+              }
+            }
+          }
+          
+          if (hasValidTarget) {
+            let currentSum = 0;
+            for (const gq of groupQs) {
+              const gqId = gq.questionId || String(gq._id);
+              if (visibleQuestions[gqId] !== false) {
+                const val = providedAnswers[gqId];
+                if (gq.type === 'multi_input' && typeof val === 'object' && val !== null) {
+                  currentSum += Object.values(val).reduce((acc, v) => acc + (parseFloat(v) || 0), 0);
+                } else {
+                  currentSum += parseFloat(val) || 0;
+                }
+              }
+            }
+            if (currentSum !== expected) {
+              // Apply error to the last visible question in the group so it renders at the bottom
+              const lastVisibleGq = [...groupQs].reverse().find(gq => visibleQuestions[gq.questionId || String(gq._id)] !== false);
+              if (lastVisibleGq) {
+                const lastGqId = lastVisibleGq.questionId || String(lastVisibleGq._id);
+                newErrors[lastGqId] = firstGq._groupCrossValidation.errorMessage || `The sum of this group must equal ${expected}`;
+                hasError = true;
+              }
             }
           }
         }
-        if (hasError) {
-          setFieldErrors(newErrors);
-          return;
-        }
-        // Jump to the first question after the entire group
-        const lastInGroup = questions.findLastIndex(q => q._groupId === currentQ._groupId);
-        const nextIdx = findNextVisibleIdx(lastInGroup + 1, providedAnswers);
-        if (nextIdx !== -1) {
-          setCurrentIdx(nextIdx);
-        } else {
-          goToInterviewStep();
-        }
+      }
+      if (hasError) {
+        setFieldErrors(newErrors);
         return;
       }
+      // Jump to the first question after the entire group
+      const lastInGroup = questions.findLastIndex(q => q._groupId === currentQ._groupId);
+      const nextIdx = findNextVisibleIdx(lastInGroup + 1, providedAnswers);
+      if (nextIdx !== -1) {
+        setCurrentIdx(nextIdx);
+      } else {
+        goToInterviewStep();
+      }
+      return;
     }
 
     const nextIdx = findNextVisibleIdx(currentIdx + 1, providedAnswers);
@@ -964,7 +1056,7 @@ export default function TakeSurvey({ mockSurvey }) {
     if (!currentSection) return errors;
 
     const questionsInSec = (currentSection.questions || []).flatMap(item =>
-      item.type === 'group' ? (item.questions || []) : [item]
+      item.type === 'group' ? (item.questions || []).map(inner => ({ ...inner, _groupCrossValidation: item.crossValidation })) : [item]
     );
 
     const visibleQuestionsInSec = questionsInSec.filter(q => {
@@ -974,7 +1066,7 @@ export default function TakeSurvey({ mockSurvey }) {
 
     visibleQuestionsInSec.forEach(q => {
       const qId = q.questionId || String(q._id);
-      if (q.type === 'info' || q.optional === true) {
+      if (q.type === 'info' || q.type === 'notice' || q.optional === true) {
         return;
       }
 
@@ -1331,7 +1423,8 @@ export default function TakeSurvey({ mockSurvey }) {
 
     // Auto-scroll on answering a group question
     const q = questions.find(qst => (qst.questionId || String(qst._id)) === questionId);
-    if (q && q._groupId && value !== undefined && value !== null && value !== '') {
+    const autoScrollTypes = ['single_choice', 'boolean', 'rating', 'dropdown'];
+    if (q && q._groupId && autoScrollTypes.includes(q.type) && value !== undefined && value !== null && value !== '') {
       const latestAnswers = { ...answers, [questionId]: value };
       setTimeout(() => {
         scrollToNextInGroup(questionId, latestAnswers);
@@ -1571,7 +1664,16 @@ export default function TakeSurvey({ mockSurvey }) {
               value={answers[qId] || ''}
               onChange={(e) => handleAnswerChange(qId, e.target.value)}
               style={{ flex: 1 }}
-              autoFocus={flatIdx === currentIdx}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (q._groupId) {
+                    scrollToNextInGroup(qId, answers);
+                  } else if (survey?.layoutMode !== 'multi') {
+                    handleNextQuestion();
+                  }
+                }
+              }}
             />
           </div>
         )}
@@ -1591,6 +1693,15 @@ export default function TakeSurvey({ mockSurvey }) {
                 handleAnswerChange(qId, cleaned);
               }}
               onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (q._groupId) {
+                    scrollToNextInGroup(qId, answers);
+                  } else if (survey?.layoutMode !== 'multi') {
+                    handleNextQuestion();
+                  }
+                  return;
+                }
                 // Block non-numeric keys except navigation/control keys
                 const allowed = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', '.', '-'];
                 if (!allowed.includes(e.key) && !/^[0-9]$/.test(e.key)) {
@@ -1598,8 +1709,61 @@ export default function TakeSurvey({ mockSurvey }) {
                 }
               }}
               style={{ flex: 1 }}
-              autoFocus={flatIdx === currentIdx}
             />
+          </div>
+        )}
+
+        {q.type === 'multi_input' && (
+          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {(q.subInputs || []).map(sub => {
+              const ansObj = typeof answers[qId] === 'object' && answers[qId] !== null ? answers[qId] : {};
+              const val = ansObj[sub.id] || '';
+              return (
+                <div key={sub.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <label className="form-label" style={{ display: 'flex', gap: '0.25rem' }}>
+                    {sub.label}
+                    {sub.required && <span style={{ color: 'var(--danger)' }}>*</span>}
+                  </label>
+                  {sub.inputType === 'dropdown' ? (
+                    <select
+                      className="input-field"
+                      value={val}
+                      onChange={e => handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value })}
+                    >
+                      <option value="">-- Select --</option>
+                      {(sub.options || []).map((opt, i) => (
+                        <option key={i} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  ) : sub.inputType === 'number' ? (
+                    <input
+                      type="number"
+                      className="input-field"
+                      value={val}
+                      onChange={e => {
+                        const raw = e.target.value;
+                        const cleaned = raw.replace(/[^0-9.\-]/g, '');
+                        handleAnswerChange(qId, { ...ansObj, [sub.id]: cleaned });
+                      }}
+                    />
+                  ) : sub.inputType === 'date' ? (
+                    <input
+                      type="date"
+                      className="input-field"
+                      value={val}
+                      onChange={e => handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value })}
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      className="input-field"
+                      value={val}
+                      onChange={e => handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value })}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -1621,25 +1785,20 @@ export default function TakeSurvey({ mockSurvey }) {
   return (
     <DebugErrorBoundary>
       <div className="survey-layout">
-        {/* Mobile Toggle */}
-        <button className="btn-secondary mobile-sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
-          <Menu size={20} />
-        </button>
-
         {/* Sidebar Overlay */}
-        {sidebarOpen && (
-          <div className="survey-sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+        {sidebarVisible && (
+          <div className="survey-sidebar-overlay desktop-hidden" onClick={() => setSidebarVisible(false)} />
         )}
 
         {/* Sidebar */}
-        <div className={`survey-sidebar ${sidebarOpen ? 'open' : ''}`} style={{ width: '300px' }}>
+        <div className={`survey-sidebar ${sidebarVisible ? 'open' : 'collapsed'}`} style={{ width: '300px' }}>
           <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 700 }}>{t('sections') || 'Sections'}</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {survey.sections && survey.sections.map((sec, sIdx) => {
               // Flatten groups for sidebar visibility and count
               const rawQsInSec = sec.questions || [];
               const flatQsInSec = rawQsInSec.flatMap(item =>
-                item.type === 'group' ? (item.questions || []).map(inner => ({ ...inner, _groupId: item.groupId, _groupLabel: item.label })) : [item]
+                item.type === 'group' ? (item.questions || []).map(inner => ({ ...inner, _groupId: item.groupId, _groupLabel: item.label, _groupCrossValidation: item.crossValidation })) : [item]
               );
               const visibleQuestionsInSec = flatQsInSec.filter((q) => {
                 const qId = q.questionId || String(q._id);
@@ -1712,6 +1871,7 @@ export default function TakeSurvey({ mockSurvey }) {
                           // Check if all group questions answered
                           const groupFlat = questions.filter(q => q._groupId === qst._groupId);
                           const allGroupAnswered = groupFlat.every(q => {
+                            if (q.type === 'info' || q.type === 'notice' || q.optional === true) return true;
                             const gqId = q.questionId || String(q._id);
                             const v = answers[gqId];
                             return v !== undefined && v !== null && v !== '';
@@ -1821,7 +1981,20 @@ export default function TakeSurvey({ mockSurvey }) {
 
         {/* Main Content */}
         <div className="survey-main">
-          <div className="survey-content">
+          {/* Universal Toggle Button */}
+          <div style={{ padding: '1rem 2rem 0', display: 'flex', alignItems: 'center' }}>
+            <button 
+              type="button"
+              className="btn-secondary" 
+              onClick={() => setSidebarVisible(!sidebarVisible)}
+              title={sidebarVisible ? "Collapse Sidebar (Focus Mode)" : "Expand Sidebar"}
+              style={{ padding: '0.5rem 0.75rem', display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}
+            >
+              <Menu size={20} />
+              <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{sidebarVisible ? 'Focus Mode' : 'Show Sidebar'}</span>
+            </button>
+          </div>
+          <div className="survey-content" style={{ paddingTop: '1rem' }}>
             <div className="survey-progress-container">
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
                 {survey?.layoutMode === 'multi' ? (
@@ -1866,6 +2039,7 @@ export default function TakeSurvey({ mockSurvey }) {
                                 let isLocked = false;
                                 if (gi > 0) {
                                   isLocked = visibleGroupQs.slice(0, gi).some(prevQ => {
+                                    if (prevQ.type === 'info' || prevQ.type === 'notice') return false;
                                     const prevQId = prevQ.questionId || String(prevQ._id);
                                     const val = answers[prevQId];
                                     return val === undefined || val === null || val === '';
@@ -1920,11 +2094,6 @@ export default function TakeSurvey({ mockSurvey }) {
                   if (currentQ._groupId) {
                     const groupQs = questions.filter(q => q._groupId === currentQ._groupId);
                     const firstInGroup = questions.findIndex(q => q._groupId === currentQ._groupId);
-                    // Only render the group block when we're at the first question in the group
-                    if (currentIdx !== firstInGroup) {
-                      // Already rendered as part of group — skip (shouldn't normally reach here)
-                      return null;
-                    }
                     const visibleGroupQs = groupQs.filter(gq => {
                       const gqId = gq.questionId || String(gq._id);
                       return visibleQuestions[gqId] !== false;
@@ -1953,6 +2122,7 @@ export default function TakeSurvey({ mockSurvey }) {
                               let isLocked = false;
                               if (gi > 0) {
                                 isLocked = visibleGroupQs.slice(0, gi).some(prevQ => {
+                                  if (prevQ.type === 'info' || prevQ.type === 'notice') return false;
                                   const prevQId = prevQ.questionId || String(prevQ._id);
                                   const val = answers[prevQId];
                                   return val === undefined || val === null || val === '';
@@ -1979,40 +2149,52 @@ export default function TakeSurvey({ mockSurvey }) {
                 })()
               })()
             )}
-          </div>
-
-          {/* Bottom Action Bar */}
-          <div className="survey-bottom-bar">
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-              {survey?.layoutMode === 'multi' ? (
-                <>
-                  <button className="btn-secondary" onClick={handlePreviousSection} disabled={currentSectionIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <ChevronLeft size={18} /> Previous
-                  </button>
-                  <button className="btn-primary" onClick={proceedToNextSection} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    Next <ChevronRight size={18} />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button className="btn-secondary" onClick={handlePrevious} disabled={currentIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <ChevronLeft size={18} /> Previous
-                  </button>
-                  <button className="btn-primary" onClick={() => handleNextQuestion()} disabled={!isCurrentGroupComplete} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    Next <ChevronRight size={18} />
-                  </button>
-                </>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-              {lastSaved && (
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <Save size={14} /> Saved {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              )}
-              <button className="btn-secondary" style={{ borderColor: 'var(--danger)', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.5rem' }} onClick={() => setShowEndCallConfirm(true)}>
-                <PhoneOff size={18} /> End Call
-              </button>
+            {/* Sticky Bottom Action Bar */}
+            <div 
+              className="survey-bottom-bar sticky bottom-0 z-50 bg-white"
+              style={{ 
+                position: 'sticky', 
+                bottom: 0, 
+                zIndex: 50, 
+                backgroundColor: 'var(--card-bg)', 
+                borderTop: '1px solid var(--border-color)',
+                padding: '1rem 2rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}
+            >
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                {survey?.layoutMode === 'multi' ? (
+                  <>
+                    <button className="btn-secondary" onClick={handlePreviousSection} disabled={currentSectionIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <ChevronLeft size={18} /> Previous
+                    </button>
+                    <button className="btn-primary" onClick={proceedToNextSection} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      Next <ChevronRight size={18} />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button className="btn-secondary" onClick={handlePrevious} disabled={currentIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <ChevronLeft size={18} /> Previous
+                    </button>
+                    <button className="btn-primary" onClick={() => handleNextQuestion()} disabled={!isCurrentGroupComplete} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      Next <ChevronRight size={18} />
+                    </button>
+                  </>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                {lastSaved && (
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                    <Save size={14} /> Saved {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+                <button className="btn-secondary" style={{ borderColor: 'var(--danger)', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.5rem' }} onClick={() => setShowEndCallConfirm(true)}>
+                  <PhoneOff size={18} /> End Call
+                </button>
+              </div>
             </div>
           </div>
           

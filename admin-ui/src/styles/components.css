@@ -161,7 +161,14 @@
 }
 
 .choice-btn {
-  padding: var(--space-4xl);
+  padding: 1.25rem 1.5rem;
+  font-size: var(--font-size-lg, 1.1rem);
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   background: var(--card-bg);
   border: var(--glass-border);
   border-radius: var(--radius-lg);
@@ -746,4 +753,10 @@ td:last-child {
 .precall-seg-btn.has-error {
   border-color: var(--danger) !important;
   box-shadow: var(--shadow-focus-danger) !important;
+}
+
+@media (min-width: 769px) {
+  .desktop-hidden {
+    display: none !important;
+  }
 }

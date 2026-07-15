@@ -138,6 +138,16 @@ exports.completePrecall = async (userId, userRole, data, io) => {
       doc.markModified('payload');
       await doc.save({ session });
     }
+    
+    // Fallback: If no phone was provided and no serial was assigned yet, generate one anyway
+    if (!payload.serial_number) {
+      const fallbackSerial = await getNextSerialNumber('survey_numbers');
+      payload.serial_number = fallbackSerial;
+      doc.serialNumber = fallbackSerial;
+      doc.payload.serial_number = fallbackSerial;
+      doc.markModified('payload');
+      await doc.save({ session });
+    }
 
     if (ir === 'postponed' && payload.serial_number != null && String(payload.serial_number).trim() !== '') {
       await PostponedSerial.create([{

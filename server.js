@@ -206,11 +206,16 @@ app.use((req, res, next) => {
   if (urlPath.startsWith('/assets/') || urlPath === '/favicon.ico' || urlPath === '/manifest.json' || urlPath === '/robots.txt' || urlPath === '/sw.js') {
     const filePath = path.join(frontendPath, urlPath);
     
-    if (fs.existsSync(filePath)) {
-      const ext = path.extname(filePath).toLowerCase();
-      const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-      res.setHeader('Content-Type', contentType);
-      return res.sendFile(filePath);
+    try {
+      if (fs.existsSync(filePath)) {
+        const ext = path.extname(filePath).toLowerCase();
+        const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+        const fileContent = fs.readFileSync(filePath);
+        res.setHeader('Content-Type', contentType);
+        return res.status(200).send(fileContent);
+      }
+    } catch (err) {
+      return res.status(500).send('Error reading file: ' + err.message);
     }
     // If file doesn't exist, return 404 (don't fall through to API routes)
     return res.status(404).send('Static file not found: ' + urlPath);
@@ -1894,7 +1899,10 @@ app.get(/.*/, (req, res, next) => {
   if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|json|woff|woff2|ttf|svg)$/)) {
     return res.status(404).send('Asset not found');
   }
-  res.sendFile(path.join(frontendPath, 'index.html'));
+  const htmlPath = path.join(frontendPath, 'index.html');
+  const html = fs.readFileSync(htmlPath, 'utf8');
+  res.setHeader('Content-Type', 'text/html');
+  res.status(200).send(html);
 });
 
 app.use((_req, res) => {

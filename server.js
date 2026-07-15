@@ -201,6 +201,11 @@ app.use(
         return callback(null, true);
       }
 
+      // Allow same-origin requests (production hosting)
+      if (origin.includes('.ltempurl.com') || origin.includes('.smarterasp.net')) {
+        return callback(null, true);
+      }
+
       callback(new Error("Not allowed by CORS"));
     },
     credentials: true,

@@ -86,7 +86,8 @@ export function useSurveyBuilderState(surveyId, isAdmin) {
     outboundConfig: getDefaultOutboundClone(),
     customizeOutbound: false,
     sections: [{ title: 'Main Section', questions: [] }],
-    groups: []
+    groups: [],
+    numberAssignmentMode: 'queue_only'
   });
 
   const [history, setHistory] = useState([]);
@@ -106,6 +107,7 @@ export function useSurveyBuilderState(surveyId, isAdmin) {
         const outboundPrecall = draft?.outboundPrecall ?? root.outboundPrecall;
         const title = draft?.title ?? root.title ?? '';
         const layoutMode = draft?.layoutMode ?? root.layoutMode ?? 'single';
+        const numberAssignmentMode = draft?.numberAssignmentMode ?? root.numberAssignmentMode ?? 'queue_only';
 
         setSurveyState({
           title,
@@ -118,6 +120,7 @@ export function useSurveyBuilderState(surveyId, isAdmin) {
           customizeOutbound: hasStoredOutboundCustom(outboundPrecall),
           sections: flattenSections(sections),
           groups: draft?.groups ?? root.groups ?? [],
+          numberAssignmentMode
         });
         setHistory([]);
         setFuture([]);

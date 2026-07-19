@@ -169,15 +169,6 @@ async function getSurveyEligibilityState(user, surveyId, serialParam = null, ses
         ? String(lastPrecall.serialNumber).trim()
         : '';
   const payload = lastPrecall.payload || {};
-  const ageYears = parseRespondentAgeYears(payload);
-
-  // Rule 3: Age field is filled AND toFiniteAge(age) >= 18
-  if (!isStaff && (Number.isNaN(ageYears) || ageYears === null || (Number.isFinite(ageYears) && ageYears < 18))) {
-    return { canStartSurvey: false, reason: 'under_18', precallSerialNumber: serial, payload };
-  }
-  if (!isStaff && lastPrecall.under18NotQualified) {
-    return { canStartSurvey: false, reason: 'under_18_not_qualified', precallSerialNumber: serial, payload };
-  }
 
   let respQ = Response.findOne({ serialNumber: serial }).lean();
   if (session) respQ = respQ.session(session);

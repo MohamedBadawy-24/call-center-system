@@ -53,11 +53,6 @@ exports.completePrecall = async (userId, userRole, data, io) => {
     payload.researcher_name = user.name || '';
     payload.researcher_code = user.researcherCode || '';
     const ageYears = parseRespondentAgeYears(payload);
-    let under18NotQualified = false;
-    if (Number.isFinite(ageYears) && ageYears < 18) {
-      under18NotQualified = true;
-      payload.interview_result = 'no_qualified';
-    }
 
     const ir = String(payload.interview_result || '');
     const { category, disqualified } = categorizeInterviewOutcome(ir);
@@ -81,8 +76,7 @@ exports.completePrecall = async (userId, userRole, data, io) => {
       interviewOutcome: ir,
       outcomeCategory: category,
       outcomeReason: payload.outcome_reason || '',
-      disqualified: disqualified || under18NotQualified,
-      under18NotQualified,
+      disqualified,
     };
     
     if (serialNumber) precallData.serialNumber = serialNumber;
@@ -165,11 +159,10 @@ exports.completePrecall = async (userId, userRole, data, io) => {
     let outcomeReason = callOutcome;
     if (callOutcome === 'contacted' && ir) outcomeReason = `Contacted | ${ir}`;
     else if (!outcomeReason && ir) outcomeReason = ir;
-    if (under18NotQualified) outcomeReason = outcomeReason ? `${outcomeReason} (Under 18)` : 'Under 18';
 
     const deadCallOutcomes = ['wrong_number', 'out_of_service', 'no_answer', 'busy', 'closed'];
     const deadIntOutcomes = ['refused', 'no_qualified', 'not_contacted'];
-    if (deadCallOutcomes.includes(callOutcome) || deadIntOutcomes.includes(ir) || under18NotQualified) {
+    if (deadCallOutcomes.includes(callOutcome) || deadIntOutcomes.includes(ir)) {
       phoneStatus = 'disqualified';
     } else if (ir === 'postponed') {
       phoneStatus = 'postponed';

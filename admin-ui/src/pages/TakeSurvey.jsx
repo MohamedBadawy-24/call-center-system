@@ -434,11 +434,7 @@ export default function TakeSurvey({ mockSurvey }) {
     const actualPreloaded = (preloadedData && (preloadedData.nativeEvent || preloadedData.target || typeof preloadedData.preventDefault === 'function')) ? null : preloadedData;
     const data = actualPreloaded || await refreshEligibility();
     if (!data?.canStartSurvey) {
-      if (data?.reason === 'under_18' || data?.reason === 'under_18_not_qualified') {
-        toast.error(t('under18CannotStartSurvey'));
-      } else {
-        toast.error(t('cannotStartSurveyGeneric'));
-      }
+      toast.error(data?.reason ? t('cannotStartSurveyGeneric') : t('cannotStartSurveyGeneric'));
       return;
     }
 
@@ -1291,7 +1287,7 @@ export default function TakeSurvey({ mockSurvey }) {
           </div>
         )}
         {user?.role === 'agent' && eligibility.checked && !eligibility.canStart && (
-          <p style={{ color: 'var(--danger)', fontWeight: 700, marginBottom: '1rem' }}>{t('under18CannotStartSurvey')}</p>
+          <p style={{ color: 'var(--danger)', fontWeight: 700, marginBottom: '1rem' }}>{t('cannotStartSurveyGeneric')}</p>
         )}
         <button
           className="btn-primary"

@@ -65,7 +65,7 @@ describe('Survey Eligibility State Gate', () => {
     expect(res.data.reason).toBe('no_precall');
   });
 
-  it('GATE: Agent in active status but with underage (<18) precall → canStartSurvey: false', async () => {
+  it('GATE: Agent in active status with underage (<18) precall → now allowed (no global age gate)', async () => {
     const { token, user } = await getAuthToken('agent');
     await makeRequest('POST', '/auth/status', { status: 'active' }, token);
     const updatedUser = await mongoose.model('User').findById(user._id);
@@ -78,11 +78,10 @@ describe('Survey Eligibility State Gate', () => {
 
     const res = await makeRequest('GET', '/agent/survey-eligibility', { surveyId: survey._id, serial: precall.serialNumber }, token);
     expect(res.status).toBe(200);
-    expect(res.data.canStartSurvey).toBe(false);
-    expect(res.data.reason).toBe('under_18');
+    expect(res.data.canStartSurvey).toBe(true);
   });
 
-  it('GATE: Agent in active status with under18NotQualified flag true precall → canStartSurvey: false', async () => {
+  it('GATE: Agent in active status with under18NotQualified flag true precall → now allowed (flag no longer gates)', async () => {
     const { token, user } = await getAuthToken('agent');
     await makeRequest('POST', '/auth/status', { status: 'active' }, token);
     const updatedUser = await mongoose.model('User').findById(user._id);
@@ -91,13 +90,12 @@ describe('Survey Eligibility State Gate', () => {
     const precall = await createTestPrecall(user._id, survey._id, {
       statusStartedAt: updatedUser.statusStartedAt,
       under18NotQualified: true,
-      payload: { phone: '01000001111', age_years: 25 } // Age >= 18 to skip under_18 rule, triggering under_18_not_qualified
+      payload: { phone: '01000001111', age_years: 25 }
     });
 
     const res = await makeRequest('GET', '/agent/survey-eligibility', { surveyId: survey._id, serial: precall.serialNumber }, token);
     expect(res.status).toBe(200);
-    expect(res.data.canStartSurvey).toBe(false);
-    expect(res.data.reason).toBe('under_18_not_qualified');
+    expect(res.data.canStartSurvey).toBe(true);
   });
 });
 
@@ -217,7 +215,7 @@ describe('POST /agent/precall-complete', () => {
     expect(postponedSerial).not.toBeNull();
   });
 
-  it('UNDER 18: forces interview_result = no_qualified and under18NotQualified = true', async () => {
+  it('UNDER 18: age < 18 no longer force-overrides interview_result (global age gate removed)', async () => {
     const { token, user } = await getAuthToken('agent');
     await makeRequest('POST', '/auth/status', { status: 'active' }, token);
     const survey = await createTestSurvey();
@@ -232,9 +230,9 @@ describe('POST /agent/precall-complete', () => {
 
     const PrecallCompletion = mongoose.model('PrecallCompletion');
     const doc = await PrecallCompletion.findOne({ userId: user._id, surveyId: survey._id });
-    expect(doc.interviewOutcome).toBe('no_qualified');
-    expect(doc.under18NotQualified).toBe(true);
-    expect(doc.disqualified).toBe(true);
+    // interview_result should be preserved as 'completed', NOT overridden to 'no_qualified'
+    expect(doc.interviewOutcome).toBe('completed');
+    expect(doc.disqualified).toBe(false);
   });
 
   it('FAIL: Agent not in active status returns 403', async () => {

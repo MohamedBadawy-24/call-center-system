@@ -269,7 +269,7 @@ const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers,
           <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {(q.subInputs || []).map((sub, subIdx) => {
               const ansObj = typeof answers[qId] === 'object' && answers[qId] !== null ? answers[qId] : {};
-              const val = ansObj[sub.id] || '';
+              const val = ansObj[sub.id] ?? '';
               return (
                 <div key={sub.id || `sub-${subIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                   <label dir="auto" className="form-label" style={{ display: 'flex', gap: '0.25rem' }}>
@@ -2046,7 +2046,7 @@ export default function TakeSurvey({ mockSurvey }) {
                                     return val === undefined || val === null || val === '';
                                   });
                                 }
-                                return <QuestionRenderer q={gq} sIdx={currentSectionIdx} qIdx={gi} isLocked={isLocked} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
+                                return <QuestionRenderer key={gq.questionId || String(gq._id)} q={gq} sIdx={currentSectionIdx} qIdx={gi} isLocked={isLocked} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
                               })}
                             </div>
                           </div>
@@ -2054,7 +2054,7 @@ export default function TakeSurvey({ mockSurvey }) {
                       } else {
                         const qId = q.questionId || String(q._id);
                         if (visibleQuestions[qId] === false) return null;
-                        return <QuestionRenderer q={q} sIdx={currentSectionIdx} qIdx={qIdx} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
+                        return <QuestionRenderer key={q.questionId || String(q._id)} q={q} sIdx={currentSectionIdx} qIdx={qIdx} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
                       }
                     })}
                   </div>
@@ -2121,7 +2121,7 @@ export default function TakeSurvey({ mockSurvey }) {
                                   return val === undefined || val === null || val === '';
                                 });
                               }
-                              return <QuestionRenderer q={gq} sIdx={gqSIdx >= 0 ? gqSIdx : 0} qIdx={gi} isLocked={isLocked} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
+                              return <QuestionRenderer key={gq.questionId || String(gq._id)} q={gq} sIdx={gqSIdx >= 0 ? gqSIdx : 0} qIdx={gi} isLocked={isLocked} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
                             })}
                           </div>
                         </div>
@@ -2136,7 +2136,7 @@ export default function TakeSurvey({ mockSurvey }) {
                           {sectionTitle}
                         </div>
                       )}
-                      <QuestionRenderer q={currentQ} sIdx={sIdx} qIdx={qIdx} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />
+                      <QuestionRenderer key={currentQ.questionId || String(currentQ._id)} q={currentQ} sIdx={sIdx} qIdx={qIdx} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />
                     </div>
                   );
                 })()

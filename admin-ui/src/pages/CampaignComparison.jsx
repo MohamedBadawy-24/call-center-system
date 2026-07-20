@@ -55,7 +55,8 @@ export default function CampaignComparison() {
 
   const formatAnswer = (value) => {
     if (value === null || value === undefined) return '—';
-    if (Array.isArray(value)) return value.join(', ');
+    if (Array.isArray(value)) return value.map(v => formatAnswer(v)).join(', ');
+    if (typeof value === 'object') return Object.values(value).map(v => formatAnswer(v)).join(' | ');
     return String(value);
   };
 

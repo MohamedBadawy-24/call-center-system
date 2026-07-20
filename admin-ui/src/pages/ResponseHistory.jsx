@@ -166,6 +166,15 @@ export default function ResponseHistory() {
     return questionId;
   };
 
+  const formatCellValue = (value) => {
+    if (value === null || value === undefined || value === '') return '—';
+    if (Array.isArray(value)) return value.map(v => formatCellValue(v)).join(', ');
+    if (typeof value === 'object') {
+      return Object.values(value).map(v => formatCellValue(v)).join(' | ');
+    }
+    return String(value);
+  };
+
   const filteredResponses = responses.filter(r => {
     const s = searchTerm.toLowerCase();
     return (
@@ -565,7 +574,7 @@ export default function ResponseHistory() {
                                       <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
                                         {getQuestionText(r.surveyId, ans.questionId)}
                                       </div>
-                                      <div style={{ fontWeight: 600 }}>{ans.value || '—'}</div>
+                                      <div style={{ fontWeight: 600 }}>{formatCellValue(ans.value)}</div>
                                     </div>
                                   ))
                                 ) : (

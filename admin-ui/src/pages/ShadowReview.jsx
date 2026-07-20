@@ -82,7 +82,11 @@ export default function ShadowReview() {
     if (!data || !data.draft || !data.draft.answers) return '—';
     const ans = data.draft.answers.find(a => a.questionId === questionId);
     if (!ans) return '—';
-    return ans.value !== undefined ? String(ans.value) : '—';
+    const v = ans.value;
+    if (v === null || v === undefined) return '—';
+    if (Array.isArray(v)) return v.map(item => typeof item === 'object' && item !== null ? Object.values(item).join(' | ') : String(item)).join(', ');
+    if (typeof v === 'object') return Object.values(v).map(sub => sub != null ? String(sub) : '').join(' | ');
+    return String(v);
   };
 
   return (

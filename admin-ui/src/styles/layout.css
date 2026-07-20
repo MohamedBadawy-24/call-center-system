@@ -217,7 +217,7 @@
 .survey-sidebar {
   width: 300px;
   background-color: var(--card-bg);
-  border-right: 1px solid var(--border-color);
+  border-inline-end: 1px solid var(--border-color);
   overflow-y: auto;
   padding: var(--space-xl);
   display: flex;
@@ -246,8 +246,13 @@
 .survey-sidebar.collapsed {
   transform: translateX(-100%);
   position: absolute;
+  inset-inline-start: 0;
   z-index: 100;
   height: 100%;
+}
+
+[dir="rtl"] .survey-sidebar.collapsed {
+  transform: translateX(100%);
 }
 
 .survey-main {

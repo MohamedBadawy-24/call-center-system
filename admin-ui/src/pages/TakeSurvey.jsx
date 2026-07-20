@@ -1301,7 +1301,7 @@ export default function TakeSurvey({ mockSurvey }) {
             type="button"
             className="btn-secondary"
             onClick={() => setIsHandoverOpen(true)}
-            style={{ marginTop: '1rem', marginLeft: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+            style={{ marginTop: '1rem', marginInlineStart: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
           >
             <UserPlus size={18} />
             {t('handover') || 'Handover Call'}
@@ -1960,7 +1960,7 @@ export default function TakeSurvey({ mockSurvey }) {
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
                               flex: 1,
-                              textAlign: isRtl ? 'right' : 'left'
+                              textAlign: 'start'
                             }}>
                               {displayTitle}
                             </span>
@@ -2164,19 +2164,19 @@ export default function TakeSurvey({ mockSurvey }) {
                 {survey?.layoutMode === 'multi' ? (
                   <>
                     <button dir="auto" className="btn-secondary" onClick={handlePreviousSection} disabled={currentSectionIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <ChevronLeft size={18} /> Previous
+                      {isRtl ? <ChevronRight size={18} /> : <ChevronLeft size={18} />} {t('previous') || 'Previous'}
                     </button>
                     <button dir="auto" className="btn-primary" onClick={proceedToNextSection} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      Next <ChevronRight size={18} />
+                      {t('next') || 'Next'} {isRtl ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
                     </button>
                   </>
                 ) : (
                   <>
                     <button dir="auto" className="btn-secondary" onClick={handlePrevious} disabled={currentIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <ChevronLeft size={18} /> Previous
+                      {isRtl ? <ChevronRight size={18} /> : <ChevronLeft size={18} />} {t('previous') || 'Previous'}
                     </button>
                     <button dir="auto" className="btn-primary" onClick={() => handleNextQuestion()} disabled={!isCurrentGroupComplete} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      Next <ChevronRight size={18} />
+                      {t('next') || 'Next'} {isRtl ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
                     </button>
                   </>
                 )}

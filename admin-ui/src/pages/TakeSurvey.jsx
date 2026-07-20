@@ -52,8 +52,8 @@ const parseDynamicText = (text, answers) => {
   };
 
 const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers, isRtl, t, toggleChoiceForQuestion, setSingleChoiceForQuestion, handleAnswerChange, otherValues, setOtherValues, markInteracted, fieldErrors, setFieldErrors, scrollToNextInGroup, survey, handleNextQuestion, showInteractionError }) => {
-    const qId = q.questionId || String(q._id);
-    const flatIdx = questions.findIndex(qst => (qst.questionId || String(qst._id)) === qId);
+    const qId = q.id || q.questionId || String(q._id);
+    const flatIdx = questions.findIndex(qst => (qst.id || qst.questionId || String(qst._id)) === qId);
     
     const dynamicQuestionText = parseDynamicText(q.text, answers);
     const dynamicScriptText = parseDynamicText(q.script, answers);
@@ -366,7 +366,7 @@ export default function TakeSurvey({ mockSurvey }) {
   const visibleQuestions = useMemo(() => {
     const map = {};
     questions.forEach(q => {
-      const qId = q.questionId || String(q._id);
+      const qId = q.id || q.questionId || String(q._id);
       if (!q.visibility) {
         map[qId] = true;
       } else {
@@ -393,12 +393,12 @@ export default function TakeSurvey({ mockSurvey }) {
     if (!currentQ || !currentQ._groupId) return true;
     const groupQs = questions.filter(q => q._groupId === currentQ._groupId);
     const visibleGroupQs = groupQs.filter(gq => {
-      const gqId = gq.questionId || String(gq._id);
+      const gqId = gq.id || gq.questionId || String(gq._id);
       return visibleQuestions[gqId] !== false;
     });
     return visibleGroupQs.every(gq => {
       if (gq.type === 'info' || gq.type === 'notice' || gq.optional === true) return true;
-      const gqId = gq.questionId || String(gq._id);
+      const gqId = gq.id || gq.questionId || String(gq._id);
       const val = answers[gqId];
       return val !== undefined && val !== null && val !== '';
     });
@@ -415,7 +415,7 @@ export default function TakeSurvey({ mockSurvey }) {
         item.type === 'group' ? (item.questions || []).map(inner => ({ ...inner, _groupCrossValidation: item.crossValidation })) : [item]
       );
       const visibleQuestionsInSec = questionsInSec.filter((q) => {
-        const qId = q.questionId || String(q._id);
+        const qId = q.id || q.questionId || String(q._id);
         return visibleQuestions[qId] !== false;
       });
 
@@ -426,7 +426,7 @@ export default function TakeSurvey({ mockSurvey }) {
 
       const allAnswered = visibleQuestionsInSec.every((q) => {
         if (q.type === 'info' || q.type === 'notice' || q.optional === true) return true;
-        const qId = q.questionId || String(q._id);
+        const qId = q.id || q.questionId || String(q._id);
         const val = answers[qId];
         return val !== undefined && val !== null && val !== '';
       });
@@ -483,7 +483,7 @@ export default function TakeSurvey({ mockSurvey }) {
   useEffect(() => {
     let furthest = currentIdx;
     questions.forEach((q, idx) => {
-      const qId = q.questionId || String(q._id);
+      const qId = q.id || q.questionId || String(q._id);
       const hasAnswer = answers[qId] !== undefined && answers[qId] !== null && answers[qId] !== '';
       if (hasAnswer && idx > furthest) {
         furthest = idx;
@@ -688,7 +688,7 @@ export default function TakeSurvey({ mockSurvey }) {
     if (phase === 'questions' && user?.id && precallSerialNumber) {
       const cleanedAnswers = { ...answers };
       questions.forEach(qst => {
-        const qId = qst.questionId || String(qst._id);
+        const qId = qst.id || qst.questionId || String(qst._id);
         if (qst.allowMultipleOther && cleanedAnswers[qId] && Array.isArray(cleanedAnswers[qId])) {
           cleanedAnswers[qId] = cleanedAnswers[qId].filter(v => typeof v !== 'string' || !v.startsWith('other:') || v.substring(6).trim() !== '');
           if (cleanedAnswers[qId].length === 0 && qst.type === 'single_choice') {
@@ -795,7 +795,7 @@ export default function TakeSurvey({ mockSurvey }) {
         } else if (survey?.sections) {
           const qId = questions[draftIdx]?.questionId || String(questions[draftIdx]?._id);
           const secIdx = survey.sections.findIndex(sec =>
-            (sec.questions || []).some(q => (q.questionId || String(q._id)) === qId)
+            (sec.questions || []).some(q => (q.id || q.questionId || String(q._id)) === qId)
           );
           if (secIdx !== -1) {
             setCurrentSectionIdx(secIdx);
@@ -806,7 +806,7 @@ export default function TakeSurvey({ mockSurvey }) {
         if (survey?.sections) {
           const qId = questions[firstIdx]?.questionId || String(questions[firstIdx]?._id);
           const secIdx = survey.sections.findIndex(sec =>
-            (sec.questions || []).some(q => (q.questionId || String(q._id)) === qId)
+            (sec.questions || []).some(q => (q.id || q.questionId || String(q._id)) === qId)
           );
           if (secIdx !== -1) {
             setCurrentSectionIdx(secIdx);
@@ -1003,7 +1003,7 @@ export default function TakeSurvey({ mockSurvey }) {
       return null;
     }
 
-    const qId = q.questionId || String(q._id);
+    const qId = q.id || q.questionId || String(q._id);
     const val = providedAnswers[qId];
 
     // Check if question is required
@@ -1167,7 +1167,7 @@ export default function TakeSurvey({ mockSurvey }) {
       let hasError = false;
       const newErrors = { ...fieldErrors };
       for (const gq of groupQs) {
-        const gqId = gq.questionId || String(gq._id);
+        const gqId = gq.id || gq.questionId || String(gq._id);
         if (visibleQuestions[gqId] !== false) {
           const err = getQuestionValidationError(gq, providedAnswers);
           if (err) {
@@ -1199,7 +1199,7 @@ export default function TakeSurvey({ mockSurvey }) {
           if (hasValidTarget) {
             let currentSum = 0;
             for (const gq of groupQs) {
-              const gqId = gq.questionId || String(gq._id);
+              const gqId = gq.id || gq.questionId || String(gq._id);
               if (visibleQuestions[gqId] !== false) {
                 const val = providedAnswers[gqId];
                 if (gq.type === 'multi_input' && typeof val === 'object' && val !== null) {
@@ -1211,7 +1211,7 @@ export default function TakeSurvey({ mockSurvey }) {
             }
             if (currentSum !== expected) {
               // Apply error to the last visible question in the group so it renders at the bottom
-              const lastVisibleGq = [...groupQs].reverse().find(gq => visibleQuestions[gq.questionId || String(gq._id)] !== false);
+              const lastVisibleGq = [...groupQs].reverse().find(gq => visibleQuestions[gq.id || gq.questionId || String(gq._id)] !== false);
               if (lastVisibleGq) {
                 const lastGqId = lastVisibleGq.questionId || String(lastVisibleGq._id);
                 newErrors[lastGqId] = firstGq._groupCrossValidation.errorMessage || `The sum of this group must equal ${expected}`;
@@ -1314,7 +1314,7 @@ export default function TakeSurvey({ mockSurvey }) {
     if (!survey?.sections || !survey.sections[secIdx]) return false;
     const sec = survey.sections[secIdx];
     return (sec.questions || []).some(q => {
-      const qId = q.questionId || String(q._id);
+      const qId = q.id || q.questionId || String(q._id);
       if (!q.visibility) return true;
       try {
         return evaluateCondition(q.visibility, currentAnswers);
@@ -1354,12 +1354,12 @@ export default function TakeSurvey({ mockSurvey }) {
     );
 
     const visibleQuestionsInSec = questionsInSec.filter(q => {
-      const qId = q.questionId || String(q._id);
+      const qId = q.id || q.questionId || String(q._id);
       return visibleQuestions[qId] !== false;
     });
 
     visibleQuestionsInSec.forEach(q => {
-      const qId = q.questionId || String(q._id);
+      const qId = q.id || q.questionId || String(q._id);
       if (q.type === 'info' || q.type === 'notice' || q.optional === true) {
         return;
       }
@@ -1390,20 +1390,20 @@ export default function TakeSurvey({ mockSurvey }) {
     setFieldErrors(prev => {
       const next = { ...prev };
       (currentSection?.questions || []).forEach(q => {
-        const qId = q.questionId || String(q._id);
+        const qId = q.id || q.questionId || String(q._id);
         delete next[qId];
       });
       return next;
     });
 
     const visibleQuestionsInSec = (currentSection?.questions || []).filter(q => {
-      const qId = q.questionId || String(q._id);
+      const qId = q.id || q.questionId || String(q._id);
       return visibleQuestions[qId] !== false;
     });
 
     let activeChoiceLogic = null;
     for (const q of visibleQuestionsInSec) {
-      const qId = q.questionId || String(q._id);
+      const qId = q.id || q.questionId || String(q._id);
       const val = answers[qId];
       if (q.type === 'single_choice' && q.choices) {
         const selectedChoice = q.choices.find(c => c.text === val);
@@ -1425,7 +1425,7 @@ export default function TakeSurvey({ mockSurvey }) {
           const targetQ = questions[targetIdx];
           const targetQId = targetQ.questionId || String(targetQ._id);
           const targetSecIdx = survey.sections.findIndex(sec => 
-            (sec.questions || []).some(q => (q.questionId || String(q._id)) === targetQId)
+            (sec.questions || []).some(q => (q.id || q.questionId || String(q._id)) === targetQId)
           );
           
           if (targetSecIdx !== -1) {
@@ -1436,7 +1436,7 @@ export default function TakeSurvey({ mockSurvey }) {
                 const firstQOfSec = survey.sections[nextSecIdx].questions[0];
                 if (firstQOfSec) {
                   const firstQId = firstQOfSec.questionId || String(firstQOfSec._id);
-                  const flatIdx = questions.findIndex(q => (q.questionId || String(q._id)) === firstQId);
+                  const flatIdx = questions.findIndex(q => (q.id || q.questionId || String(q._id)) === firstQId);
                   if (flatIdx !== -1) setCurrentIdx(flatIdx);
                 }
                 return;
@@ -1457,7 +1457,7 @@ export default function TakeSurvey({ mockSurvey }) {
         const firstQOfSec = survey.sections[nextSecIdx].questions[0];
         if (firstQOfSec) {
           const firstQId = firstQOfSec.questionId || String(firstQOfSec._id);
-          const flatIdx = questions.findIndex(q => (q.questionId || String(q._id)) === firstQId);
+          const flatIdx = questions.findIndex(q => (q.id || q.questionId || String(q._id)) === firstQId);
           if (flatIdx !== -1) setCurrentIdx(flatIdx);
         }
         return;
@@ -1476,7 +1476,7 @@ export default function TakeSurvey({ mockSurvey }) {
         const firstQOfSec = survey.sections[prevSecIdx].questions[0];
         if (firstQOfSec) {
           const firstQId = firstQOfSec.questionId || String(firstQOfSec._id);
-          const flatIdx = questions.findIndex(q => (q.questionId || String(q._id)) === firstQId);
+          const flatIdx = questions.findIndex(q => (q.id || q.questionId || String(q._id)) === firstQId);
           if (flatIdx !== -1) setCurrentIdx(flatIdx);
         }
         return;
@@ -1495,7 +1495,7 @@ export default function TakeSurvey({ mockSurvey }) {
     if (targetQ && survey?.sections) {
       const qId = targetQ.questionId || String(targetQ._id);
       const secIdx = survey.sections.findIndex(sec =>
-        (sec.questions || []).some(q => (q.questionId || String(q._id)) === qId)
+        (sec.questions || []).some(q => (q.id || q.questionId || String(q._id)) === qId)
       );
       if (secIdx !== -1) {
         setCurrentSectionIdx(secIdx);
@@ -1508,7 +1508,7 @@ export default function TakeSurvey({ mockSurvey }) {
     let answeredVisible = 0;
 
     questions.forEach(q => {
-      const qId = q.questionId || String(q._id);
+      const qId = q.id || q.questionId || String(q._id);
       if (visibleQuestions[qId] !== false) {
         totalVisible++;
         const ans = answers[qId];
@@ -1536,7 +1536,7 @@ export default function TakeSurvey({ mockSurvey }) {
   const currentVisibleNumber = useMemo(() => {
     let num = 1;
     questions.forEach((q, idx) => {
-      const qId = q.questionId || String(q._id);
+      const qId = q.id || q.questionId || String(q._id);
       if (visibleQuestions[qId] !== false && idx < currentIdx) {
         num++;
       }
@@ -1552,7 +1552,7 @@ export default function TakeSurvey({ mockSurvey }) {
       if (targetQ) {
         const qId = targetQ.questionId || String(targetQ._id);
         const secIdx = survey.sections.findIndex(sec =>
-          (sec.questions || []).some(q => (q.questionId || String(q._id)) === qId)
+          (sec.questions || []).some(q => (q.id || q.questionId || String(q._id)) === qId)
         );
         if (secIdx !== -1) {
           setDefaultOpenSectionIdx(secIdx);
@@ -1665,12 +1665,12 @@ export default function TakeSurvey({ mockSurvey }) {
   // Questions phase rendering below
 
   const scrollToNextInGroup = (answeredQId, latestAnswers) => {
-    const answeredQ = questions.find(q => (q.questionId || String(q._id)) === answeredQId);
+    const answeredQ = questions.find(q => (q.id || q.questionId || String(q._id)) === answeredQId);
     if (!answeredQ || !answeredQ._groupId) return;
 
     const groupQs = questions.filter(q => q._groupId === answeredQ._groupId);
     const visibleGroupQs = groupQs.filter(gq => {
-      const gqId = gq.questionId || String(gq._id);
+      const gqId = gq.id || gq.questionId || String(gq._id);
       if (!gq.visibility) return true;
       try {
         return evaluateCondition(gq.visibility, latestAnswers);
@@ -1679,7 +1679,7 @@ export default function TakeSurvey({ mockSurvey }) {
       }
     });
 
-    const answeredIdx = visibleGroupQs.findIndex(gq => (gq.questionId || String(gq._id)) === answeredQId);
+    const answeredIdx = visibleGroupQs.findIndex(gq => (gq.id || gq.questionId || String(gq._id)) === answeredQId);
     if (answeredIdx === -1) return;
 
     if (answeredIdx < visibleGroupQs.length - 1) {
@@ -1703,7 +1703,7 @@ export default function TakeSurvey({ mockSurvey }) {
   const handleAnswerChange = (questionId, value) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
     markInteracted(questionId);
-    const flatIdx = questions.findIndex(q => (q.questionId || String(q._id)) === questionId);
+    const flatIdx = questions.findIndex(q => (q.id || q.questionId || String(q._id)) === questionId);
     if (flatIdx !== -1) {
       setCurrentIdx(flatIdx);
     }
@@ -1716,7 +1716,7 @@ export default function TakeSurvey({ mockSurvey }) {
     }
 
     // Auto-scroll on answering a group question
-    const q = questions.find(qst => (qst.questionId || String(qst._id)) === questionId);
+    const q = questions.find(qst => (qst.id || qst.questionId || String(qst._id)) === questionId);
     const autoScrollTypes = ['single_choice', 'boolean', 'rating', 'dropdown'];
     if (q && q._groupId && autoScrollTypes.includes(q.type) && value !== undefined && value !== null && value !== '') {
       const latestAnswers = { ...answers, [questionId]: value };
@@ -1727,7 +1727,7 @@ export default function TakeSurvey({ mockSurvey }) {
   };
 
   const toggleChoiceForQuestion = (q, val) => {
-    const qId = q.questionId || String(q._id);
+    const qId = q.id || q.questionId || String(q._id);
     const currArr = Array.isArray(answers[qId]) ? answers[qId] : [];
     let updated;
     if (val === 'Other' && q.allowMultipleOther) {
@@ -1755,7 +1755,7 @@ export default function TakeSurvey({ mockSurvey }) {
   };
 
   const setSingleChoiceForQuestion = (q, val, choiceLogic = null) => {
-    const qId = q.questionId || String(q._id);
+    const qId = q.id || q.questionId || String(q._id);
     
     if (val === 'Other' && q.allowMultipleOther) {
       handleAnswerChange(qId, ["other:"]);
@@ -1802,7 +1802,7 @@ export default function TakeSurvey({ mockSurvey }) {
                 item.type === 'group' ? (item.questions || []).map(inner => ({ ...inner, _groupId: item.groupId, _groupLabel: item.label, _groupCrossValidation: item.crossValidation })) : [item]
               );
               const visibleQuestionsInSec = flatQsInSec.filter((q) => {
-                const qId = q.questionId || String(q._id);
+                const qId = q.id || q.questionId || String(q._id);
                 return visibleQuestions[qId] !== false;
               });
 
@@ -1865,7 +1865,7 @@ export default function TakeSurvey({ mockSurvey }) {
                         if (qst._isGroup) {
                           const firstQ = qst._firstQ;
                           const firstQId = firstQ.questionId || String(firstQ._id);
-                          const firstIdx = questions.findIndex(q => (q.questionId || String(q._id)) === firstQId);
+                          const firstIdx = questions.findIndex(q => (q.id || q.questionId || String(q._id)) === firstQId);
                           const isCurrent = firstIdx === currentIdx || (questions[currentIdx]?._groupId === qst._groupId);
                           const isStaff = user?.role === 'quality' || user?.role === 'admin';
                           const isLocked = !isStaff && firstIdx > maxReachedIdx;
@@ -1873,7 +1873,7 @@ export default function TakeSurvey({ mockSurvey }) {
                           const groupFlat = questions.filter(q => q._groupId === qst._groupId);
                           const allGroupAnswered = groupFlat.every(q => {
                             if (q.type === 'info' || q.type === 'notice' || q.optional === true) return true;
-                            const gqId = q.questionId || String(q._id);
+                            const gqId = q.id || q.questionId || String(q._id);
                             const v = answers[gqId];
                             return v !== undefined && v !== null && v !== '';
                           });
@@ -1911,8 +1911,8 @@ export default function TakeSurvey({ mockSurvey }) {
                         }
 
                         // Regular question node
-                        const qId = qst.questionId || String(qst._id);
-                        const idx = questions.findIndex(q => (q.questionId || String(q._id)) === qId);
+                        const qId = qst.id || qst.questionId || String(qst._id);
+                        const idx = questions.findIndex(q => (q.id || q.questionId || String(q._id)) === qId);
                         const isCurrent = idx === currentIdx;
                         const isAnswered = answers[qId] !== undefined && answers[qId] !== null && answers[qId] !== '';
                         const isStaff = user?.role === 'quality' || user?.role === 'admin';
@@ -2025,7 +2025,7 @@ export default function TakeSurvey({ mockSurvey }) {
                     {(currentSection.questions || []).map((q, qIdx) => {
                       if (q.type === 'group') {
                         const visibleGroupQs = (q.questions || []).filter(gq => {
-                          const gqId = gq.questionId || String(gq._id);
+                          const gqId = gq.id || gq.questionId || String(gq._id);
                           return visibleQuestions[gqId] !== false;
                         });
                         if (visibleGroupQs.length === 0) return null;
@@ -2041,20 +2041,20 @@ export default function TakeSurvey({ mockSurvey }) {
                                 if (gi > 0) {
                                   isLocked = visibleGroupQs.slice(0, gi).some(prevQ => {
                                     if (prevQ.type === 'info' || prevQ.type === 'notice') return false;
-                                    const prevQId = prevQ.questionId || String(prevQ._id);
+                                    const prevQId = prevQ.id || prevQ.questionId || String(prevQ._id);
                                     const val = answers[prevQId];
                                     return val === undefined || val === null || val === '';
                                   });
                                 }
-                                return <QuestionRenderer key={gq.questionId || String(gq._id)} q={gq} sIdx={currentSectionIdx} qIdx={gi} isLocked={isLocked} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
+                                return <QuestionRenderer key={gq.id || gq.questionId || String(gq._id)} q={gq} sIdx={currentSectionIdx} qIdx={gi} isLocked={isLocked} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
                               })}
                             </div>
                           </div>
                         );
                       } else {
-                        const qId = q.questionId || String(q._id);
+                        const qId = q.id || q.questionId || String(q._id);
                         if (visibleQuestions[qId] === false) return null;
-                        return <QuestionRenderer key={q.questionId || String(q._id)} q={q} sIdx={currentSectionIdx} qIdx={qIdx} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
+                        return <QuestionRenderer key={q.id || q.questionId || String(q._id)} q={q} sIdx={currentSectionIdx} qIdx={qIdx} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
                       }
                     })}
                   </div>
@@ -2072,10 +2072,10 @@ export default function TakeSurvey({ mockSurvey }) {
 
                 if (survey.sections) {
                   sIdx = survey.sections.findIndex(sec =>
-                    (sec.questions || []).some(q => (q.questionId || String(q._id)) === qId)
+                    (sec.questions || []).some(q => (q.id || q.questionId || String(q._id)) === qId)
                   );
                   if (sIdx !== -1) {
-                    qIdx = survey.sections[sIdx].questions.findIndex(q => (q.questionId || String(q._id)) === qId);
+                    qIdx = survey.sections[sIdx].questions.findIndex(q => (q.id || q.questionId || String(q._id)) === qId);
                     sectionTitle = survey.sections[sIdx].title;
                   } else {
                     sIdx = 0;
@@ -2088,7 +2088,7 @@ export default function TakeSurvey({ mockSurvey }) {
                     const groupQs = questions.filter(q => q._groupId === currentQ._groupId);
                     const firstInGroup = questions.findIndex(q => q._groupId === currentQ._groupId);
                     const visibleGroupQs = groupQs.filter(gq => {
-                      const gqId = gq.questionId || String(gq._id);
+                      const gqId = gq.id || gq.questionId || String(gq._id);
                       return visibleQuestions[gqId] !== false;
                     });
                     if (visibleGroupQs.length === 0) return null;
@@ -2108,20 +2108,20 @@ export default function TakeSurvey({ mockSurvey }) {
                             {visibleGroupQs.map((gq, gi) => {
                               const gqSIdx = survey?.sections ? survey.sections.findIndex(sec =>
                                 (sec.questions || []).some(item => {
-                                  if (item.type === 'group') return (item.questions || []).some(inner => (inner.questionId || String(inner._id)) === (gq.questionId || String(gq._id)));
-                                  return (item.questionId || String(item._id)) === (gq.questionId || String(gq._id));
+                                  if (item.type === 'group') return (item.questions || []).some(inner => (inner.id || inner.questionId || String(inner._id)) === (gq.id || gq.questionId || String(gq._id)));
+                                  return (item.id || item.questionId || String(item._id)) === (gq.id || gq.questionId || String(gq._id));
                                 })
                               ) : 0;
                               let isLocked = false;
                               if (gi > 0) {
                                 isLocked = visibleGroupQs.slice(0, gi).some(prevQ => {
                                   if (prevQ.type === 'info' || prevQ.type === 'notice') return false;
-                                  const prevQId = prevQ.questionId || String(prevQ._id);
+                                  const prevQId = prevQ.id || prevQ.questionId || String(prevQ._id);
                                   const val = answers[prevQId];
                                   return val === undefined || val === null || val === '';
                                 });
                               }
-                              return <QuestionRenderer key={gq.questionId || String(gq._id)} q={gq} sIdx={gqSIdx >= 0 ? gqSIdx : 0} qIdx={gi} isLocked={isLocked} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
+                              return <QuestionRenderer key={gq.id || gq.questionId || String(gq._id)} q={gq} sIdx={gqSIdx >= 0 ? gqSIdx : 0} qIdx={gi} isLocked={isLocked} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
                             })}
                           </div>
                         </div>
@@ -2136,7 +2136,7 @@ export default function TakeSurvey({ mockSurvey }) {
                           {sectionTitle}
                         </div>
                       )}
-                      <QuestionRenderer key={currentQ.questionId || String(currentQ._id)} q={currentQ} sIdx={sIdx} qIdx={qIdx} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />
+                      <QuestionRenderer key={currentQ.id || currentQ.questionId || String(currentQ._id)} q={currentQ} sIdx={sIdx} qIdx={qIdx} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />
                     </div>
                   );
                 })()

@@ -36,6 +36,304 @@ class DebugErrorBoundary extends React.Component {
   }
 }
 
+const parseDynamicText = (text, answers) => {
+    if (!text) return "";
+    let parsed = String(text);
+    const matches = parsed.match(/\{([^}]+)\}/g);
+    if (matches) {
+      matches.forEach(match => {
+        const key = match.slice(1, -1);
+        if (answers[key] !== undefined) {
+          parsed = parsed.replace(match, String(answers[key]));
+        }
+      });
+    }
+    return parsed;
+  };
+
+const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers, isRtl, t, toggleChoiceForQuestion, setSingleChoiceForQuestion, handleAnswerChange, otherValues, setOtherValues, markInteracted, fieldErrors, setFieldErrors, scrollToNextInGroup, survey, handleNextQuestion, showInteractionError }) => {
+    const qId = q.questionId || String(q._id);
+    const flatIdx = questions.findIndex(qst => (qst.questionId || String(qst._id)) === qId);
+    
+    const dynamicQuestionText = parseDynamicText(q.text, answers);
+    const dynamicScriptText = parseDynamicText(q.script, answers);
+
+    const isSelected = (val) => {
+      if (val === 'Other' && q.allowMultipleOther) {
+        const arr = Array.isArray(answers[qId]) ? answers[qId] : [];
+        return arr.some(v => typeof v === 'string' && v.startsWith('other:'));
+      }
+      if (q.type === 'multiple_choice') return (Array.isArray(answers[qId]) && answers[qId].includes(val));
+      return answers[qId] === val;
+    };
+
+    const choices = [...(q.choices || [])];
+    if (q.allowOther) choices.push({ text: 'Other', isOther: true });
+
+    return (
+      <div 
+        key={qId}
+        id={`question-card-${qId}`} 
+        className="glass-card fade-enter-active" 
+        style={{ 
+          padding: '1.25rem', 
+          border: '1px solid var(--border-color)', 
+          borderRadius: '8px',
+          ...(isLocked ? { opacity: 0.5, pointerEvents: 'none' } : {})
+        }}
+      >
+        <h3 dir="auto" style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+          {typeof q.category === 'string' ? q.category.toUpperCase() : t('question')} {flatIdx + 1}
+        </h3>
+        <h2 dir="auto">{dynamicQuestionText}</h2>
+
+        {q.script && (
+          <div className="agent-script-box" style={{ marginTop: '0.5rem' }}>
+            <strong style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>{t('agentReadAloud')}</strong>
+            {dynamicScriptText}
+          </div>
+        )}
+
+        {(q.type === 'single_choice' || q.type === 'multiple_choice') && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+            <div className="choice-grid" style={{ marginTop: 0 }}>
+              {choices.map((c, i) => (
+                <button dir="auto" 
+                  key={i} 
+                  className={`choice-btn ${isSelected(c.text) ? 'active' : ''}`} 
+                  onClick={() => q.type === 'multiple_choice' ? toggleChoiceForQuestion(q, c.text) : setSingleChoiceForQuestion(q, c.text, c.logic)}
+                  style={isSelected(c.text) ? { backgroundColor: 'var(--primary)', color: 'white', borderColor: 'var(--primary)' } : {}}
+                  type="button"
+                >
+                  {c.text}
+                </button>
+              ))}
+            </div>
+
+            {isSelected('Other') && (
+              <div style={{ marginTop: '0.5rem' }}>
+                {q.allowMultipleOther ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {(() => {
+                        const arr = Array.isArray(answers[qId]) ? answers[qId] : [];
+                        const others = arr.filter(v => typeof v === 'string' && v.startsWith('other:'));
+                        if (others.length === 0) others.push('other:');
+                        return others.map((val, idx) => {
+                          const textVal = val.substring(6);
+                          return (
+                            <div key={idx} style={{ display: 'flex', gap: '0.5rem' }}>
+                              <input dir="auto"
+                                type="text"
+                                className="input-field"
+                                placeholder="Please specify..."
+                                value={textVal}
+                                onChange={(e) => {
+                                  const newText = e.target.value;
+                                  const newAnswers = [...arr];
+                                  let otherCounter = 0;
+                                  for (let i = 0; i < newAnswers.length; i++) {
+                                    if (typeof newAnswers[i] === 'string' && newAnswers[i].startsWith('other:')) {
+                                      if (otherCounter === idx) {
+                                        newAnswers[i] = `other:${newText}`;
+                                        break;
+                                      }
+                                      otherCounter++;
+                                    }
+                                  }
+                                  handleAnswerChange(qId, newAnswers);
+                                }}
+                              />
+                              <button dir="auto" 
+                                type="button" 
+                                className="btn-secondary" 
+                                style={{ padding: '0.5rem', color: '#ef4444' }} 
+                                onClick={() => {
+                                  const newAnswers = [...arr];
+                                  let otherCounter = 0;
+                                  for (let i = 0; i < newAnswers.length; i++) {
+                                    if (typeof newAnswers[i] === 'string' && newAnswers[i].startsWith('other:')) {
+                                      if (otherCounter === idx) {
+                                        newAnswers.splice(i, 1);
+                                        break;
+                                      }
+                                      otherCounter++;
+                                    }
+                                  }
+                                  handleAnswerChange(qId, newAnswers);
+                                }}
+                                disabled={others.length <= 1}
+                              >
+                                −
+                              </button>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                    <button dir="auto" 
+                      type="button" 
+                      className="btn-secondary" 
+                      style={{ alignSelf: 'flex-start', fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}
+                      onClick={() => {
+                        const arr = Array.isArray(answers[qId]) ? answers[qId] : [];
+                        handleAnswerChange(qId, [...arr, "other:"]);
+                      }}
+                    >
+                      {t('addAnother') || '+ Add another'}
+                    </button>
+                  </div>
+                ) : (
+                  <input dir="auto"
+                    type="text"
+                    className="input-field"
+                    placeholder="Please specify..."
+                    value={otherValues[qId] || ''}
+                    onChange={(e) => {
+                      setOtherValues(prev => ({ ...prev, [qId]: e.target.value }));
+                      markInteracted(qId);
+                      if (fieldErrors[qId]) {
+                        setFieldErrors(prev => {
+                          const next = { ...prev };
+                          delete next[qId];
+                          return next;
+                        });
+                      }
+                    }}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {q.type === 'text' && (
+          <div className="form-group" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <input dir="auto"
+              type="text"
+              className="input-field"
+              placeholder={t('typeAnswer')}
+              value={answers[qId] || ''}
+              onChange={(e) => handleAnswerChange(qId, e.target.value)}
+              style={{ flex: 1 }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (q._groupId) {
+                    scrollToNextInGroup(qId, answers);
+                  } else if (survey?.layoutMode !== 'multi') {
+                    handleNextQuestion();
+                  }
+                }
+              }}
+            />
+          </div>
+        )}
+
+        {q.type === 'number' && (
+          <div className="form-group" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <input dir="auto"
+              type="number"
+              inputMode="numeric"
+              className="input-field"
+              placeholder={t('typeNumber') || t('typeAnswer')}
+              value={answers[qId] ?? ''}
+              onChange={(e) => {
+                const raw = e.target.value;
+                // Allow only digits, optional leading minus, and decimal point
+                const cleaned = raw.replace(/[^0-9.\-]/g, '');
+                handleAnswerChange(qId, cleaned);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (q._groupId) {
+                    scrollToNextInGroup(qId, answers);
+                  } else if (survey?.layoutMode !== 'multi') {
+                    handleNextQuestion();
+                  }
+                  return;
+                }
+                // Block non-numeric keys except navigation/control keys
+                const allowed = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', '.', '-'];
+                if (!allowed.includes(e.key) && !/^[0-9]$/.test(e.key)) {
+                  e.preventDefault();
+                }
+              }}
+              style={{ flex: 1 }}
+            />
+          </div>
+        )}
+
+        {q.type === 'multi_input' && (
+          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {(q.subInputs || []).map((sub, subIdx) => {
+              const ansObj = typeof answers[qId] === 'object' && answers[qId] !== null ? answers[qId] : {};
+              const val = ansObj[sub.id] || '';
+              return (
+                <div key={sub.id || `sub-${subIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <label dir="auto" className="form-label" style={{ display: 'flex', gap: '0.25rem' }}>
+                    {sub.label}
+                    {sub.required && <span dir="auto" style={{ color: 'var(--danger)' }}>*</span>}
+                  </label>
+                  {sub.inputType === 'dropdown' ? (
+                    <select
+                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                      value={val}
+                      onChange={e => handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value })}
+                    >
+                      <option value="">-- Select --</option>
+                      {(sub.options || []).map((opt, i) => (
+                        <option key={i} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  ) : sub.inputType === 'number' ? (
+                    <input dir="auto"
+                      type="number"
+                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                      value={val}
+                      onChange={e => {
+                        const raw = e.target.value;
+                        const cleaned = raw.replace(/[^0-9.\-]/g, '');
+                        handleAnswerChange(qId, { ...ansObj, [sub.id]: cleaned });
+                      }}
+                    />
+                  ) : sub.inputType === 'date' ? (
+                    <input dir="auto"
+                      type="date"
+                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                      value={val}
+                      onChange={e => handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value })}
+                    />
+                  ) : (
+                    <input dir="auto"
+                      type="text"
+                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                      value={val}
+                      onChange={e => handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value })}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {fieldErrors[qId] && (
+          <div className="field-error-text" style={{ color: 'var(--danger)', marginTop: '0.75rem', fontWeight: 600, fontSize: '0.9rem' }}>
+            {fieldErrors[qId]}
+          </div>
+        )}
+
+        {showInteractionError && (
+          <p dir="auto" className="field-error-text">
+            {t('questionInteractionRequired')}
+          </p>
+        )}
+      </div>
+    );
+  };
+
 export default function TakeSurvey({ mockSurvey }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -1481,303 +1779,9 @@ export default function TakeSurvey({ mockSurvey }) {
     }
   };
 
-  const parseDynamicText = (text) => {
-    if (!text) return "";
-    let parsed = String(text);
-    const matches = parsed.match(/\{([^}]+)\}/g);
-    if (matches) {
-      matches.forEach(match => {
-        const key = match.slice(1, -1);
-        if (answers[key] !== undefined) {
-          parsed = parsed.replace(match, String(answers[key]));
-        }
-      });
-    }
-    return parsed;
-  };
+  
 
-  const renderQuestion = (q, sIdx, qIdx, isLocked = false) => {
-    const qId = q.questionId || String(q._id);
-    const flatIdx = questions.findIndex(qst => (qst.questionId || String(qst._id)) === qId);
-    
-    const dynamicQuestionText = parseDynamicText(q.text);
-    const dynamicScriptText = parseDynamicText(q.script);
-
-    const isSelected = (val) => {
-      if (val === 'Other' && q.allowMultipleOther) {
-        const arr = Array.isArray(answers[qId]) ? answers[qId] : [];
-        return arr.some(v => typeof v === 'string' && v.startsWith('other:'));
-      }
-      if (q.type === 'multiple_choice') return (Array.isArray(answers[qId]) && answers[qId].includes(val));
-      return answers[qId] === val;
-    };
-
-    const choices = [...(q.choices || [])];
-    if (q.allowOther) choices.push({ text: 'Other', isOther: true });
-
-    return (
-      <div 
-        key={qId}
-        id={`question-card-${qId}`} 
-        className="glass-card fade-enter-active" 
-        style={{ 
-          padding: '1.25rem', 
-          border: '1px solid var(--border-color)', 
-          borderRadius: '8px',
-          ...(isLocked ? { opacity: 0.5, pointerEvents: 'none' } : {})
-        }}
-      >
-        <h3 dir="auto" style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-          {typeof q.category === 'string' ? q.category.toUpperCase() : t('question')} {flatIdx + 1}
-        </h3>
-        <h2 dir="auto">{dynamicQuestionText}</h2>
-
-        {q.script && (
-          <div className="agent-script-box" style={{ marginTop: '0.5rem' }}>
-            <strong style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>{t('agentReadAloud')}</strong>
-            {dynamicScriptText}
-          </div>
-        )}
-
-        {(q.type === 'single_choice' || q.type === 'multiple_choice') && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-            <div className="choice-grid" style={{ marginTop: 0 }}>
-              {choices.map((c, i) => (
-                <button dir="auto" 
-                  key={i} 
-                  className={`choice-btn ${isSelected(c.text) ? 'active' : ''}`} 
-                  onClick={() => q.type === 'multiple_choice' ? toggleChoiceForQuestion(q, c.text) : setSingleChoiceForQuestion(q, c.text, c.logic)}
-                  style={isSelected(c.text) ? { backgroundColor: 'var(--primary)', color: 'white', borderColor: 'var(--primary)' } : {}}
-                  type="button"
-                >
-                  {c.text}
-                </button>
-              ))}
-            </div>
-
-            {isSelected('Other') && (
-              <div style={{ marginTop: '0.5rem' }}>
-                {q.allowMultipleOther ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      {(() => {
-                        const arr = Array.isArray(answers[qId]) ? answers[qId] : [];
-                        const others = arr.filter(v => typeof v === 'string' && v.startsWith('other:'));
-                        if (others.length === 0) others.push('other:');
-                        return others.map((val, idx) => {
-                          const textVal = val.substring(6);
-                          return (
-                            <div key={idx} style={{ display: 'flex', gap: '0.5rem' }}>
-                              <input dir="auto"
-                                type="text"
-                                className="input-field"
-                                placeholder="Please specify..."
-                                value={textVal}
-                                onChange={(e) => {
-                                  const newText = e.target.value;
-                                  const newAnswers = [...arr];
-                                  let otherCounter = 0;
-                                  for (let i = 0; i < newAnswers.length; i++) {
-                                    if (typeof newAnswers[i] === 'string' && newAnswers[i].startsWith('other:')) {
-                                      if (otherCounter === idx) {
-                                        newAnswers[i] = `other:${newText}`;
-                                        break;
-                                      }
-                                      otherCounter++;
-                                    }
-                                  }
-                                  handleAnswerChange(qId, newAnswers);
-                                }}
-                              />
-                              <button dir="auto" 
-                                type="button" 
-                                className="btn-secondary" 
-                                style={{ padding: '0.5rem', color: '#ef4444' }} 
-                                onClick={() => {
-                                  const newAnswers = [...arr];
-                                  let otherCounter = 0;
-                                  for (let i = 0; i < newAnswers.length; i++) {
-                                    if (typeof newAnswers[i] === 'string' && newAnswers[i].startsWith('other:')) {
-                                      if (otherCounter === idx) {
-                                        newAnswers.splice(i, 1);
-                                        break;
-                                      }
-                                      otherCounter++;
-                                    }
-                                  }
-                                  handleAnswerChange(qId, newAnswers);
-                                }}
-                                disabled={others.length <= 1}
-                              >
-                                −
-                              </button>
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                    <button dir="auto" 
-                      type="button" 
-                      className="btn-secondary" 
-                      style={{ alignSelf: 'flex-start', fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}
-                      onClick={() => {
-                        const arr = Array.isArray(answers[qId]) ? answers[qId] : [];
-                        handleAnswerChange(qId, [...arr, "other:"]);
-                      }}
-                    >
-                      {t('addAnother') || '+ Add another'}
-                    </button>
-                  </div>
-                ) : (
-                  <input dir="auto"
-                    type="text"
-                    className="input-field"
-                    placeholder="Please specify..."
-                    value={otherValues[qId] || ''}
-                    onChange={(e) => {
-                      setOtherValues(prev => ({ ...prev, [qId]: e.target.value }));
-                      markInteracted(qId);
-                      if (fieldErrors[qId]) {
-                        setFieldErrors(prev => {
-                          const next = { ...prev };
-                          delete next[qId];
-                          return next;
-                        });
-                      }
-                    }}
-                  />
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {q.type === 'text' && (
-          <div className="form-group" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <input dir="auto"
-              type="text"
-              className="input-field"
-              placeholder={t('typeAnswer')}
-              value={answers[qId] || ''}
-              onChange={(e) => handleAnswerChange(qId, e.target.value)}
-              style={{ flex: 1 }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  if (q._groupId) {
-                    scrollToNextInGroup(qId, answers);
-                  } else if (survey?.layoutMode !== 'multi') {
-                    handleNextQuestion();
-                  }
-                }
-              }}
-            />
-          </div>
-        )}
-
-        {q.type === 'number' && (
-          <div className="form-group" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <input dir="auto"
-              type="number"
-              inputMode="numeric"
-              className="input-field"
-              placeholder={t('typeNumber') || t('typeAnswer')}
-              value={answers[qId] ?? ''}
-              onChange={(e) => {
-                const raw = e.target.value;
-                // Allow only digits, optional leading minus, and decimal point
-                const cleaned = raw.replace(/[^0-9.\-]/g, '');
-                handleAnswerChange(qId, cleaned);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  if (q._groupId) {
-                    scrollToNextInGroup(qId, answers);
-                  } else if (survey?.layoutMode !== 'multi') {
-                    handleNextQuestion();
-                  }
-                  return;
-                }
-                // Block non-numeric keys except navigation/control keys
-                const allowed = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', '.', '-'];
-                if (!allowed.includes(e.key) && !/^[0-9]$/.test(e.key)) {
-                  e.preventDefault();
-                }
-              }}
-              style={{ flex: 1 }}
-            />
-          </div>
-        )}
-
-        {q.type === 'multi_input' && (
-          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {(q.subInputs || []).map((sub, subIdx) => {
-              const ansObj = typeof answers[qId] === 'object' && answers[qId] !== null ? answers[qId] : {};
-              const val = ansObj[sub.id] || '';
-              return (
-                <div key={sub.id || `sub-${subIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                  <label dir="auto" className="form-label" style={{ display: 'flex', gap: '0.25rem' }}>
-                    {sub.label}
-                    {sub.required && <span dir="auto" style={{ color: 'var(--danger)' }}>*</span>}
-                  </label>
-                  {sub.inputType === 'dropdown' ? (
-                    <select
-                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
-                      value={val}
-                      onChange={e => handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value })}
-                    >
-                      <option value="">-- Select --</option>
-                      {(sub.options || []).map((opt, i) => (
-                        <option key={i} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                  ) : sub.inputType === 'number' ? (
-                    <input dir="auto"
-                      type="number"
-                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
-                      value={val}
-                      onChange={e => {
-                        const raw = e.target.value;
-                        const cleaned = raw.replace(/[^0-9.\-]/g, '');
-                        handleAnswerChange(qId, { ...ansObj, [sub.id]: cleaned });
-                      }}
-                    />
-                  ) : sub.inputType === 'date' ? (
-                    <input dir="auto"
-                      type="date"
-                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
-                      value={val}
-                      onChange={e => handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value })}
-                    />
-                  ) : (
-                    <input dir="auto"
-                      type="text"
-                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
-                      value={val}
-                      onChange={e => handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value })}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {fieldErrors[qId] && (
-          <div className="field-error-text" style={{ color: 'var(--danger)', marginTop: '0.75rem', fontWeight: 600, fontSize: '0.9rem' }}>
-            {fieldErrors[qId]}
-          </div>
-        )}
-
-        {showInteractionError && (
-          <p dir="auto" className="field-error-text">
-            {t('questionInteractionRequired')}
-          </p>
-        )}
-      </div>
-    );
-  };
+  
 
   return (
     <DebugErrorBoundary>
@@ -2042,7 +2046,7 @@ export default function TakeSurvey({ mockSurvey }) {
                                     return val === undefined || val === null || val === '';
                                   });
                                 }
-                                return renderQuestion(gq, currentSectionIdx, gi, isLocked);
+                                return <QuestionRenderer q={gq} sIdx={currentSectionIdx} qIdx={gi} isLocked={isLocked} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
                               })}
                             </div>
                           </div>
@@ -2050,7 +2054,7 @@ export default function TakeSurvey({ mockSurvey }) {
                       } else {
                         const qId = q.questionId || String(q._id);
                         if (visibleQuestions[qId] === false) return null;
-                        return renderQuestion(q, currentSectionIdx, qIdx);
+                        return <QuestionRenderer q={q} sIdx={currentSectionIdx} qIdx={qIdx} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
                       }
                     })}
                   </div>
@@ -2117,7 +2121,7 @@ export default function TakeSurvey({ mockSurvey }) {
                                   return val === undefined || val === null || val === '';
                                 });
                               }
-                              return renderQuestion(gq, gqSIdx >= 0 ? gqSIdx : 0, gi, isLocked);
+                              return <QuestionRenderer q={gq} sIdx={gqSIdx >= 0 ? gqSIdx : 0} qIdx={gi} isLocked={isLocked} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
                             })}
                           </div>
                         </div>
@@ -2132,7 +2136,7 @@ export default function TakeSurvey({ mockSurvey }) {
                           {sectionTitle}
                         </div>
                       )}
-                      {renderQuestion(currentQ, sIdx, qIdx)}
+                      <QuestionRenderer q={currentQ} sIdx={sIdx} qIdx={qIdx} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />
                     </div>
                   );
                 })()

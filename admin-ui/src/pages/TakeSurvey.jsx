@@ -26,7 +26,7 @@ class DebugErrorBoundary extends React.Component {
     if (this.state.error) {
       return (
         <div style={{ padding: '2rem', color: 'red', fontFamily: 'monospace' }}>
-          <h2>Survey Render Error (debug only)</h2>
+          <h2 dir="auto">Survey Render Error (debug only)</h2>
           <pre>{this.state.error?.message}</pre>
           <pre>{this.state.error?.stack}</pre>
         </div>
@@ -1279,7 +1279,7 @@ export default function TakeSurvey({ mockSurvey }) {
   if (phase === 'intro') {
     return (
       <div className="glass-card fade-enter-active">
-        <h1>{survey.title}</h1>
+        <h1 dir="auto">{survey.title}</h1>
         {survey.introScript && (
           <div className="agent-script-box">
             <strong style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>{t('agentReadAloud')}</strong>
@@ -1287,9 +1287,9 @@ export default function TakeSurvey({ mockSurvey }) {
           </div>
         )}
         {user?.role === 'agent' && eligibility.checked && !eligibility.canStart && (
-          <p style={{ color: 'var(--danger)', fontWeight: 700, marginBottom: '1rem' }}>{t('cannotStartSurveyGeneric')}</p>
+          <p dir="auto" style={{ color: 'var(--danger)', fontWeight: 700, marginBottom: '1rem' }}>{t('cannotStartSurveyGeneric')}</p>
         )}
-        <button
+        <button dir="auto"
           className="btn-primary"
           onClick={() => handleStartCall()}
           disabled={user?.role === 'agent' && (eligLoading || (eligibility.checked && !eligibility.canStart))}
@@ -1297,7 +1297,7 @@ export default function TakeSurvey({ mockSurvey }) {
           {t('startQuestionnaire')}
         </button>
         {precallSerialNumber && (
-          <button
+          <button dir="auto"
             type="button"
             className="btn-secondary"
             onClick={() => setIsHandoverOpen(true)}
@@ -1322,8 +1322,8 @@ export default function TakeSurvey({ mockSurvey }) {
   if (phase === 'interview') {
     return (
       <div className="glass-card fade-enter-active">
-        <h2>{t('surveyInterviewOutcomeTitle')}</h2>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>{t('surveyInterviewOutcomeHelp')}</p>
+        <h2 dir="auto">{t('surveyInterviewOutcomeTitle')}</h2>
+        <p dir="auto" style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>{t('surveyInterviewOutcomeHelp')}</p>
         <select
           className="input-field"
           style={{ marginBottom: '1rem', maxWidth: '100%' }}
@@ -1339,10 +1339,10 @@ export default function TakeSurvey({ mockSurvey }) {
         </select>
         {['partial', 'refused', 'postponed'].includes(answers.interview_result) && (
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>
+            <label dir="auto" style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>
               {t('reason') || 'Reason'}
             </label>
-            <textarea
+            <textarea dir="auto"
               className="input-field"
               rows={3}
               placeholder={t('typeReasonPlaceholder') || 'Type reason here... (defaults to "none" if empty)'}
@@ -1353,10 +1353,10 @@ export default function TakeSurvey({ mockSurvey }) {
           </div>
         )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-          <button type="button" className="btn-primary" onClick={() => submitResponse()} disabled={!answers.interview_result}>
+          <button dir="auto" type="button" className="btn-primary" onClick={() => submitResponse()} disabled={!answers.interview_result}>
             {t('submitSurvey')}
           </button>
-          <button type="button" className="btn-secondary" onClick={() => navigate('/agent/precall')}>
+          <button dir="auto" type="button" className="btn-secondary" onClick={() => navigate('/agent/precall')}>
             {t('backToChecklist')}
           </button>
         </div>
@@ -1526,10 +1526,10 @@ export default function TakeSurvey({ mockSurvey }) {
           ...(isLocked ? { opacity: 0.5, pointerEvents: 'none' } : {})
         }}
       >
-        <h3 style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+        <h3 dir="auto" style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
           {typeof q.category === 'string' ? q.category.toUpperCase() : t('question')} {flatIdx + 1}
         </h3>
-        <h2>{dynamicQuestionText}</h2>
+        <h2 dir="auto">{dynamicQuestionText}</h2>
 
         {q.script && (
           <div className="agent-script-box" style={{ marginTop: '0.5rem' }}>
@@ -1542,7 +1542,7 @@ export default function TakeSurvey({ mockSurvey }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
             <div className="choice-grid" style={{ marginTop: 0 }}>
               {choices.map((c, i) => (
-                <button 
+                <button dir="auto" 
                   key={i} 
                   className={`choice-btn ${isSelected(c.text) ? 'active' : ''}`} 
                   onClick={() => q.type === 'multiple_choice' ? toggleChoiceForQuestion(q, c.text) : setSingleChoiceForQuestion(q, c.text, c.logic)}
@@ -1567,7 +1567,7 @@ export default function TakeSurvey({ mockSurvey }) {
                           const textVal = val.substring(6);
                           return (
                             <div key={idx} style={{ display: 'flex', gap: '0.5rem' }}>
-                              <input
+                              <input dir="auto"
                                 type="text"
                                 className="input-field"
                                 placeholder="Please specify..."
@@ -1588,7 +1588,7 @@ export default function TakeSurvey({ mockSurvey }) {
                                   handleAnswerChange(qId, newAnswers);
                                 }}
                               />
-                              <button 
+                              <button dir="auto" 
                                 type="button" 
                                 className="btn-secondary" 
                                 style={{ padding: '0.5rem', color: '#ef4444' }} 
@@ -1615,7 +1615,7 @@ export default function TakeSurvey({ mockSurvey }) {
                         });
                       })()}
                     </div>
-                    <button 
+                    <button dir="auto" 
                       type="button" 
                       className="btn-secondary" 
                       style={{ alignSelf: 'flex-start', fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}
@@ -1628,7 +1628,7 @@ export default function TakeSurvey({ mockSurvey }) {
                     </button>
                   </div>
                 ) : (
-                  <input
+                  <input dir="auto"
                     type="text"
                     className="input-field"
                     placeholder="Please specify..."
@@ -1653,7 +1653,7 @@ export default function TakeSurvey({ mockSurvey }) {
 
         {q.type === 'text' && (
           <div className="form-group" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <input
+            <input dir="auto"
               type="text"
               className="input-field"
               placeholder={t('typeAnswer')}
@@ -1676,7 +1676,7 @@ export default function TakeSurvey({ mockSurvey }) {
 
         {q.type === 'number' && (
           <div className="form-group" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <input
+            <input dir="auto"
               type="number"
               inputMode="numeric"
               className="input-field"
@@ -1716,9 +1716,9 @@ export default function TakeSurvey({ mockSurvey }) {
               const val = ansObj[sub.id] || '';
               return (
                 <div key={sub.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                  <label className="form-label" style={{ display: 'flex', gap: '0.25rem' }}>
+                  <label dir="auto" className="form-label" style={{ display: 'flex', gap: '0.25rem' }}>
                     {sub.label}
-                    {sub.required && <span style={{ color: 'var(--danger)' }}>*</span>}
+                    {sub.required && <span dir="auto" style={{ color: 'var(--danger)' }}>*</span>}
                   </label>
                   {sub.inputType === 'dropdown' ? (
                     <select
@@ -1732,7 +1732,7 @@ export default function TakeSurvey({ mockSurvey }) {
                       ))}
                     </select>
                   ) : sub.inputType === 'number' ? (
-                    <input
+                    <input dir="auto"
                       type="number"
                       className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
                       value={val}
@@ -1743,14 +1743,14 @@ export default function TakeSurvey({ mockSurvey }) {
                       }}
                     />
                   ) : sub.inputType === 'date' ? (
-                    <input
+                    <input dir="auto"
                       type="date"
                       className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
                       value={val}
                       onChange={e => handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value })}
                     />
                   ) : (
-                    <input
+                    <input dir="auto"
                       type="text"
                       className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
                       value={val}
@@ -1770,7 +1770,7 @@ export default function TakeSurvey({ mockSurvey }) {
         )}
 
         {showInteractionError && (
-          <p className="field-error-text">
+          <p dir="auto" className="field-error-text">
             {t('questionInteractionRequired')}
           </p>
         )}
@@ -1788,7 +1788,7 @@ export default function TakeSurvey({ mockSurvey }) {
 
         {/* Sidebar */}
         <div className={`survey-sidebar ${sidebarVisible ? 'open' : 'collapsed'}`} style={{ width: '300px' }}>
-          <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 700 }}>{t('sections') || 'Sections'}</h3>
+          <h3 dir="auto" style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 700 }}>{t('sections') || 'Sections'}</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {survey.sections && survey.sections.map((sec, sIdx) => {
               // Flatten groups for sidebar visibility and count
@@ -1840,14 +1840,14 @@ export default function TakeSurvey({ mockSurvey }) {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0 }}>
                       <ArrowIcon size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
-                      <span style={{ fontSize: '0.85rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={sec.title}>
+                      <span dir="auto" style={{ fontSize: '0.85rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={sec.title}>
                         {sec.title || `${t('section') || 'Section'} ${sIdx + 1}`}
                       </span>
                     </div>
                     {completedSections[sIdx] ? (
                       <Check size={14} style={{ color: 'var(--success)', flexShrink: 0 }} />
                     ) : (
-                      <span style={{ fontSize: '0.75rem', background: 'var(--primary-low)', color: 'var(--primary)', padding: '0.1rem 0.4rem', borderRadius: '10px', fontWeight: 'bold', flexShrink: 0 }}>
+                      <span dir="auto" style={{ fontSize: '0.75rem', background: 'var(--primary-low)', color: 'var(--primary)', padding: '0.1rem 0.4rem', borderRadius: '10px', fontWeight: 'bold', flexShrink: 0 }}>
                         {sidebarItems.length}
                       </span>
                     )}
@@ -1894,13 +1894,13 @@ export default function TakeSurvey({ mockSurvey }) {
                                 fontWeight: isCurrent ? '700' : '600',
                               }}
                             >
-                              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '16px', flexShrink: 0 }}>
-                                {isLocked ? <Lock size={12} style={{ opacity: 0.5 }} /> : allGroupAnswered ? <Check size={12} style={{ color: 'var(--success)' }} /> : <span style={{ fontSize: '0.7rem' }}>⬡</span>}
+                              <span dir="auto" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '16px', flexShrink: 0 }}>
+                                {isLocked ? <Lock size={12} style={{ opacity: 0.5 }} /> : allGroupAnswered ? <Check size={12} style={{ color: 'var(--success)' }} /> : <span dir="auto" style={{ fontSize: '0.7rem' }}>⬡</span>}
                               </span>
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                              <span dir="auto" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                                 {qst._groupLabel || (t('questionGroupLabel') || 'Group')}
                               </span>
-                              <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>({groupFlat.length})</span>
+                              <span dir="auto" style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>({groupFlat.length})</span>
                             </div>
                           );
                         }
@@ -1919,9 +1919,9 @@ export default function TakeSurvey({ mockSurvey }) {
                         } else if (isAnswered) {
                           statusIcon = <Check size={12} style={{ color: 'var(--success)' }} />;
                         } else if (isCurrent) {
-                          statusIcon = <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--primary)' }} />;
+                          statusIcon = <span dir="auto" style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--primary)' }} />;
                         } else {
-                          statusIcon = <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--border-color)' }} />;
+                          statusIcon = <span dir="auto" style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--border-color)' }} />;
                         }
 
                         const displayTitle = qst.text && qst.text.length > 40
@@ -1952,10 +1952,10 @@ export default function TakeSurvey({ mockSurvey }) {
                             }}
                             title={qst.text}
                           >
-                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '16px', flexShrink: 0 }}>
+                            <span dir="auto" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '16px', flexShrink: 0 }}>
                               {statusIcon}
                             </span>
-                            <span style={{
+                            <span dir="auto" style={{
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
@@ -1979,7 +1979,7 @@ export default function TakeSurvey({ mockSurvey }) {
         <div className="survey-main">
           {/* Universal Toggle Button */}
           <div style={{ padding: '1rem 2rem 0', display: 'flex', alignItems: 'center' }}>
-            <button 
+            <button dir="auto" 
               type="button"
               className="btn-secondary" 
               onClick={() => setSidebarVisible(!sidebarVisible)}
@@ -1987,18 +1987,18 @@ export default function TakeSurvey({ mockSurvey }) {
               style={{ padding: '0.5rem 0.75rem', display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}
             >
               <Menu size={20} />
-              <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{sidebarVisible ? 'Focus Mode' : 'Show Sidebar'}</span>
+              <span dir="auto" style={{ fontSize: '0.85rem', fontWeight: 600 }}>{sidebarVisible ? 'Focus Mode' : 'Show Sidebar'}</span>
             </button>
           </div>
           <div className="survey-content" style={{ paddingTop: '1rem' }}>
             <div className="survey-progress-container">
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
                 {survey?.layoutMode === 'multi' ? (
-                  <span>{t('page') || 'Page'} {pageStats.X} {t('of') || 'of'} {pageStats.Y}</span>
+                  <span dir="auto">{t('page') || 'Page'} {pageStats.X} {t('of') || 'of'} {pageStats.Y}</span>
                 ) : (
-                  <span>Question {currentVisibleNumber} of {progressStats.Y}</span>
+                  <span dir="auto">Question {currentVisibleNumber} of {progressStats.Y}</span>
                 )}
-                <span>{progressStats.percentage}% completed</span>
+                <span dir="auto">{progressStats.percentage}% completed</span>
               </div>
               <div className="survey-progress-bar-bg">
                 <div className="survey-progress-bar-fill" style={{ width: `${progressStats.percentage}%` }}></div>
@@ -2027,8 +2027,8 @@ export default function TakeSurvey({ mockSurvey }) {
                         return (
                           <div key={`grp-card-${q.groupId || qIdx}`} className="question-group-box">
                             <div className="question-group-header">
-                              <span>⬡</span>
-                              <span>{q.label || (t('questionGroupLabel') || 'Question Group')}</span>
+                              <span dir="auto">⬡</span>
+                              <span dir="auto">{q.label || (t('questionGroupLabel') || 'Question Group')}</span>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1rem' }}>
                               {visibleGroupQs.map((gq, gi) => {
@@ -2104,8 +2104,8 @@ export default function TakeSurvey({ mockSurvey }) {
                         )}
                         <div className="question-group-box">
                           <div className="question-group-header">
-                            <span>⬡</span>
-                            <span>{currentQ._groupLabel || (t('questionGroupLabel') || 'Question Group')}</span>
+                            <span dir="auto">⬡</span>
+                            <span dir="auto">{currentQ._groupLabel || (t('questionGroupLabel') || 'Question Group')}</span>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {visibleGroupQs.map((gq, gi) => {
@@ -2163,19 +2163,19 @@ export default function TakeSurvey({ mockSurvey }) {
               <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                 {survey?.layoutMode === 'multi' ? (
                   <>
-                    <button className="btn-secondary" onClick={handlePreviousSection} disabled={currentSectionIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <button dir="auto" className="btn-secondary" onClick={handlePreviousSection} disabled={currentSectionIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <ChevronLeft size={18} /> Previous
                     </button>
-                    <button className="btn-primary" onClick={proceedToNextSection} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <button dir="auto" className="btn-primary" onClick={proceedToNextSection} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       Next <ChevronRight size={18} />
                     </button>
                   </>
                 ) : (
                   <>
-                    <button className="btn-secondary" onClick={handlePrevious} disabled={currentIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <button dir="auto" className="btn-secondary" onClick={handlePrevious} disabled={currentIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <ChevronLeft size={18} /> Previous
                     </button>
-                    <button className="btn-primary" onClick={() => handleNextQuestion()} disabled={!isCurrentGroupComplete} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <button dir="auto" className="btn-primary" onClick={() => handleNextQuestion()} disabled={!isCurrentGroupComplete} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       Next <ChevronRight size={18} />
                     </button>
                   </>
@@ -2183,11 +2183,11 @@ export default function TakeSurvey({ mockSurvey }) {
               </div>
               <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
                 {lastSaved && (
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <span dir="auto" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                     <Save size={14} /> Saved {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 )}
-                <button className="btn-secondary" style={{ borderColor: 'var(--danger)', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.5rem' }} onClick={() => setShowEndCallConfirm(true)}>
+                <button dir="auto" className="btn-secondary" style={{ borderColor: 'var(--danger)', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.5rem' }} onClick={() => setShowEndCallConfirm(true)}>
                   <PhoneOff size={18} /> End Call
                 </button>
               </div>
@@ -2200,14 +2200,14 @@ export default function TakeSurvey({ mockSurvey }) {
               <div className="modal-content glass-card fade-enter-active" style={{ maxWidth: '400px' }}>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem', color: 'var(--danger)' }}>
                   <AlertTriangle size={24} />
-                  <h2 style={{ margin: 0 }}>{t('endCallConfirmTitle') || 'End Call?'}</h2>
+                  <h2 dir="auto" style={{ margin: 0 }}>{t('endCallConfirmTitle') || 'End Call?'}</h2>
                 </div>
-                <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                <p dir="auto" style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
                   {t('endCallConfirmDesc') || 'Are you sure you want to end this interview? You will be taken to the submission screen to finalize the outcome.'}
                 </p>
                 <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-                  <button className="btn-secondary" onClick={() => setShowEndCallConfirm(false)}>{t('stayInCall') || 'Stay in Call'}</button>
-                  <button className="btn-primary" style={{ backgroundColor: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { setShowEndCallConfirm(false); goToInterviewStep(); }}>
+                  <button dir="auto" className="btn-secondary" onClick={() => setShowEndCallConfirm(false)}>{t('stayInCall') || 'Stay in Call'}</button>
+                  <button dir="auto" className="btn-primary" style={{ backgroundColor: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { setShowEndCallConfirm(false); goToInterviewStep(); }}>
                     {t('endCallYes') || 'Yes, End Call'}
                   </button>
                 </div>

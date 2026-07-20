@@ -61,10 +61,10 @@ const AgentMultiSelect = ({ agents, assignedAgents, setAssignedAgents, disabled 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', width: '100%' }}>
       <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-        <button type="button" className="btn-secondary" disabled={disabled || agents.length === 0} style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => setAssignedAgents(agents.map(a => a._id))}>
+        <button dir="auto" type="button" className="btn-secondary" disabled={disabled || agents.length === 0} style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => setAssignedAgents(agents.map(a => a._id))}>
           Select All
         </button>
-        <button type="button" className="btn-secondary" disabled={disabled || assignedAgents.length === 0} style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => setAssignedAgents([])}>
+        <button dir="auto" type="button" className="btn-secondary" disabled={disabled || assignedAgents.length === 0} style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => setAssignedAgents([])}>
           Clear All
         </button>
       </div>
@@ -91,7 +91,7 @@ const AgentMultiSelect = ({ agents, assignedAgents, setAssignedAgents, disabled 
             const agent = agents.find(a => a._id === id);
             if (!agent) return null;
             return (
-              <span key={id} style={{
+              <span dir="auto" key={id} style={{
                 display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
                 backgroundColor: 'rgba(59, 130, 246, 0.12)',
                 color: 'var(--primary)',
@@ -103,7 +103,7 @@ const AgentMultiSelect = ({ agents, assignedAgents, setAssignedAgents, disabled 
               }}>
                 {agent.name}
                 {!disabled && (
-                  <button type="button" style={{
+                  <button dir="auto" type="button" style={{
                     background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', padding: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.7
                   }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.7} onClick={(e) => { e.stopPropagation(); handleToggleAgent(id); }}>✕</button>
@@ -112,7 +112,7 @@ const AgentMultiSelect = ({ agents, assignedAgents, setAssignedAgents, disabled 
             );
           })}
           {!disabled && (
-            <input 
+            <input dir="auto" 
               type="text" 
               value={search} 
               onChange={e => setSearch(e.target.value)} 
@@ -314,18 +314,18 @@ export default function SettingsTab() {
       <div className="glass-card" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem', overflow: 'visible', zIndex: 20 }}>
         {/* Row 1 */}
         <div style={{ width: '100%' }}>
-          <label className="form-label">Campaign Title</label>
-          <input className="input-field" value={surveyState.title} onChange={e => updateState({ title: e.target.value })} placeholder="e.g. Health Awareness Poll 2026" readOnly={!isAdmin} style={{ margin: 0 }} />
+          <label dir="auto" className="form-label">Campaign Title</label>
+          <input dir="auto" className="input-field" value={surveyState.title} onChange={e => updateState({ title: e.target.value })} placeholder="e.g. Health Awareness Poll 2026" readOnly={!isAdmin} style={{ margin: 0 }} />
         </div>
 
         {/* Row 2 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
           <div>
-            <label className="form-label">Campaign Goal</label>
-            <input type="number" className="input-field" value={surveyState.goal} onChange={e => updateState({ goal: Number(e.target.value) })} placeholder="Target count" readOnly={!isAdmin} style={{ margin: 0 }} />
+            <label dir="auto" className="form-label">Campaign Goal</label>
+            <input dir="auto" type="number" className="input-field" value={surveyState.goal} onChange={e => updateState({ goal: Number(e.target.value) })} placeholder="Target count" readOnly={!isAdmin} style={{ margin: 0 }} />
           </div>
           <div>
-            <label className="form-label">Target Governorate</label>
+            <label dir="auto" className="form-label">Target Governorate</label>
             <select className="input-field" value={surveyState.targetGovernorate} onChange={e => updateState({ targetGovernorate: e.target.value })} disabled={!isAdmin} style={{ margin: 0 }}>
               <option value="All">All Governorates</option>
               {EGYPTIAN_GOVERNORATES.map(g => (
@@ -334,7 +334,7 @@ export default function SettingsTab() {
             </select>
           </div>
           <div>
-            <label className="form-label">Survey Layout Mode</label>
+            <label dir="auto" className="form-label">Survey Layout Mode</label>
             <select className="input-field" value={surveyState.layoutMode || 'single'} onChange={e => updateState({ layoutMode: e.target.value })} disabled={!isAdmin} style={{ margin: 0 }}>
               <option value="single">Single Question Per Screen</option>
               <option value="multi">Multiple Questions (Page-by-Section)</option>
@@ -345,7 +345,7 @@ export default function SettingsTab() {
         {/* Row 3 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem' }}>
           <div>
-            <label className="form-label">Number Assignment Mode</label>
+            <label dir="auto" className="form-label">Number Assignment Mode</label>
             <select className="input-field" value={surveyState.numberAssignmentMode || 'queue_only'} onChange={e => updateState({ numberAssignmentMode: e.target.value })} disabled={!isAdmin} style={{ margin: 0 }}>
               <option value="queue_only">Queue Only</option>
               <option value="queue_then_manual">Queue then Manual</option>
@@ -354,8 +354,8 @@ export default function SettingsTab() {
             </select>
           </div>
           <div>
-            <label className="form-label" style={{ display: 'block', marginBottom: '0.4rem' }}>Campaign Status</label>
-            <button 
+            <label dir="auto" className="form-label" style={{ display: 'block', marginBottom: '0.4rem' }}>Campaign Status</label>
+            <button dir="auto" 
               type="button"
               aria-label={surveyState.isActive ? 'ACTIVE' : 'INACTIVE'}
               onClick={isAdmin ? toggleCampaignStatus : undefined}
@@ -394,11 +394,11 @@ export default function SettingsTab() {
         {/* Row 4 */}
         {isAdmin && (
           <div style={{ width: '100%', padding: '1.25rem', background: 'var(--bg-primary)', borderRadius: '12px', border: '1px solid var(--border)' }}>
-            <label className="form-label" style={{ fontSize: '1rem', marginBottom: '1rem' }}>Agent Visibility Assignment</label>
+            <label dir="auto" className="form-label" style={{ fontSize: '1rem', marginBottom: '1rem' }}>Agent Visibility Assignment</label>
             
             <div style={{ display: 'flex', gap: '2rem', marginBottom: '1.25rem', alignItems: 'center' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600, color: 'var(--text-primary)' }}>
-                <input 
+              <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600, color: 'var(--text-primary)' }}>
+                <input dir="auto" 
                   type="radio" 
                   name="visibilityMode" 
                   checked={assignmentMode === 'public'}
@@ -411,8 +411,8 @@ export default function SettingsTab() {
                 All Agents (Public)
               </label>
               
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600, color: 'var(--text-primary)' }}>
-                <input 
+              <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600, color: 'var(--text-primary)' }}>
+                <input dir="auto" 
                   type="radio" 
                   name="visibilityMode" 
                   checked={assignmentMode === 'custom'}
@@ -438,19 +438,19 @@ export default function SettingsTab() {
       </div>
 
       <div className="glass-card">
-        <h2 style={{ margin: 0, fontSize: '1.25rem', marginBottom: '0.5rem' }}>Governorate Goals</h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+        <h2 dir="auto" style={{ margin: 0, fontSize: '1.25rem', marginBottom: '0.5rem' }}>Governorate Goals</h2>
+        <p dir="auto" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
           Target sum: <strong>{surveyState.governorateGoals.reduce((sum, g) => sum + (Number(g.goal) || 0), 0)}</strong> / {surveyState.goal || 0}
           {surveyState.governorateGoals.reduce((sum, g) => sum + (Number(g.goal) || 0), 0) > surveyState.goal && (
-            <span style={{ color: 'red', marginLeft: '0.5rem', fontWeight: 'bold' }}>Error: Exceeds campaign goal!</span>
+            <span dir="auto" style={{ color: 'red', marginLeft: '0.5rem', fontWeight: 'bold' }}>Error: Exceeds campaign goal!</span>
           )}
         </p>
         
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
           {surveyState.governorateGoals.map((govObj, i) => (
             <div key={i} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'var(--surface)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
-              <span style={{ fontWeight: 600, flex: 1 }}>{govObj.governorate}</span>
-              <input 
+              <span dir="auto" style={{ fontWeight: 600, flex: 1 }}>{govObj.governorate}</span>
+              <input dir="auto" 
                 type="number" 
                 className="input-field" 
                 style={{ width: '80px', padding: '0.4rem' }} 
@@ -464,7 +464,7 @@ export default function SettingsTab() {
                 readOnly={!isAdmin}
               />
               {isAdmin && (
-                <button type="button" className="btn-secondary" style={{ padding: '0.4rem 0.6rem' }} onClick={() => {
+                <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.4rem 0.6rem' }} onClick={() => {
                   if (!window.confirm("Are you sure you want to remove this governorate target?")) return;
                   updateState({ governorateGoals: surveyState.governorateGoals.filter((_, idx) => idx !== i) });
                 }}>✕</button>
@@ -481,7 +481,7 @@ export default function SettingsTab() {
                 <option key={g} value={g}>{g}</option>
               ))}
             </select>
-            <button type="button" className="btn-secondary" onClick={() => {
+            <button dir="auto" type="button" className="btn-secondary" onClick={() => {
               const sel = document.getElementById('add-gov-select');
               if (sel && sel.value) {
                 updateState({ governorateGoals: [...surveyState.governorateGoals, { governorate: sel.value, goal: 0 }] });
@@ -493,39 +493,39 @@ export default function SettingsTab() {
       </div>
 
       <div className="glass-card">
-        <h2 style={{ margin: 0, fontSize: '1.25rem', marginBottom: '1rem' }}>Outbound Call List Queue</h2>
+        <h2 dir="auto" style={{ margin: 0, fontSize: '1.25rem', marginBottom: '1rem' }}>Outbound Call List Queue</h2>
         {surveyId && (
           <>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
             <div style={{ background: 'var(--surface)', padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' }}>Total Numbers</span>
-              <span style={{ fontWeight: 800, fontSize: '1.5rem', color: 'var(--text-primary)' }}>{numbersStats.total}</span>
+              <span dir="auto" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' }}>Total Numbers</span>
+              <span dir="auto" style={{ fontWeight: 800, fontSize: '1.5rem', color: 'var(--text-primary)' }}>{numbersStats.total}</span>
             </div>
             <div style={{ background: 'var(--surface)', padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' }}>Uncalled</span>
-              <span style={{ fontWeight: 800, fontSize: '1.5rem', color: 'var(--text-primary)' }}>{numbersStats.pending}</span>
+              <span dir="auto" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' }}>Uncalled</span>
+              <span dir="auto" style={{ fontWeight: 800, fontSize: '1.5rem', color: 'var(--text-primary)' }}>{numbersStats.pending}</span>
             </div>
             <div style={{ background: 'rgba(59, 130, 246, 0.08)', padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
-              <span style={{ fontSize: '0.75rem', color: '#1d4ed8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' }}>Called</span>
-              <span style={{ fontWeight: 800, fontSize: '1.5rem', color: '#1d4ed8' }}>{numbersStats.called}</span>
+              <span dir="auto" style={{ fontSize: '0.75rem', color: '#1d4ed8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' }}>Called</span>
+              <span dir="auto" style={{ fontWeight: 800, fontSize: '1.5rem', color: '#1d4ed8' }}>{numbersStats.called}</span>
             </div>
             <div style={{ background: 'rgba(16, 185, 129, 0.08)', padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-              <span style={{ fontSize: '0.75rem', color: '#047857', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' }}>Qualified</span>
-              <span style={{ fontWeight: 800, fontSize: '1.5rem', color: '#047857' }}>{numbersStats.qualified}</span>
+              <span dir="auto" style={{ fontSize: '0.75rem', color: '#047857', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' }}>Qualified</span>
+              <span dir="auto" style={{ fontWeight: 800, fontSize: '1.5rem', color: '#047857' }}>{numbersStats.qualified}</span>
             </div>
             <div style={{ background: 'rgba(239, 68, 68, 0.08)', padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-              <span style={{ fontSize: '0.75rem', color: '#b91c1c', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' }}>Disqualified</span>
-              <span style={{ fontWeight: 800, fontSize: '1.5rem', color: '#b91c1c' }}>{numbersStats.disqualified}</span>
+              <span dir="auto" style={{ fontSize: '0.75rem', color: '#b91c1c', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' }}>Disqualified</span>
+              <span dir="auto" style={{ fontWeight: 800, fontSize: '1.5rem', color: '#b91c1c' }}>{numbersStats.disqualified}</span>
             </div>
             
             <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
-              <button type="button" className="btn-secondary" onClick={downloadDisqualified}>Download Disqualified</button>
-              {isAdmin && <button type="button" className="btn-secondary" onClick={clearNumbers}>Clear List</button>}
+              <button dir="auto" type="button" className="btn-secondary" onClick={downloadDisqualified}>Download Disqualified</button>
+              {isAdmin && <button dir="auto" type="button" className="btn-secondary" onClick={clearNumbers}>Clear List</button>}
             </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Numbers Detail Table</h3>
+            <h3 dir="auto" style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Numbers Detail Table</h3>
             <select className="input-field" style={{ minWidth: '150px', padding: '0.25rem 0.5rem' }} value={numbersGovFilter} onChange={e => setNumbersGovFilter(e.target.value)}>
               <option value="All">All Governorates</option>
               {EGYPTIAN_GOVERNORATES.map(g => (
@@ -545,20 +545,20 @@ export default function SettingsTab() {
             border: '1px solid var(--border)',
             boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.02)'
           }}>
-            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.05rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <h3 dir="auto" style={{ margin: '0 0 1rem 0', fontSize: '1.05rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <UploadCloud size={20} color="var(--primary)" />
               Upload Campaign Numbers
             </h3>
             
             {!surveyId ? (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0, fontStyle: 'italic' }}>
+              <p dir="auto" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0, fontStyle: 'italic' }}>
                 Please save this new campaign first before uploading numbers.
               </p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '1.25rem' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', flex: '1 1 200px' }}>
-                    <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>Assign to Governorate</label>
+                    <label dir="auto" className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>Assign to Governorate</label>
                     <select 
                       className="input-field" 
                       value={uploadGov} 
@@ -574,8 +574,8 @@ export default function SettingsTab() {
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', flex: '2 1 250px' }}>
-                    <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>Phone Numbers File</label>
-                    <input 
+                    <label dir="auto" className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>Phone Numbers File</label>
+                    <input dir="auto" 
                       type="file" 
                       accept=".xlsx,.csv,.txt" 
                       ref={uploadFileInputRef}
@@ -594,7 +594,7 @@ export default function SettingsTab() {
                       >
                         Choose File
                       </motion.button>
-                      <span style={{ 
+                      <span dir="auto" style={{ 
                         color: uploadFile ? 'var(--text-primary)' : 'var(--text-secondary)', 
                         fontSize: '0.85rem',
                         fontWeight: uploadFile ? 700 : 500,
@@ -660,7 +660,7 @@ export default function SettingsTab() {
                           <AlertCircle size={18} />
                           {uploadError}
                         </div>
-                        <button 
+                        <button dir="auto" 
                           type="button" 
                           onClick={handleUploadSubmit} 
                           style={{ 
@@ -677,9 +677,9 @@ export default function SettingsTab() {
                 </div>
 
                 <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', fontWeight: 600, display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.25rem' }}>
-                  <span>Accepts .csv, .xlsx, .txt — one number per row</span>
+                  <span dir="auto">Accepts .csv, .xlsx, .txt — one number per row</span>
                   {uploadStatus === 'success' && uploadResult && uploadResult.rejectedSamples && uploadResult.rejectedSamples.length > 0 && (
-                    <span style={{ color: 'var(--danger)' }}>
+                    <span dir="auto" style={{ color: 'var(--danger)' }}>
                       Rejected samples: {uploadResult.rejectedSamples.join(', ')}
                     </span>
                   )}
@@ -705,7 +705,7 @@ export default function SettingsTab() {
                   <tr key={n._id || i} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '0.75rem', fontWeight: 500 }}>{n.number}</td>
                     <td style={{ padding: '0.75rem' }}>
-                      <span style={{ 
+                      <span dir="auto" style={{ 
                         padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700, fontSize: '0.75rem',
                         backgroundColor: n.status === 'completed' ? '#ecfdf5' : n.status === 'disqualified' ? '#fef2f2' : n.status === 'called' ? '#e0f2fe' : '#f3f4f6',
                         color: n.status === 'completed' ? '#047857' : n.status === 'disqualified' ? '#b91c1c' : n.status === 'called' ? '#0369a1' : '#4b5563',

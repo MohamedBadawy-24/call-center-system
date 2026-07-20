@@ -92,7 +92,7 @@ export default function ShadowReview() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ paddingBottom: '4rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: 0 }}>
+        <h1 dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: 0 }}>
           <Monitor size={32} color="var(--primary)" />
           {t('liveAudit') || 'Live Audit'}
         </h1>
@@ -102,7 +102,7 @@ export default function ShadowReview() {
         <form onSubmit={handleSearch} style={{ display: 'flex', gap: '1rem' }}>
           <div className="search-container" style={{ flex: 1 }}>
             <Search className="search-icon" size={20} />
-            <input 
+            <input dir="auto" 
               type="text" 
               placeholder="Enter Call Serial Number..." 
               className="search-input"
@@ -111,7 +111,7 @@ export default function ShadowReview() {
               disabled={loading}
             />
           </div>
-          <button type="submit" className="btn-primary" disabled={loading || !serialNumber.trim()}>
+          <button dir="auto" type="submit" className="btn-primary" disabled={loading || !serialNumber.trim()}>
             {loading ? 'Searching...' : 'Start Audit'}
           </button>
         </form>
@@ -125,14 +125,14 @@ export default function ShadowReview() {
             <div className="glass-card" style={{ flex: 1, padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
               <div className="status-dot" style={{ width: '12px', height: '12px', background: data.isCompleted ? 'var(--success)' : 'var(--warning)' }}></div>
               <div>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 800 }}>Status</span>
+                <span dir="auto" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 800 }}>Status</span>
                 <div style={{ fontWeight: 800 }}>{data.isCompleted ? 'Completed Response' : 'Live Draft'}</div>
               </div>
             </div>
             <div className="glass-card" style={{ flex: 1, padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
               <FileText size={24} color="var(--primary)" />
               <div>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 800 }}>Survey</span>
+                <span dir="auto" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 800 }}>Survey</span>
                 <div style={{ fontWeight: 800 }}>{survey.title}</div>
               </div>
             </div>
@@ -141,16 +141,16 @@ export default function ShadowReview() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
             {/* Left Side: Agent's View */}
             <div>
-              <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h3 dir="auto" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <User size={18} color="var(--text-secondary)" /> Agent Answers
               </h3>
               
               {survey.sections.map((section, sIdx) => (
                 <div key={sIdx} className="glass-card" style={{ padding: '1.5rem', marginBottom: '1rem', background: 'var(--bg-secondary)', borderStyle: 'dashed' }}>
-                  <h4 style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>{section.title}</h4>
+                  <h4 dir="auto" style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>{section.title}</h4>
                   {section.questions.map((q, qIdx) => (
                     <div key={q.questionId || qIdx} style={{ marginBottom: '1.5rem' }}>
-                      <p style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>
+                      <p dir="auto" style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>
                         {qIdx + 1}. {q.text}
                       </p>
                       <div style={{ padding: '0.75rem', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}>
@@ -164,22 +164,22 @@ export default function ShadowReview() {
 
             {/* Right Side: Quality's View */}
             <div>
-              <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h3 dir="auto" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <CheckCircle size={18} color="var(--primary)" /> Your Evaluation
               </h3>
 
               {survey.sections.map((section, sIdx) => (
                 <div key={sIdx} className="glass-card" style={{ padding: '1.5rem', marginBottom: '1rem' }}>
-                  <h4 style={{ marginBottom: '1rem' }}>{section.title}</h4>
+                  <h4 dir="auto" style={{ marginBottom: '1rem' }}>{section.title}</h4>
                   {section.questions.map((q, qIdx) => (
                     <div key={q.questionId || qIdx} style={{ marginBottom: '1.5rem' }}>
-                      <p style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.5rem' }}>
+                      <p dir="auto" style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.5rem' }}>
                         {qIdx + 1}. {q.text}
                       </p>
                       {q.type === 'single-choice' || q.type === 'yes-no' ? (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                           {(q.options || ['Yes', 'No']).map((opt, oIdx) => (
-                            <button
+                            <button dir="auto"
                               key={oIdx}
                               onClick={() => handleAnswerChange(q.questionId || q._id, opt)}
                               className="btn-secondary"
@@ -195,7 +195,7 @@ export default function ShadowReview() {
                           ))}
                         </div>
                       ) : (
-                        <input
+                        <input dir="auto"
                           type="text"
                           className="glass-input"
                           placeholder="Your answer..."
@@ -210,8 +210,8 @@ export default function ShadowReview() {
               ))}
 
               <div className="glass-card" style={{ padding: '1.5rem', marginTop: '2rem' }}>
-                <h4 style={{ marginBottom: '1rem' }}>Feedback Notes</h4>
-                <textarea
+                <h4 dir="auto" style={{ marginBottom: '1rem' }}>Feedback Notes</h4>
+                <textarea dir="auto"
                   className="glass-input"
                   rows="4"
                   placeholder="Enter overall feedback and notes for the agent..."
@@ -221,7 +221,7 @@ export default function ShadowReview() {
                 />
 
                 <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
-                  <button 
+                  <button dir="auto" 
                     onClick={handleSubmit} 
                     disabled={submitting}
                     className="btn-primary" 

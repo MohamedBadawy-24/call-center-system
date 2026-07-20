@@ -84,7 +84,7 @@ export default function QuestionCard({
         </div>
         {onToggleSelect && (
           <div style={{ padding: '0 0.5rem', display: 'flex', alignItems: 'center' }}>
-            <input 
+            <input dir="auto" 
               type="checkbox" 
               checked={!!selected} 
               onChange={onToggleSelect} 
@@ -95,12 +95,12 @@ export default function QuestionCard({
         )}
 
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '1rem', marginLeft: '0.5rem' }}>
-          <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--primary)' }}>Q{qIdx + 1}</span>
+          <span dir="auto" style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--primary)' }}>Q{qIdx + 1}</span>
           <div style={{ flex: 1, fontWeight: 600, fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {question.text || <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>Untitled Question</span>}
+            {question.text || <span dir="auto" style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>Untitled Question</span>}
           </div>
           {question.visibility && (
-            <span style={{ fontSize: '0.75rem', background: 'var(--danger, #ef4444)', color: 'white', padding: '0.2rem 0.6rem', borderRadius: '4px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+            <span dir="auto" style={{ fontSize: '0.75rem', background: 'var(--danger, #ef4444)', color: 'white', padding: '0.2rem 0.6rem', borderRadius: '4px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
               Skip Logic Active
             </span>
           )}
@@ -109,15 +109,15 @@ export default function QuestionCard({
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           {isAdmin && (
             <>
-              <button type="button" className="btn-secondary" style={{ padding: '0.35rem', border: 'none' }} onClick={duplicateQ} title="Duplicate">
+              <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.35rem', border: 'none' }} onClick={duplicateQ} title="Duplicate">
                 <Copy size={16} />
               </button>
-              <button type="button" className="btn-secondary" style={{ padding: '0.35rem', border: 'none', color: '#ef4444' }} onClick={deleteQ} title="Delete">
+              <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.35rem', border: 'none', color: '#ef4444' }} onClick={deleteQ} title="Delete">
                 <Trash2 size={16} />
               </button>
             </>
           )}
-          <button type="button" className="btn-secondary" style={{ padding: '0.35rem', border: 'none' }} onClick={() => setCollapsed(!collapsed)} title="Toggle Collapse">
+          <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.35rem', border: 'none' }} onClick={() => setCollapsed(!collapsed)} title="Toggle Collapse">
             {collapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
           </button>
         </div>
@@ -127,11 +127,11 @@ export default function QuestionCard({
         <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: '150px' }}>
-              <label className="form-label" style={{ fontSize: '0.8rem' }}>Question ID</label>
-              <input className="input-field" value={question.questionId} onChange={e => updateQ({ questionId: e.target.value.replace(/\s+/g, '_') })} readOnly={!isAdmin} />
+              <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>Question ID</label>
+              <input dir="auto" className="input-field" value={question.questionId} onChange={e => updateQ({ questionId: e.target.value.replace(/\s+/g, '_') })} readOnly={!isAdmin} />
             </div>
             <div style={{ flex: 1, minWidth: '150px' }}>
-              <label className="form-label" style={{ fontSize: '0.8rem' }}>Question Type</label>
+              <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>Question Type</label>
               <select className="input-field" value={question.type} onChange={e => updateQ({ type: e.target.value, choices: e.target.value === 'text' || e.target.value === 'number' ? [] : question.choices })} disabled={!isAdmin}>
                 <option value="text">Text (Open Answer)</option>
                 <option value="single_choice">Single Choice</option>
@@ -142,22 +142,22 @@ export default function QuestionCard({
               </select>
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '0.5rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, fontSize: '0.9rem', cursor: isAdmin ? 'pointer' : 'default' }}>
-                <input type="checkbox" checked={!!question.required} onChange={e => updateQ({ required: e.target.checked })} disabled={!isAdmin} />
+              <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, fontSize: '0.9rem', cursor: isAdmin ? 'pointer' : 'default' }}>
+                <input dir="auto" type="checkbox" checked={!!question.required} onChange={e => updateQ({ required: e.target.checked })} disabled={!isAdmin} />
                 Required
               </label>
             </div>
           </div>
 
           <div>
-            <label className="form-label">Question Text (Agent reads this)</label>
-            <input className="input-field" value={question.text} onChange={e => updateQ({ text: e.target.value })} readOnly={!isAdmin} />
+            <label dir="auto" className="form-label">Question Text (Agent reads this)</label>
+            <input dir="auto" className="input-field" value={question.text} onChange={e => updateQ({ text: e.target.value })} readOnly={!isAdmin} />
           </div>
 
           {question.type !== 'info' && (
             <div style={{ display: 'flex', alignItems: 'center', marginTop: '-0.25rem', marginBottom: '0.25rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, fontSize: '0.9rem', cursor: isAdmin ? 'pointer' : 'default' }}>
-                <input 
+              <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, fontSize: '0.9rem', cursor: isAdmin ? 'pointer' : 'default' }}>
+                <input dir="auto" 
                   type="checkbox" 
                   checked={!!question.optional} 
                   onChange={() => updateQ({ optional: !question.optional })} 
@@ -169,20 +169,20 @@ export default function QuestionCard({
           )}
 
           <div>
-            <label className="form-label">Internal Script / Instruction (Optional)</label>
-            <textarea className="input-field" rows={2} value={question.script || ''} onChange={e => updateQ({ script: e.target.value })} readOnly={!isAdmin} />
+            <label dir="auto" className="form-label">Internal Script / Instruction (Optional)</label>
+            <textarea dir="auto" className="input-field" rows={2} value={question.script || ''} onChange={e => updateQ({ script: e.target.value })} readOnly={!isAdmin} />
           </div>
 
           {(question.type === 'single_choice' || question.type === 'multiple_choice') && (
             <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-              <label className="form-label" style={{ marginBottom: '0.25rem', display: 'block' }}>Choices</label>
-              <p style={{ margin: '0 0 0.75rem', fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <label dir="auto" className="form-label" style={{ marginBottom: '0.25rem', display: 'block' }}>Choices</label>
+              <p dir="auto" style={{ margin: '0 0 0.75rem', fontSize: '12px', color: 'var(--text-secondary)' }}>
                 Add export codes to each answer (optional)
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {(question.choices || []).map((choice, cIdx) => (
                   <div key={cIdx} style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input
+                    <input dir="auto"
                       className="input-field"
                       style={{ flex: 1 }}
                       value={choice.text}
@@ -190,7 +190,7 @@ export default function QuestionCard({
                       placeholder="Option text"
                       readOnly={!isAdmin}
                     />
-                    <input
+                    <input dir="auto"
                       className="input-field"
                       style={{ width: '30%', minWidth: '80px', maxWidth: '140px' }}
                       value={choice.value ?? ''}
@@ -200,24 +200,24 @@ export default function QuestionCard({
                       title="Export code — exported instead of label text when set"
                     />
                     {isAdmin && (
-                      <button type="button" className="btn-secondary" style={{ padding: '0.5rem', color: '#ef4444' }} onClick={() => removeChoice(cIdx)}>×</button>
+                      <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.5rem', color: '#ef4444' }} onClick={() => removeChoice(cIdx)}>×</button>
                     )}
                   </div>
                 ))}
               </div>
               {isAdmin && (
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginTop: '0.75rem', flexWrap: 'wrap', gap: '1rem' }}>
-                  <button type="button" className="btn-secondary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }} onClick={addChoice}>
+                  <button dir="auto" type="button" className="btn-secondary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }} onClick={addChoice}>
                     + Add Choice
                   </button>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={!!question.allowOther} onChange={e => updateQ({ allowOther: e.target.checked })} />
+                    <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>
+                      <input dir="auto" type="checkbox" checked={!!question.allowOther} onChange={e => updateQ({ allowOther: e.target.checked })} />
                       Allow "Other" option (Text Input)
                     </label>
                     {question.allowOther && (
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', marginLeft: '1.5rem', color: 'var(--text-secondary)' }}>
-                        <input type="checkbox" checked={!!question.allowMultipleOther} onChange={e => updateQ({ allowMultipleOther: e.target.checked })} />
+                      <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', marginLeft: '1.5rem', color: 'var(--text-secondary)' }}>
+                        <input dir="auto" type="checkbox" checked={!!question.allowMultipleOther} onChange={e => updateQ({ allowMultipleOther: e.target.checked })} />
                         Allow multiple Other entries
                       </label>
                     )}
@@ -228,8 +228,8 @@ export default function QuestionCard({
               {question.type === 'multiple_choice' && (
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
                   <div style={{ flex: 1 }}>
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Min Selections</label>
-                    <input
+                    <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>Min Selections</label>
+                    <input dir="auto"
                       type="number"
                       className="input-field"
                       min="0"
@@ -241,8 +241,8 @@ export default function QuestionCard({
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Max Selections</label>
-                    <input
+                    <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>Max Selections</label>
+                    <input dir="auto"
                       type="number"
                       className="input-field"
                       min="1"
@@ -260,11 +260,11 @@ export default function QuestionCard({
 
           {question.type === 'multi_input' && (
             <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-              <label className="form-label" style={{ marginBottom: '0.25rem', display: 'block' }}>Sub-Inputs</label>
+              <label dir="auto" className="form-label" style={{ marginBottom: '0.25rem', display: 'block' }}>Sub-Inputs</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {(question.subInputs || []).map((sub, sIdx) => (
                   <div key={sub.id} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', background: '#fff', padding: '0.5rem', border: '1px solid var(--border-color)', borderRadius: '6px' }}>
-                    <input
+                    <input dir="auto"
                       className="input-field"
                       style={{ flex: 2, minWidth: '150px' }}
                       value={sub.label || ''}
@@ -293,8 +293,8 @@ export default function QuestionCard({
                       <option value="date">Date</option>
                       <option value="dropdown">Dropdown</option>
                     </select>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 600 }}>
-                      <input 
+                    <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 600 }}>
+                      <input dir="auto" 
                         type="checkbox" 
                         checked={!!sub.required} 
                         onChange={e => {
@@ -307,7 +307,7 @@ export default function QuestionCard({
                       Req.
                     </label>
                     {isAdmin && (
-                      <button type="button" className="btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', color: 'var(--danger)' }} onClick={() => {
+                      <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', color: 'var(--danger)' }} onClick={() => {
                         const newSubs = [...(question.subInputs || [])];
                         newSubs.splice(sIdx, 1);
                         updateQ({ subInputs: newSubs });
@@ -315,7 +315,7 @@ export default function QuestionCard({
                     )}
                     {sub.inputType === 'dropdown' && (
                       <div style={{ width: '100%', marginTop: '0.25rem' }}>
-                        <input
+                        <input dir="auto"
                           className="input-field"
                           placeholder="Options (comma separated)"
                           value={(sub.options || []).join(', ')}
@@ -331,7 +331,7 @@ export default function QuestionCard({
                   </div>
                 ))}
                 {isAdmin && (
-                  <button type="button" className="btn-secondary" style={{ padding: '0.5rem', alignSelf: 'flex-start' }} onClick={() => {
+                  <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.5rem', alignSelf: 'flex-start' }} onClick={() => {
                     const newSubs = [...(question.subInputs || [])];
                     newSubs.push({ id: Math.random().toString(36).substring(2, 9), label: '', inputType: 'short_text', required: false, options: [] });
                     updateQ({ subInputs: newSubs });
@@ -348,8 +348,8 @@ export default function QuestionCard({
               Cross-Question Validation (Sum Validation)
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, cursor: isAdmin ? 'pointer' : 'default' }}>
-                <input 
+              <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, cursor: isAdmin ? 'pointer' : 'default' }}>
+                <input dir="auto" 
                   type="checkbox" 
                   checked={question.crossValidation?.ruleType === 'sum_equals'} 
                   onChange={e => {
@@ -368,7 +368,7 @@ export default function QuestionCard({
               {question.crossValidation?.ruleType === 'sum_equals' && (
                 <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginLeft: '1.5rem' }}>
                   <div style={{ flex: 1, minWidth: '200px' }}>
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Target Question IDs</label>
+                    <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>Target Question IDs</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: '150px', overflowY: 'auto', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.5rem' }}>
                       {(() => {
                         const allQs = surveyState?.sections?.flatMap(s => (s.questions || []).flatMap(q => q.type === 'group' ? (q.questions || []) : [q])) || [];
@@ -382,8 +382,8 @@ export default function QuestionCard({
                         return prevQs.map(prevQ => {
                           const id = prevQ.questionId || String(prevQ._id);
                           return (
-                            <label key={id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', cursor: isAdmin ? 'pointer' : 'default' }}>
-                              <input 
+                            <label dir="auto" key={id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', cursor: isAdmin ? 'pointer' : 'default' }}>
+                              <input dir="auto" 
                                 type="checkbox" 
                                 checked={targets.includes(id)}
                                 onChange={e => {
@@ -406,8 +406,8 @@ export default function QuestionCard({
                     </div>
                   </div>
                   <div style={{ flex: 2, minWidth: '300px' }}>
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Error Message</label>
-                    <input 
+                    <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>Error Message</label>
+                    <input dir="auto" 
                       className="input-field" 
                       placeholder="e.g. The sum here must match the total in Q401" 
                       value={question.crossValidation.errorMessage || ''} 

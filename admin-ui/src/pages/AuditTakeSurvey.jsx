@@ -659,10 +659,10 @@ export default function AuditTakeSurvey() {
 
     return (
       <div id={`question-card-${qId}`} className="glass-card fade-enter-active" style={{ padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-        <h3 style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+        <h3 dir="auto" style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
           {typeof q.category === 'string' ? q.category.toUpperCase() : t('question')} {flatIdx + 1}
         </h3>
-        <h2>{dynamicQuestionText}</h2>
+        <h2 dir="auto">{dynamicQuestionText}</h2>
 
         {q.script && (
           <div className="agent-script-box" style={{ marginTop: '0.5rem' }}>
@@ -675,7 +675,7 @@ export default function AuditTakeSurvey() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
             <div className="choice-grid" style={{ marginTop: 0 }}>
               {choices.map((c, i) => (
-                <button 
+                <button dir="auto" 
                   key={i} 
                   className={`choice-btn ${isSelected(c.text) ? 'active' : ''}`} 
                   onClick={() => q.type === 'multiple_choice' ? toggleChoiceForQuestion(q, c.text) : setSingleChoiceForQuestion(q, c.text, c.logic)}
@@ -700,7 +700,7 @@ export default function AuditTakeSurvey() {
                           const textVal = val.substring(6);
                           return (
                             <div key={idx} style={{ display: 'flex', gap: '0.5rem' }}>
-                              <input
+                              <input dir="auto"
                                 type="text"
                                 className="input-field"
                                 placeholder="Please specify..."
@@ -728,7 +728,7 @@ export default function AuditTakeSurvey() {
                     </div>
                   </div>
                 ) : (
-                  <input
+                  <input dir="auto"
                     type="text"
                     className="input-field"
                     placeholder="Please specify..."
@@ -745,7 +745,7 @@ export default function AuditTakeSurvey() {
 
         {q.type === 'text' && (
           <div className="form-group" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <input
+            <input dir="auto"
               type="text"
               className="input-field"
               placeholder={t('typeAnswer')}
@@ -771,13 +771,13 @@ export default function AuditTakeSurvey() {
   if (phase === 'interview') {
     return (
       <div className="glass-card fade-enter-active">
-        <h2 style={{ marginBottom: '1.5rem' }}>{t('auditEvaluationOutcome') || 'Quality Audit Evaluation'}</h2>
+        <h2 dir="auto" style={{ marginBottom: '1.5rem' }}>{t('auditEvaluationOutcome') || 'Quality Audit Evaluation'}</h2>
         
         <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-          <label className="form-label">{t('auditOutcome') || 'Outcome'}</label>
+          <label dir="auto" className="form-label">{t('auditOutcome') || 'Outcome'}</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600 }}>
-              <input
+            <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600 }}>
+              <input dir="auto"
                 type="radio"
                 name="outcome"
                 value="passed"
@@ -786,8 +786,8 @@ export default function AuditTakeSurvey() {
               />
               {t('auditPassed') || 'Passed'}
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600 }}>
-              <input
+            <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600 }}>
+              <input dir="auto"
                 type="radio"
                 name="outcome"
                 value="failed"
@@ -796,8 +796,8 @@ export default function AuditTakeSurvey() {
               />
               {t('auditFailed') || 'Failed'}
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600 }}>
-              <input
+            <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600 }}>
+              <input dir="auto"
                 type="radio"
                 name="outcome"
                 value="needs_follow_up"
@@ -810,8 +810,8 @@ export default function AuditTakeSurvey() {
         </div>
 
         <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-          <label className="form-label">{t('notes') || 'Notes'}</label>
-          <textarea
+          <label dir="auto" className="form-label">{t('notes') || 'Notes'}</label>
+          <textarea dir="auto"
             className="input-field"
             rows="4"
             maxLength="500"
@@ -823,10 +823,10 @@ export default function AuditTakeSurvey() {
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-          <button type="button" className="btn-primary" onClick={submitAuditResult} disabled={submittingAudit}>
+          <button dir="auto" type="button" className="btn-primary" onClick={submitAuditResult} disabled={submittingAudit}>
             {submittingAudit ? 'Submitting...' : t('submitAudit') || 'Submit Audit'}
           </button>
-          <button type="button" className="btn-secondary" onClick={() => setPhase('questions')}>
+          <button dir="auto" type="button" className="btn-secondary" onClick={() => setPhase('questions')}>
             {t('backToQuestions') || 'Back to Questions'}
           </button>
         </div>
@@ -837,7 +837,7 @@ export default function AuditTakeSurvey() {
   return (
     <div className="survey-layout">
       {/* Mobile Toggle */}
-      <button className="btn-secondary mobile-sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
+      <button dir="auto" className="btn-secondary mobile-sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
         <Menu size={20} />
       </button>
 
@@ -848,7 +848,7 @@ export default function AuditTakeSurvey() {
 
       {/* Sidebar */}
       <div className={`survey-sidebar ${sidebarOpen ? 'open' : ''}`} style={{ width: '300px' }}>
-        <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 700 }}>{t('sections') || 'Sections'}</h3>
+        <h3 dir="auto" style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 700 }}>{t('sections') || 'Sections'}</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {survey.sections && survey.sections.map((sec, sIdx) => {
             const questionsInSec = sec.questions || [];
@@ -881,11 +881,11 @@ export default function AuditTakeSurvey() {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0 }}>
                     <ArrowIcon size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={sec.title}>
+                    <span dir="auto" style={{ fontSize: '0.85rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={sec.title}>
                       {sec.title || `${t('section') || 'Section'} ${sIdx + 1}`}
                     </span>
                   </div>
-                  <span style={{ fontSize: '0.75rem', background: 'var(--primary-low)', color: 'var(--primary)', padding: '0.1rem 0.4rem', borderRadius: '10px', fontWeight: 'bold', flexShrink: 0 }}>
+                  <span dir="auto" style={{ fontSize: '0.75rem', background: 'var(--primary-low)', color: 'var(--primary)', padding: '0.1rem 0.4rem', borderRadius: '10px', fontWeight: 'bold', flexShrink: 0 }}>
                     {visibleQuestionsInSec.length}
                   </span>
                 </div>
@@ -939,11 +939,11 @@ export default function AuditTakeSurvey() {
             <div className="survey-progress-container" style={{ flex: 1, marginBottom: 0, marginRight: '1.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
                 {survey?.layoutMode === 'multi' ? (
-                  <span>{t('page') || 'Page'} {pageStats.X} {t('of') || 'of'} {pageStats.Y}</span>
+                  <span dir="auto">{t('page') || 'Page'} {pageStats.X} {t('of') || 'of'} {pageStats.Y}</span>
                 ) : (
-                  <span>Question {currentVisibleNumber} of {progressStats.Y}</span>
+                  <span dir="auto">Question {currentVisibleNumber} of {progressStats.Y}</span>
                 )}
-                <span>{progressStats.percentage}% completed</span>
+                <span dir="auto">{progressStats.percentage}% completed</span>
               </div>
               <div className="survey-progress-bar-bg">
                 <div className="survey-progress-bar-fill" style={{ width: `${progressStats.percentage}%` }}></div>
@@ -952,7 +952,7 @@ export default function AuditTakeSurvey() {
 
             {/* Live Mirror Indicator */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '0.4rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 700 }}>
-              <span className="status-dot active" style={{ background: 'var(--primary)', width: '8px', height: '8px' }}></span>
+              <span dir="auto" className="status-dot active" style={{ background: 'var(--primary)', width: '8px', height: '8px' }}></span>
               {t('shadowMirrorLive') || 'Mirrored Live'}
             </div>
           </div>
@@ -1019,26 +1019,26 @@ export default function AuditTakeSurvey() {
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
             {survey?.layoutMode === 'multi' ? (
               <>
-                <button className="btn-secondary" onClick={handlePreviousSection} disabled={currentSectionIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <button dir="auto" className="btn-secondary" onClick={handlePreviousSection} disabled={currentSectionIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <ChevronLeft size={18} /> Previous
                 </button>
-                <button className="btn-primary" onClick={proceedToNextSection} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <button dir="auto" className="btn-primary" onClick={proceedToNextSection} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   Next <ChevronRight size={18} />
                 </button>
               </>
             ) : (
               <>
-                <button className="btn-secondary" onClick={handlePrevious} disabled={currentIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <button dir="auto" className="btn-secondary" onClick={handlePrevious} disabled={currentIdx === 0} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <ChevronLeft size={18} /> Previous
                 </button>
-                <button className="btn-primary" onClick={() => handleNextQuestion()} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <button dir="auto" className="btn-primary" onClick={() => handleNextQuestion()} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   Next <ChevronRight size={18} />
                 </button>
               </>
             )}
           </div>
           <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-            <button className="btn-secondary" style={{ borderColor: 'var(--danger)', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.5rem' }} onClick={() => setShowEndCallConfirm(true)}>
+            <button dir="auto" className="btn-secondary" style={{ borderColor: 'var(--danger)', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.5rem' }} onClick={() => setShowEndCallConfirm(true)}>
               <PhoneOff size={18} /> End Call / Finalize Audit
             </button>
           </div>
@@ -1050,14 +1050,14 @@ export default function AuditTakeSurvey() {
             <div className="modal-content glass-card fade-enter-active" style={{ maxWidth: '400px' }}>
               <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem', color: 'var(--danger)' }}>
                 <AlertTriangle size={24} />
-                <h2 style={{ margin: 0 }}>{t('endAuditConfirmTitle') || 'End Survey Audit?'}</h2>
+                <h2 dir="auto" style={{ margin: 0 }}>{t('endAuditConfirmTitle') || 'End Survey Audit?'}</h2>
               </div>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+              <p dir="auto" style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
                 {t('endAuditConfirmDesc') || 'Are you sure you want to end this shadow audit session? You will be taken to the final quality evaluation form to submit.'}
               </p>
               <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-                <button className="btn-secondary" onClick={() => setShowEndCallConfirm(false)}>{t('stayInCall') || 'Stay in Call'}</button>
-                <button className="btn-primary" style={{ backgroundColor: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { setShowEndCallConfirm(false); goToInterviewStep(); }}>
+                <button dir="auto" className="btn-secondary" onClick={() => setShowEndCallConfirm(false)}>{t('stayInCall') || 'Stay in Call'}</button>
+                <button dir="auto" className="btn-primary" style={{ backgroundColor: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { setShowEndCallConfirm(false); goToInterviewStep(); }}>
                   {t('endAuditYes') || 'Yes, End Audit'}
                 </button>
               </div>

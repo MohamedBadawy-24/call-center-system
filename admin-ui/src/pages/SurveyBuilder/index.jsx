@@ -26,13 +26,13 @@ function SurveyBuilderContent() {
       
       {!isAdmin && (
          <div style={{ padding: '1rem', background: 'rgba(59, 130, 246, 0.05)', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.1)', color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-           <p style={{ margin: 0 }}><strong>Note:</strong> You are in Audit mode. Configuration is read-only.</p>
+           <p dir="auto" style={{ margin: 0 }}><strong>Note:</strong> You are in Audit mode. Configuration is read-only.</p>
          </div>
       )}
 
       {isAdmin && surveyState?.isActive && (
          <div style={{ padding: '1rem', background: 'rgba(245, 158, 11, 0.05)', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.2)', color: 'var(--warning)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-           <p style={{ margin: 0 }}><strong>Warning:</strong> This campaign is Active. You cannot modify its questions. End the campaign to edit the questionnaire.</p>
+           <p dir="auto" style={{ margin: 0 }}><strong>Warning:</strong> This campaign is Active. You cannot modify its questions. End the campaign to edit the questionnaire.</p>
          </div>
       )}
 

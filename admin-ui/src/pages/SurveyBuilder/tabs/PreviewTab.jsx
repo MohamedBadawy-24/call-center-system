@@ -126,10 +126,10 @@ export default function PreviewTab() {
 
     return (
       <div className="glass-card" style={{ padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-        <h3 style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+        <h3 dir="auto" style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
           {typeof q.category === 'string' ? q.category.toUpperCase() : t('question')}
         </h3>
-        <h2>{dynamicQuestionText}</h2>
+        <h2 dir="auto">{dynamicQuestionText}</h2>
 
         {q.script && (
           <div className="agent-script-box" style={{ marginTop: '0.5rem' }}>
@@ -142,7 +142,7 @@ export default function PreviewTab() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
             <div className="choice-grid" style={{ marginTop: 0 }}>
               {choices.map((c, i) => (
-                <button 
+                <button dir="auto" 
                   key={i} 
                   className={`choice-btn ${isSelected(c.text) ? 'active' : ''}`} 
                   onClick={() => q.type === 'multiple_choice' ? handleToggleChoice(c.text) : handleSetSingleChoice(c.text)}
@@ -167,7 +167,7 @@ export default function PreviewTab() {
                           const textVal = val.substring(6);
                           return (
                             <div key={idx} style={{ display: 'flex', gap: '0.5rem' }}>
-                              <input
+                              <input dir="auto"
                                 type="text"
                                 className="input-field"
                                 placeholder="Please specify..."
@@ -188,7 +188,7 @@ export default function PreviewTab() {
                                   setAnswers(prev => ({ ...prev, [qId]: newAnswers }));
                                 }}
                               />
-                              <button 
+                              <button dir="auto" 
                                 type="button" 
                                 className="btn-secondary" 
                                 style={{ padding: '0.5rem', color: '#ef4444' }} 
@@ -215,7 +215,7 @@ export default function PreviewTab() {
                         });
                       })()}
                     </div>
-                    <button 
+                    <button dir="auto" 
                       type="button" 
                       className="btn-secondary" 
                       style={{ alignSelf: 'flex-start', fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}
@@ -228,7 +228,7 @@ export default function PreviewTab() {
                     </button>
                   </div>
                 ) : (
-                  <input
+                  <input dir="auto"
                      type="text"
                      className="input-field"
                      placeholder="Please specify..."
@@ -245,7 +245,7 @@ export default function PreviewTab() {
 
         {q.type === 'text' && (
           <div className="form-group" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <input
+            <input dir="auto"
               type="text"
               className="input-field"
               placeholder={t('typeAnswer')}
@@ -262,21 +262,21 @@ export default function PreviewTab() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%', minHeight: '80vh' }}>
       <div className="glass-card" style={{ display: 'flex', justifyContent: 'center', gap: '1rem', padding: '0.75rem' }}>
-        <button 
+        <button dir="auto" 
           className={`btn-secondary ${device === 'desktop' ? 'active' : ''}`}
           onClick={() => setDevice('desktop')}
           style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', background: device === 'desktop' ? 'var(--primary)' : '', color: device === 'desktop' ? 'white' : '' }}
         >
           <Monitor size={18} /> Desktop
         </button>
-        <button 
+        <button dir="auto" 
           className={`btn-secondary ${device === 'tablet' ? 'active' : ''}`}
           onClick={() => setDevice('tablet')}
           style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', background: device === 'tablet' ? 'var(--primary)' : '', color: device === 'tablet' ? 'white' : '' }}
         >
           <Tablet size={18} /> Tablet
         </button>
-        <button 
+        <button dir="auto" 
           className={`btn-secondary ${device === 'mobile' ? 'active' : ''}`}
           onClick={() => setDevice('mobile')}
           style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', background: device === 'mobile' ? 'var(--primary)' : '', color: device === 'mobile' ? 'white' : '' }}
@@ -310,14 +310,14 @@ export default function PreviewTab() {
           <div className="survey-layout" style={{ height: '100%' }}>
             {/* Sections Mini-Map Sidebar */}
             <div className="survey-sidebar open" style={{ borderRight: '1px solid var(--border-color)' }}>
-              <h3 style={{ marginBottom: '1rem', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
+              <h3 dir="auto" style={{ marginBottom: '1rem', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
                 {t('sections') || 'Sections'}
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {(surveyState.sections || []).map((sec, sIdx) => {
                   const isAnswered = isSectionAnswered(sec);
                   return (
-                    <button
+                    <button dir="auto"
                       key={sIdx}
                       type="button"
                       className="btn-secondary"
@@ -340,11 +340,11 @@ export default function PreviewTab() {
                         cursor: 'pointer'
                       }}
                     >
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '0.5rem' }}>
+                      <span dir="auto" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '0.5rem' }}>
                         {sec.title || `${t('section') || 'Section'} ${sIdx + 1}`}
                       </span>
                       {isAnswered && (
-                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--success)', flexShrink: 0 }} />
+                        <span dir="auto" style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--success)', flexShrink: 0 }} />
                       )}
                     </button>
                   );

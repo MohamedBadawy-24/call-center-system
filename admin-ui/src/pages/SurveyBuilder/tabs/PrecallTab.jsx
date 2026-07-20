@@ -142,9 +142,9 @@ export default function PrecallTab() {
   return (
     <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
-        <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Outbound Pre-Call Checklist</h2>
+        <h2 dir="auto" style={{ margin: 0, fontSize: '1.25rem' }}>Outbound Pre-Call Checklist</h2>
         {isAdmin && (
-          <button
+          <button dir="auto"
             type="button"
             className={surveyState.customizeOutbound ? 'btn-primary' : 'btn-secondary'}
             onClick={() => updateState(prev => ({ 
@@ -162,7 +162,7 @@ export default function PrecallTab() {
         <>
           {isAdmin && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.25rem' }}>
-              <button type="button" className="btn-secondary" onClick={() => setTemplatePickerOpen(true)}>
+              <button dir="auto" type="button" className="btn-secondary" onClick={() => setTemplatePickerOpen(true)}>
                 Reset to older template
               </button>
             </div>
@@ -171,30 +171,30 @@ export default function PrecallTab() {
           {templatePickerOpen && (
             <div className="modal-overlay" onClick={() => setTemplatePickerOpen(false)}>
               <div className="modal-content glass-card" onClick={(e) => e.stopPropagation()}>
-                <h3 style={{ marginTop: 0 }}>{t('chooseOlderTemplate') || 'Choose an older template'}</h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                <h3 dir="auto" style={{ marginTop: 0 }}>{t('chooseOlderTemplate') || 'Choose an older template'}</h3>
+                <p dir="auto" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
                   {t('chooseOlderTemplateDesc') || 'Pick a starting layout. You can still edit every field afterward.'}
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {OUTBOUND_TEMPLATE_PRESETS.map((p) => (
-                    <button key={p.id} type="button" className="btn-secondary" style={{ justifyContent: 'flex-start', textAlign: 'left' }} onClick={() => applyTemplatePreset(p.factory)}>
+                    <button dir="auto" key={p.id} type="button" className="btn-secondary" style={{ justifyContent: 'flex-start', textAlign: 'left' }} onClick={() => applyTemplatePreset(p.factory)}>
                       {p.name}
                     </button>
                   ))}
                 </div>
-                <button type="button" className="btn-primary" style={{ marginTop: '1rem', width: '100%' }} onClick={() => setTemplatePickerOpen(false)}>
+                <button dir="auto" type="button" className="btn-primary" style={{ marginTop: '1rem', width: '100%' }} onClick={() => setTemplatePickerOpen(false)}>
                   {t('cancelTemplateSelection') || 'Cancel Template Selection'}
                 </button>
               </div>
             </div>
           )}
 
-          <h3 className="form-label" style={{ marginTop: 0 }}>Page copy</h3>
+          <h3 dir="auto" className="form-label" style={{ marginTop: 0 }}>Page copy</h3>
           <div style={{ display: 'grid', gap: '1rem', marginBottom: '1.5rem' }}>
             {META_KEYS.map(({ key, label }) => (
               <div key={key}>
-                <label className="form-label" style={{ marginBottom: '0.35rem', display: 'block' }}>{label}</label>
-                <textarea
+                <label dir="auto" className="form-label" style={{ marginBottom: '0.35rem', display: 'block' }}>{label}</label>
+                <textarea dir="auto"
                   className="input-field"
                   rows={key === 'script' ? 4 : 2}
                   value={outboundConfig.meta[key] ?? ''}
@@ -205,8 +205,8 @@ export default function PrecallTab() {
             ))}
           </div>
 
-          <h3 className="form-label">Section order</h3>
-          <p style={{ margin: '0 0 1rem', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
+          <h3 dir="auto" className="form-label">Section order</h3>
+          <p dir="auto" style={{ margin: '0 0 1rem', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
             Drag or use arrows to choose which group of questions appears first on the agent's page.
           </p>
           <div style={{ display: 'grid', gap: '0.75rem', marginBottom: '1.5rem' }}>
@@ -214,11 +214,11 @@ export default function PrecallTab() {
               const label = sec === 'agent' ? 'Researcher / respondent' : sec === 'call' ? 'Call logistics' : 'Phone distribution';
               return (
                 <div key={sec} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--input-bg)' }}>
-                  <span style={{ fontWeight: 600, flex: 1 }}>{label}</span>
+                  <span dir="auto" style={{ fontWeight: 600, flex: 1 }}>{label}</span>
                   {isAdmin && (
                     <div style={{ display: 'flex', gap: '0.35rem' }}>
-                      <button type="button" className="btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }} onClick={() => moveSection(sIdx, -1)} disabled={sIdx === 0}>↑</button>
-                      <button type="button" className="btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }} onClick={() => moveSection(sIdx, 1)} disabled={sIdx === (outboundConfig.sectionOrder || ['agent', 'call', 'phone']).length - 1}>↓</button>
+                      <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }} onClick={() => moveSection(sIdx, -1)} disabled={sIdx === 0}>↑</button>
+                      <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }} onClick={() => moveSection(sIdx, 1)} disabled={sIdx === (outboundConfig.sectionOrder || ['agent', 'call', 'phone']).length - 1}>↓</button>
                     </div>
                   )}
                 </div>
@@ -226,24 +226,24 @@ export default function PrecallTab() {
             })}
           </div>
 
-          <h3 className="form-label">Questions (order = agent form order)</h3>
+          <h3 dir="auto" className="form-label">Questions (order = agent form order)</h3>
           <div style={{ display: 'grid', gap: '1.25rem' }}>
             {outboundConfig.fields.map((field, fIdx) => (
               <div key={`${field.id}-${fIdx}`} style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', background: 'var(--input-bg)' }}>
                 {isAdmin && (
                   <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.75rem' }}>
-                    <button type="button" className="btn-secondary" style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }} onClick={() => moveField(fIdx, -1)} disabled={fIdx === 0}>↑</button>
-                    <button type="button" className="btn-secondary" style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }} onClick={() => moveField(fIdx, 1)} disabled={fIdx === outboundConfig.fields.length - 1}>↓</button>
-                    <button type="button" className="btn-secondary" style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }} onClick={() => removeField(fIdx)}>Remove</button>
+                    <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }} onClick={() => moveField(fIdx, -1)} disabled={fIdx === 0}>↑</button>
+                    <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }} onClick={() => moveField(fIdx, 1)} disabled={fIdx === outboundConfig.fields.length - 1}>↓</button>
+                    <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }} onClick={() => removeField(fIdx)}>Remove</button>
                   </div>
                 )}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
                   <div>
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Field ID (stable)</label>
-                    <input className="input-field" value={field.id} onChange={(e) => updateField(fIdx, { id: e.target.value.replace(/\s+/g, '_') })} readOnly={!isAdmin} />
+                    <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>Field ID (stable)</label>
+                    <input dir="auto" className="input-field" value={field.id} onChange={(e) => updateField(fIdx, { id: e.target.value.replace(/\s+/g, '_') })} readOnly={!isAdmin} />
                   </div>
                   <div>
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Column</label>
+                    <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>Column</label>
                     <select className="input-field" value={field.section} onChange={(e) => updateField(fIdx, { section: e.target.value })} disabled={!isAdmin}>
                       <option value="agent">Researcher / respondent</option>
                       <option value="call">Call logistics</option>
@@ -251,30 +251,30 @@ export default function PrecallTab() {
                     </select>
                   </div>
                   <div>
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Answer type</label>
+                    <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>Answer type</label>
                     <select className="input-field" value={field.type} onChange={(e) => setFieldType(fIdx, e.target.value)} disabled={!isAdmin}>
                       {OUTBOUND_FIELD_TYPES.map((opt) => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </select>
                   </div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, marginTop: '1.5rem' }}>
-                    <input type="checkbox" checked={!!field.required} onChange={(e) => updateField(fIdx, { required: e.target.checked })} disabled={!isAdmin} />
+                  <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, marginTop: '1.5rem' }}>
+                    <input dir="auto" type="checkbox" checked={!!field.required} onChange={(e) => updateField(fIdx, { required: e.target.checked })} disabled={!isAdmin} />
                     Required to continue
                   </label>
                 </div>
-                <label className="form-label" style={{ marginTop: '0.75rem', display: 'block' }}>Question / label</label>
-                <input className="input-field" value={field.label} onChange={(e) => updateField(fIdx, { label: e.target.value })} readOnly={!isAdmin} />
+                <label dir="auto" className="form-label" style={{ marginTop: '0.75rem', display: 'block' }}>Question / label</label>
+                <input dir="auto" className="input-field" value={field.label} onChange={(e) => updateField(fIdx, { label: e.target.value })} readOnly={!isAdmin} />
                 {field.type === 'text' && (
                   <>
-                    <label className="form-label" style={{ marginTop: '0.5rem', display: 'block' }}>Placeholder (optional)</label>
-                    <input className="input-field" value={field.placeholder || ''} onChange={(e) => updateField(fIdx, { placeholder: e.target.value })} readOnly={!isAdmin} />
+                    <label dir="auto" className="form-label" style={{ marginTop: '0.5rem', display: 'block' }}>Placeholder (optional)</label>
+                    <input dir="auto" className="input-field" value={field.placeholder || ''} onChange={(e) => updateField(fIdx, { placeholder: e.target.value })} readOnly={!isAdmin} />
                   </>
                 )}
                 {field.type === 'number' && (
                   <>
-                    <label className="form-label" style={{ marginTop: '0.5rem', display: 'block' }}>Minimum (optional)</label>
-                    <input className="input-field" type="number" value={field.min != null ? field.min : ''} onChange={(e) => updateField(fIdx, { min: e.target.value === '' ? undefined : Number(e.target.value) })} readOnly={!isAdmin} />
+                    <label dir="auto" className="form-label" style={{ marginTop: '0.5rem', display: 'block' }}>Minimum (optional)</label>
+                    <input dir="auto" className="input-field" type="number" value={field.min != null ? field.min : ''} onChange={(e) => updateField(fIdx, { min: e.target.value === '' ? undefined : Number(e.target.value) })} readOnly={!isAdmin} />
                   </>
                 )}
                 {(field.type === 'segment' || field.type === 'select') && (
@@ -282,14 +282,14 @@ export default function PrecallTab() {
                     <div className="form-label" style={{ marginBottom: '0.5rem' }}>Options (value + label)</div>
                     {(field.options || []).map((opt, oIdx) => (
                       <div key={oIdx} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                        <input className="input-field" placeholder="value" value={opt.value} onChange={(e) => updateOption(fIdx, oIdx, 'value', e.target.value)} style={{ maxWidth: '140px' }} readOnly={!isAdmin} />
-                        <input className="input-field" placeholder="label" value={opt.label} onChange={(e) => updateOption(fIdx, oIdx, 'label', e.target.value)} readOnly={!isAdmin} />
-                        {isAdmin && <button type="button" className="btn-secondary" onClick={() => removeOption(fIdx, oIdx)}>×</button>}
+                        <input dir="auto" className="input-field" placeholder="value" value={opt.value} onChange={(e) => updateOption(fIdx, oIdx, 'value', e.target.value)} style={{ maxWidth: '140px' }} readOnly={!isAdmin} />
+                        <input dir="auto" className="input-field" placeholder="label" value={opt.label} onChange={(e) => updateOption(fIdx, oIdx, 'label', e.target.value)} readOnly={!isAdmin} />
+                        {isAdmin && <button dir="auto" type="button" className="btn-secondary" onClick={() => removeOption(fIdx, oIdx)}>×</button>}
                       </div>
                     ))}
-                    {isAdmin && <button type="button" className="btn-secondary" style={{ marginTop: '0.25rem' }} onClick={() => addOption(fIdx)}>+ Add option</button>}
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, marginTop: '0.75rem' }}>
-                      <input type="checkbox" checked={!!field.allowOther} onChange={(e) => updateField(fIdx, { allowOther: e.target.checked })} disabled={!isAdmin} />
+                    {isAdmin && <button dir="auto" type="button" className="btn-secondary" style={{ marginTop: '0.25rem' }} onClick={() => addOption(fIdx)}>+ Add option</button>}
+                    <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, marginTop: '0.75rem' }}>
+                      <input dir="auto" type="checkbox" checked={!!field.allowOther} onChange={(e) => updateField(fIdx, { allowOther: e.target.checked })} disabled={!isAdmin} />
                       Allow Other answer / السماح بإجابة أخرى
                     </label>
                   </div>
@@ -308,7 +308,7 @@ export default function PrecallTab() {
               </div>
             ))}
           </div>
-          {isAdmin && <button type="button" className="btn-secondary" style={{ width: '100%', marginTop: '1rem', borderStyle: 'dashed' }} onClick={addField}>
+          {isAdmin && <button dir="auto" type="button" className="btn-secondary" style={{ width: '100%', marginTop: '1rem', borderStyle: 'dashed' }} onClick={addField}>
             + Add pre-call field
           </button>}
         </>

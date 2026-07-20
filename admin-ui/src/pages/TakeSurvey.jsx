@@ -1517,6 +1517,7 @@ export default function TakeSurvey({ mockSurvey }) {
 
     return (
       <div 
+        key={qId}
         id={`question-card-${qId}`} 
         className="glass-card fade-enter-active" 
         style={{ 
@@ -1711,11 +1712,11 @@ export default function TakeSurvey({ mockSurvey }) {
 
         {q.type === 'multi_input' && (
           <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {(q.subInputs || []).map(sub => {
+            {(q.subInputs || []).map((sub, subIdx) => {
               const ansObj = typeof answers[qId] === 'object' && answers[qId] !== null ? answers[qId] : {};
               const val = ansObj[sub.id] || '';
               return (
-                <div key={sub.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <div key={sub.id || `sub-${subIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                   <label dir="auto" className="form-label" style={{ display: 'flex', gap: '0.25rem' }}>
                     {sub.label}
                     {sub.required && <span dir="auto" style={{ color: 'var(--danger)' }}>*</span>}
@@ -2041,11 +2042,7 @@ export default function TakeSurvey({ mockSurvey }) {
                                     return val === undefined || val === null || val === '';
                                   });
                                 }
-                                return (
-                                  <div key={gq.questionId || String(gq._id)} id={`question-card-${gq.questionId || String(gq._id)}`}>
-                                    {renderQuestion(gq, currentSectionIdx, gi, isLocked)}
-                                  </div>
-                                );
+                                return renderQuestion(gq, currentSectionIdx, gi, isLocked);
                               })}
                             </div>
                           </div>
@@ -2053,11 +2050,7 @@ export default function TakeSurvey({ mockSurvey }) {
                       } else {
                         const qId = q.questionId || String(q._id);
                         if (visibleQuestions[qId] === false) return null;
-                        return (
-                          <div key={qId} id={`question-card-${qId}`}>
-                            {renderQuestion(q, currentSectionIdx, qIdx)}
-                          </div>
-                        );
+                        return renderQuestion(q, currentSectionIdx, qIdx);
                       }
                     })}
                   </div>

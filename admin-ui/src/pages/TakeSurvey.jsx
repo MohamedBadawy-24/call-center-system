@@ -1722,7 +1722,7 @@ export default function TakeSurvey({ mockSurvey }) {
                   </label>
                   {sub.inputType === 'dropdown' ? (
                     <select
-                      className="input-field"
+                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
                       value={val}
                       onChange={e => handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value })}
                     >
@@ -1734,7 +1734,7 @@ export default function TakeSurvey({ mockSurvey }) {
                   ) : sub.inputType === 'number' ? (
                     <input
                       type="number"
-                      className="input-field"
+                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
                       value={val}
                       onChange={e => {
                         const raw = e.target.value;
@@ -1745,14 +1745,14 @@ export default function TakeSurvey({ mockSurvey }) {
                   ) : sub.inputType === 'date' ? (
                     <input
                       type="date"
-                      className="input-field"
+                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
                       value={val}
                       onChange={e => handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value })}
                     />
                   ) : (
                     <input
                       type="text"
-                      className="input-field"
+                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
                       value={val}
                       onChange={e => handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value })}
                     />

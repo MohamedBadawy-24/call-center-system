@@ -1703,10 +1703,6 @@ export default function TakeSurvey({ mockSurvey }) {
   const handleAnswerChange = (questionId, value) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
     markInteracted(questionId);
-    const flatIdx = questions.findIndex(q => (q.id || q.questionId || String(q._id)) === questionId);
-    if (flatIdx !== -1) {
-      setCurrentIdx(flatIdx);
-    }
     if (fieldErrors[questionId]) {
       setFieldErrors(prev => {
         const next = { ...prev };

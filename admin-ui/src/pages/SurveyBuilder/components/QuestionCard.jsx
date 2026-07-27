@@ -132,11 +132,12 @@ export default function QuestionCard({
             </div>
             <div style={{ flex: 1, minWidth: '150px' }}>
               <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>Question Type</label>
-              <select className="input-field" value={question.type} onChange={e => updateQ({ type: e.target.value, choices: e.target.value === 'text' || e.target.value === 'number' ? [] : question.choices })} disabled={!isAdmin}>
+              <select className="input-field" value={question.type} onChange={e => updateQ({ type: e.target.value, choices: ['text', 'number', 'number_ratio'].includes(e.target.value) ? [] : question.choices })} disabled={!isAdmin}>
                 <option value="text">Text (Open Answer)</option>
                 <option value="single_choice">Single Choice</option>
                 <option value="multiple_choice">Multiple Choice</option>
                 <option value="number">Number</option>
+                <option value="number_ratio">Number (Ratio/Percentage)</option>
                 <option value="info">Info / Notice (No Input)</option>
                 <option value="multi_input">Multiple Inputs (Composite)</option>
               </select>
@@ -255,6 +256,38 @@ export default function QuestionCard({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {question.type === 'number' && (
+            <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <label className="form-label" style={{ marginBottom: '0.5rem', display: 'block' }}>Digit Length Constraints (Optional)</label>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <div style={{ flex: 1 }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Min Digits</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    min="1"
+                    value={question.minLength || ''}
+                    onChange={e => updateQ({ minLength: e.target.value ? Number(e.target.value) : undefined })}
+                    readOnly={!isAdmin}
+                    placeholder="e.g. 10"
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Max Digits</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    min="1"
+                    value={question.maxLength || ''}
+                    onChange={e => updateQ({ maxLength: e.target.value ? Number(e.target.value) : undefined })}
+                    readOnly={!isAdmin}
+                    placeholder="e.g. 10"
+                  />
+                </div>
+              </div>
             </div>
           )}
 

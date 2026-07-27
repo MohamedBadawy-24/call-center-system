@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useContext, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { AuthContext } from '../context/AuthContext';
@@ -51,7 +51,7 @@ const parseDynamicText = (text, answers) => {
     return parsed;
   };
 
-const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers, isRtl, t, toggleChoiceForQuestion, setSingleChoiceForQuestion, handleAnswerChange, otherValues, setOtherValues, markInteracted, fieldErrors, setFieldErrors, scrollToNextInGroup, survey, handleNextQuestion, showInteractionError }) => {
+const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, questions, answers, isRtl, t, toggleChoiceForQuestion, setSingleChoiceForQuestion, handleAnswerChange, otherValues, setOtherValues, markInteracted, fieldErrors, setFieldErrors, scrollToNextInGroup, survey, handleNextQuestion, showInteractionError, activeInputIdRef }) => {
     const qId = q.id || q.questionId || String(q._id);
     const flatIdx = questions.findIndex(qst => (qst.id || qst.questionId || String(qst._id)) === qId);
     
@@ -82,10 +82,10 @@ const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers,
           ...(isLocked ? { opacity: 0.5, pointerEvents: 'none' } : {})
         }}
       >
-        <h3 dir="auto" style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+        <h3 style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
           {typeof q.category === 'string' ? q.category.toUpperCase() : t('question')} {flatIdx + 1}
         </h3>
-        <h2 dir="auto">{dynamicQuestionText}</h2>
+        <h2>{dynamicQuestionText}</h2>
 
         {q.script && (
           <div className="agent-script-box" style={{ marginTop: '0.5rem' }}>
@@ -98,7 +98,7 @@ const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers,
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
             <div className="choice-grid" style={{ marginTop: 0 }}>
               {choices.map((c, i) => (
-                <button dir="auto" 
+                <button 
                   key={i} 
                   className={`choice-btn ${isSelected(c.text) ? 'active' : ''}`} 
                   onClick={() => q.type === 'multiple_choice' ? toggleChoiceForQuestion(q, c.text) : setSingleChoiceForQuestion(q, c.text, c.logic)}
@@ -121,14 +121,17 @@ const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers,
                         if (others.length === 0) others.push('other:');
                         return others.map((val, idx) => {
                           const textVal = val.substring(6);
+                          const otherId = `input-${qId}-other-${idx}`;
                           return (
                             <div key={idx} style={{ display: 'flex', gap: '0.5rem' }}>
                               <input dir="auto"
+                                id={otherId}
                                 type="text"
                                 className="input-field"
                                 placeholder="Please specify..."
                                 value={textVal}
                                 onChange={(e) => {
+                                  if (activeInputIdRef) activeInputIdRef.current = e.target.id;
                                   const newText = e.target.value;
                                   const newAnswers = [...arr];
                                   let otherCounter = 0;
@@ -144,7 +147,7 @@ const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers,
                                   handleAnswerChange(qId, newAnswers);
                                 }}
                               />
-                              <button dir="auto" 
+                              <button 
                                 type="button" 
                                 className="btn-secondary" 
                                 style={{ padding: '0.5rem', color: '#ef4444' }} 
@@ -171,7 +174,7 @@ const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers,
                         });
                       })()}
                     </div>
-                    <button dir="auto" 
+                    <button 
                       type="button" 
                       className="btn-secondary" 
                       style={{ alignSelf: 'flex-start', fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}
@@ -185,11 +188,13 @@ const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers,
                   </div>
                 ) : (
                   <input dir="auto"
+                    id={`input-${qId}-other`}
                     type="text"
                     className="input-field"
                     placeholder="Please specify..."
                     value={otherValues[qId] || ''}
                     onChange={(e) => {
+                      if (activeInputIdRef) activeInputIdRef.current = e.target.id;
                       setOtherValues(prev => ({ ...prev, [qId]: e.target.value }));
                       markInteracted(qId);
                       if (fieldErrors[qId]) {
@@ -210,11 +215,15 @@ const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers,
         {q.type === 'text' && (
           <div className="form-group" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <input dir="auto"
+              id={`input-${qId}`}
               type="text"
               className="input-field"
               placeholder={t('typeAnswer')}
               value={answers[qId] || ''}
-              onChange={(e) => handleAnswerChange(qId, e.target.value)}
+              onChange={(e) => {
+                if (activeInputIdRef) activeInputIdRef.current = e.target.id;
+                handleAnswerChange(qId, e.target.value);
+              }}
               style={{ flex: 1 }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -230,17 +239,18 @@ const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers,
           </div>
         )}
 
-        {q.type === 'number' && (
+        {(q.type === 'number' || q.type === 'number_ratio') && (
           <div className="form-group" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <input dir="auto"
+              id={`input-${qId}`}
               type="number"
               inputMode="numeric"
               className="input-field"
               placeholder={t('typeNumber') || t('typeAnswer')}
               value={answers[qId] ?? ''}
               onChange={(e) => {
+                if (activeInputIdRef) activeInputIdRef.current = e.target.id;
                 const raw = e.target.value;
-                // Allow only digits, optional leading minus, and decimal point
                 const cleaned = raw.replace(/[^0-9.\-]/g, '');
                 handleAnswerChange(qId, cleaned);
               }}
@@ -254,7 +264,6 @@ const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers,
                   }
                   return;
                 }
-                // Block non-numeric keys except navigation/control keys
                 const allowed = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', '.', '-'];
                 if (!allowed.includes(e.key) && !/^[0-9]$/.test(e.key)) {
                   e.preventDefault();
@@ -262,6 +271,9 @@ const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers,
               }}
               style={{ flex: 1 }}
             />
+            {q.type === 'number_ratio' && (
+              <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-secondary)' }}>%</span>
+            )}
           </div>
         )}
 
@@ -270,17 +282,22 @@ const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers,
             {(q.subInputs || []).map((sub, subIdx) => {
               const ansObj = typeof answers[qId] === 'object' && answers[qId] !== null ? answers[qId] : {};
               const val = ansObj[sub.id] ?? '';
+              const subInputId = `input-${qId}-${sub.id}`;
               return (
                 <div key={sub.id || `sub-${subIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                  <label dir="auto" className="form-label" style={{ display: 'flex', gap: '0.25rem' }}>
+                  <label className="form-label" style={{ display: 'flex', gap: '0.25rem' }}>
                     {sub.label}
-                    {sub.required && <span dir="auto" style={{ color: 'var(--danger)' }}>*</span>}
+                    {sub.required && <span style={{ color: 'var(--danger)' }}>*</span>}
                   </label>
                   {sub.inputType === 'dropdown' ? (
                     <select
+                      id={subInputId}
                       className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
                       value={val}
-                      onChange={e => handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value })}
+                      onChange={e => {
+                        if (activeInputIdRef) activeInputIdRef.current = e.target.id;
+                        handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value });
+                      }}
                     >
                       <option value="">-- Select --</option>
                       {(sub.options || []).map((opt, i) => (
@@ -289,10 +306,12 @@ const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers,
                     </select>
                   ) : sub.inputType === 'number' ? (
                     <input dir="auto"
+                      id={subInputId}
                       type="number"
                       className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
                       value={val}
                       onChange={e => {
+                        if (activeInputIdRef) activeInputIdRef.current = e.target.id;
                         const raw = e.target.value;
                         const cleaned = raw.replace(/[^0-9.\-]/g, '');
                         handleAnswerChange(qId, { ...ansObj, [sub.id]: cleaned });
@@ -300,17 +319,25 @@ const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers,
                     />
                   ) : sub.inputType === 'date' ? (
                     <input dir="auto"
+                      id={subInputId}
                       type="date"
                       className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
                       value={val}
-                      onChange={e => handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value })}
+                      onChange={e => {
+                        if (activeInputIdRef) activeInputIdRef.current = e.target.id;
+                        handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value });
+                      }}
                     />
                   ) : (
                     <input dir="auto"
+                      id={subInputId}
                       type="text"
                       className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
                       value={val}
-                      onChange={e => handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value })}
+                      onChange={e => {
+                        if (activeInputIdRef) activeInputIdRef.current = e.target.id;
+                        handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value });
+                      }}
                     />
                   )}
                 </div>
@@ -326,13 +353,26 @@ const QuestionRenderer = ({ q, sIdx, qIdx, isLocked = false, questions, answers,
         )}
 
         {showInteractionError && (
-          <p dir="auto" className="field-error-text">
+          <p className="field-error-text">
             {t('questionInteractionRequired')}
           </p>
         )}
       </div>
     );
-  };
+  }, (prevProps, nextProps) => {
+    const prevQId = prevProps.q.id || prevProps.q.questionId || String(prevProps.q._id);
+    const nextQId = nextProps.q.id || nextProps.q.questionId || String(nextProps.q._id);
+
+    return (
+      prevQId === nextQId &&
+      prevProps.answers[prevQId] === nextProps.answers[nextQId] &&
+      prevProps.fieldErrors[prevQId] === nextProps.fieldErrors[nextQId] &&
+      prevProps.otherValues[prevQId] === nextProps.otherValues[nextQId] &&
+      prevProps.isLocked === nextProps.isLocked &&
+      prevProps.isRtl === nextProps.isRtl &&
+      prevProps.showInteractionError === nextProps.showInteractionError
+    );
+  });
 
 export default function TakeSurvey({ mockSurvey }) {
   const { id } = useParams();
@@ -360,7 +400,16 @@ export default function TakeSurvey({ mockSurvey }) {
   const [lastSaved, setLastSaved] = useState(null);
   const [defaultOpenSectionIdx, setDefaultOpenSectionIdx] = useState(0);
   const [openSections, setOpenSections] = useState({});
-  const [maxReachedIdx, setMaxReachedIdx] = useState(0);
+  const activeInputIdRef = useRef(null);
+
+  useLayoutEffect(() => {
+    if (activeInputIdRef.current) {
+      const el = document.getElementById(activeInputIdRef.current);
+      if (el && document.activeElement !== el) {
+        el.focus();
+      }
+    }
+  });
 
   // ─── Hooks must be above ALL early returns (Rules of Hooks) ──────────────
   const visibleQuestions = useMemo(() => {
@@ -1063,6 +1112,13 @@ export default function TakeSurvey({ mockSurvey }) {
       }
     }
 
+    // Number digit constraints check
+    if (q.type === 'number' && val !== undefined && val !== null && val !== '') {
+      const digitCount = String(val).replace(/[^0-9]/g, '').length;
+      if (q.minLength && digitCount < q.minLength) return `Must have at least ${q.minLength} digits`;
+      if (q.maxLength && digitCount > q.maxLength) return `Must have at most ${q.maxLength} digits`;
+    }
+
     if (q.crossValidation && q.crossValidation.ruleType === 'sum_equals') {
       const targetIds = q.crossValidation.targetQuestionIds || (q.crossValidation.targetQuestionId ? [q.crossValidation.targetQuestionId] : []);
       if (targetIds.length > 0) {
@@ -1087,8 +1143,16 @@ export default function TakeSurvey({ mockSurvey }) {
           } else {
             sumVal = parseFloat(val) || 0;
           }
-          if (sumVal !== expected) {
-            return q.crossValidation.errorMessage || `The sum must equal ${expected}`;
+
+          if (q.type === 'number_ratio') {
+            const derivedSum = (sumVal / 100) * expected;
+            if (derivedSum !== expected) {
+              return q.crossValidation.errorMessage || `Total percentage must equal 100% (Derived total: ${derivedSum}, Target: ${expected})`;
+            }
+          } else {
+            if (sumVal !== expected) {
+              return q.crossValidation.errorMessage || `The sum must equal ${expected}`;
+            }
           }
         }
       }
@@ -1701,6 +1765,7 @@ export default function TakeSurvey({ mockSurvey }) {
   };
 
   const handleAnswerChange = (questionId, value) => {
+    activeInputIdRef.current = document.activeElement?.id;
     setAnswers(prev => ({ ...prev, [questionId]: value }));
     markInteracted(questionId);
     if (fieldErrors[questionId]) {
@@ -1781,7 +1846,7 @@ export default function TakeSurvey({ mockSurvey }) {
 
   return (
     <DebugErrorBoundary>
-      <div className="survey-layout">
+      <div className="survey-layout" dir={isRtl ? 'rtl' : 'ltr'}>
         {/* Sidebar Overlay */}
         {sidebarVisible && (
           <div className="survey-sidebar-overlay desktop-hidden" onClick={() => setSidebarVisible(false)} />
@@ -2042,7 +2107,7 @@ export default function TakeSurvey({ mockSurvey }) {
                                     return val === undefined || val === null || val === '';
                                   });
                                 }
-                                return <QuestionRenderer key={gq.id || gq.questionId || String(gq._id)} q={gq} sIdx={currentSectionIdx} qIdx={gi} isLocked={isLocked} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
+                                return <QuestionRenderer key={gq.id || gq.questionId || String(gq._id)} q={gq} sIdx={currentSectionIdx} qIdx={gi} isLocked={isLocked} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} activeInputIdRef={activeInputIdRef} />;
                               })}
                             </div>
                           </div>
@@ -2050,7 +2115,7 @@ export default function TakeSurvey({ mockSurvey }) {
                       } else {
                         const qId = q.id || q.questionId || String(q._id);
                         if (visibleQuestions[qId] === false) return null;
-                        return <QuestionRenderer key={q.id || q.questionId || String(q._id)} q={q} sIdx={currentSectionIdx} qIdx={qIdx} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
+                        return <QuestionRenderer key={q.id || q.questionId || String(q._id)} q={q} sIdx={currentSectionIdx} qIdx={qIdx} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} activeInputIdRef={activeInputIdRef} />;
                       }
                     })}
                   </div>
@@ -2117,7 +2182,7 @@ export default function TakeSurvey({ mockSurvey }) {
                                   return val === undefined || val === null || val === '';
                                 });
                               }
-                              return <QuestionRenderer key={gq.id || gq.questionId || String(gq._id)} q={gq} sIdx={gqSIdx >= 0 ? gqSIdx : 0} qIdx={gi} isLocked={isLocked} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />;
+                              return <QuestionRenderer key={gq.id || gq.questionId || String(gq._id)} q={gq} sIdx={gqSIdx >= 0 ? gqSIdx : 0} qIdx={gi} isLocked={isLocked} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} activeInputIdRef={activeInputIdRef} />;
                             })}
                           </div>
                         </div>
@@ -2132,7 +2197,7 @@ export default function TakeSurvey({ mockSurvey }) {
                           {sectionTitle}
                         </div>
                       )}
-                      <QuestionRenderer key={currentQ.id || currentQ.questionId || String(currentQ._id)} q={currentQ} sIdx={sIdx} qIdx={qIdx} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} />
+                      <QuestionRenderer key={currentQ.id || currentQ.questionId || String(currentQ._id)} q={currentQ} sIdx={sIdx} qIdx={qIdx} questions={questions} answers={answers} isRtl={isRtl} t={t} toggleChoiceForQuestion={toggleChoiceForQuestion} setSingleChoiceForQuestion={setSingleChoiceForQuestion} handleAnswerChange={handleAnswerChange} otherValues={otherValues} setOtherValues={setOtherValues} markInteracted={markInteracted} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} scrollToNextInGroup={scrollToNextInGroup} survey={survey} handleNextQuestion={handleNextQuestion} showInteractionError={showInteractionError} activeInputIdRef={activeInputIdRef} />
                     </div>
                   );
                 })()

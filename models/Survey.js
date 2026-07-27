@@ -38,6 +38,8 @@ const QuestionSchema = new mongoose.Schema({
   allowMultipleOther: { type: Boolean, default: false },
   minSelections: { type: Number },
   maxSelections: { type: Number },
+  minLength: { type: Number },
+  maxLength: { type: Number },
   visibility: { type: mongoose.Schema.Types.Mixed, default: undefined }, // Advanced nested logic
   
   // Cross-Question Validation (e.g. Sum of inputs must equal another question's answer)

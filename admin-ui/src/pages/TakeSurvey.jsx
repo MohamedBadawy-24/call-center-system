@@ -400,6 +400,7 @@ export default function TakeSurvey({ mockSurvey }) {
   const [lastSaved, setLastSaved] = useState(null);
   const [defaultOpenSectionIdx, setDefaultOpenSectionIdx] = useState(0);
   const [openSections, setOpenSections] = useState({});
+  const [maxReachedIdx, setMaxReachedIdx] = useState(0);
   const activeInputIdRef = useRef(null);
 
   useLayoutEffect(() => {

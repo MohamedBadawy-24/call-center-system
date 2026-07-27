@@ -32,7 +32,7 @@ const QuestionSchema = new mongoose.Schema({
   text: String,
   script: String, // What the agent reads
   category: String, // intro, screening, demographic, main
-  type: String, // text, single_choice, multiple_choice, info, group
+  type: String, // text, single_choice, multiple_choice, number, number_ratio, info, multi_input, ranking, group
   choices: [ChoiceSchema],
   allowOther: { type: Boolean, default: false },
   allowMultipleOther: { type: Boolean, default: false },

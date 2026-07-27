@@ -277,6 +277,119 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
           </div>
         )}
 
+        {q.type === 'ranking' && (() => {
+          const rankItems = Array.isArray(answers[qId]) && answers[qId].length > 0
+            ? answers[qId]
+            : (q.choices || []).map(c => c.text || c);
+          // Auto-initialize if answer not set yet
+          if (!Array.isArray(answers[qId]) || answers[qId].length === 0) {
+            // Defer to avoid updating state during render
+            setTimeout(() => handleAnswerChange(qId, rankItems), 0);
+          }
+          const moveItem = (fromIdx, toIdx) => {
+            const next = [...rankItems];
+            const [moved] = next.splice(fromIdx, 1);
+            next.splice(toIdx, 0, moved);
+            handleAnswerChange(qId, next);
+          };
+          return (
+            <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {rankItems.map((item, idx) => (
+                <div
+                  key={`rank-${item}-${idx}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                    padding: '0.75rem 1rem',
+                    background: 'var(--card-bg, #f9fafb)',
+                    border: '1px solid var(--border-color, #e5e7eb)',
+                    borderRadius: '8px',
+                    transition: 'box-shadow 0.2s ease, transform 0.15s ease',
+                  }}
+                >
+                  {/* Rank badge */}
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '2rem',
+                    height: '2rem',
+                    borderRadius: '50%',
+                    background: 'var(--primary, #6366f1)',
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    flexShrink: 0,
+                  }}>
+                    {idx + 1}
+                  </span>
+
+                  {/* Item label */}
+                  <span style={{ flex: 1, fontWeight: 500, fontSize: '0.95rem', color: 'var(--text-primary, #1f2937)' }}>
+                    {item}
+                  </span>
+
+                  {/* Move controls */}
+                  <div style={{ display: 'flex', gap: '0.35rem', flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={() => moveItem(idx, idx - 1)}
+                      title={isRtl ? 'تحريك لأعلى' : 'Move Up'}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '2rem',
+                        height: '2rem',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border-color, #d1d5db)',
+                        background: idx === 0 ? 'var(--card-bg, #f3f4f6)' : 'var(--surface, #fff)',
+                        color: idx === 0 ? 'var(--text-disabled, #9ca3af)' : 'var(--primary, #6366f1)',
+                        cursor: idx === 0 ? 'not-allowed' : 'pointer',
+                        fontWeight: 700,
+                        fontSize: '1rem',
+                        lineHeight: 1,
+                        padding: 0,
+                        transition: 'background 0.15s, color 0.15s',
+                      }}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === rankItems.length - 1}
+                      onClick={() => moveItem(idx, idx + 1)}
+                      title={isRtl ? 'تحريك لأسفل' : 'Move Down'}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '2rem',
+                        height: '2rem',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border-color, #d1d5db)',
+                        background: idx === rankItems.length - 1 ? 'var(--card-bg, #f3f4f6)' : 'var(--surface, #fff)',
+                        color: idx === rankItems.length - 1 ? 'var(--text-disabled, #9ca3af)' : 'var(--primary, #6366f1)',
+                        cursor: idx === rankItems.length - 1 ? 'not-allowed' : 'pointer',
+                        fontWeight: 700,
+                        fontSize: '1rem',
+                        lineHeight: 1,
+                        padding: 0,
+                        transition: 'background 0.15s, color 0.15s',
+                      }}
+                    >
+                      ↓
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {q.type === 'multi_input' && (
           <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {(q.subInputs || []).map((sub, subIdx) => {

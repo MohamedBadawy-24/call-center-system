@@ -132,10 +132,11 @@ export default function QuestionCard({
             </div>
             <div style={{ flex: 1, minWidth: '150px' }}>
               <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>Question Type</label>
-              <select className="input-field" value={question.type} onChange={e => updateQ({ type: e.target.value, choices: ['text', 'number', 'number_ratio'].includes(e.target.value) ? [] : question.choices })} disabled={!isAdmin}>
+              <select className="input-field" value={question.type} onChange={e => updateQ({ type: e.target.value, choices: ['text', 'number', 'number_ratio', 'info', 'multi_input'].includes(e.target.value) ? [] : question.choices })} disabled={!isAdmin}>
                 <option value="text">Text (Open Answer)</option>
                 <option value="single_choice">Single Choice</option>
                 <option value="multiple_choice">Multiple Choice</option>
+                <option value="ranking">Ranking / Ordering</option>
                 <option value="number">Number</option>
                 <option value="number_ratio">Number (Ratio/Percentage)</option>
                 <option value="info">Info / Notice (No Input)</option>
@@ -174,7 +175,7 @@ export default function QuestionCard({
             <textarea dir="auto" className="input-field" rows={2} value={question.script || ''} onChange={e => updateQ({ script: e.target.value })} readOnly={!isAdmin} />
           </div>
 
-          {(question.type === 'single_choice' || question.type === 'multiple_choice') && (
+          {(question.type === 'single_choice' || question.type === 'multiple_choice' || question.type === 'ranking') && (
             <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
               <label dir="auto" className="form-label" style={{ marginBottom: '0.25rem', display: 'block' }}>Choices</label>
               <p dir="auto" style={{ margin: '0 0 0.75rem', fontSize: '12px', color: 'var(--text-secondary)' }}>
@@ -211,6 +212,7 @@ export default function QuestionCard({
                   <button dir="auto" type="button" className="btn-secondary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }} onClick={addChoice}>
                     + Add Choice
                   </button>
+                  {question.type !== 'ranking' && (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem' }}>
                     <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>
                       <input dir="auto" type="checkbox" checked={!!question.allowOther} onChange={e => updateQ({ allowOther: e.target.checked })} />
@@ -223,6 +225,7 @@ export default function QuestionCard({
                       </label>
                     )}
                   </div>
+                  )}
                 </div>
               )}
 

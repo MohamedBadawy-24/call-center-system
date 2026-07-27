@@ -179,7 +179,9 @@ export default function QuestionCard({
             <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
               <label dir="auto" className="form-label" style={{ marginBottom: '0.25rem', display: 'block' }}>Choices</label>
               <p dir="auto" style={{ margin: '0 0 0.75rem', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                Add export codes to each answer (optional)
+                {question.type === 'ranking'
+                  ? 'Define items to rank. Leave empty to enable dynamic free-listing (agents type and add items during the call).'
+                  : 'Add export codes to each answer (optional)'}
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {(question.choices || []).map((choice, cIdx) => (

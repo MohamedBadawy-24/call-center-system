@@ -278,13 +278,12 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
         )}
 
         {q.type === 'ranking' && (() => {
-          const rankItems = Array.isArray(answers[qId]) && answers[qId].length > 0
-            ? answers[qId]
-            : (q.choices || []).map(c => c.text || c);
-          // Auto-initialize if answer not set yet
-          if (!Array.isArray(answers[qId]) || answers[qId].length === 0) {
-            // Defer to avoid updating state during render
-            setTimeout(() => handleAnswerChange(qId, rankItems), 0);
+          const choiceTexts = (q.choices || []).map(c => c.text || c);
+          const isDynamic = choiceTexts.length === 0;
+          const rankItems = Array.isArray(answers[qId]) ? answers[qId] : (isDynamic ? [] : [...choiceTexts]);
+          // Auto-initialize static ranking if answer not set yet
+          if (!isDynamic && (!Array.isArray(answers[qId]) || answers[qId].length === 0)) {
+            setTimeout(() => handleAnswerChange(qId, [...choiceTexts]), 0);
           }
           const moveItem = (fromIdx, toIdx) => {
             const next = [...rankItems];
@@ -292,11 +291,79 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
             next.splice(toIdx, 0, moved);
             handleAnswerChange(qId, next);
           };
+          const removeItem = (idx) => {
+            const next = rankItems.filter((_, i) => i !== idx);
+            handleAnswerChange(qId, next);
+          };
+          const addDynamicItem = (text) => {
+            const trimmed = (text || '').trim();
+            if (!trimmed) return;
+            const next = [...rankItems, trimmed];
+            handleAnswerChange(qId, next);
+          };
+
+          // Shared button style builder
+          const arrowBtnStyle = (disabled) => ({
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '2rem',
+            height: '2rem',
+            borderRadius: '6px',
+            border: '1px solid var(--border-color, #d1d5db)',
+            background: disabled ? 'var(--card-bg, #f3f4f6)' : 'var(--surface, #fff)',
+            color: disabled ? 'var(--text-disabled, #9ca3af)' : 'var(--primary, #6366f1)',
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            fontWeight: 700,
+            fontSize: '1rem',
+            lineHeight: 1,
+            padding: 0,
+            transition: 'background 0.15s, color 0.15s',
+          });
+
           return (
             <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {/* Dynamic free-listing input */}
+              {isDynamic && (
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <input
+                    id={`input-${qId}-ranking-add`}
+                    type="text"
+                    dir="auto"
+                    placeholder={isRtl ? 'اكتب إجابة واضغط Enter للإضافة...' : 'Type an answer and press Enter to add...'}
+                    className="input-field"
+                    style={{ flex: 1 }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addDynamicItem(e.target.value);
+                        e.target.value = '';
+                      }
+                    }}
+                    onFocus={(e) => { if (activeInputIdRef) activeInputIdRef.current = e.target.id; }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', fontWeight: 600, borderRadius: '8px', whiteSpace: 'nowrap' }}
+                    onClick={() => {
+                      const inp = document.getElementById(`input-${qId}-ranking-add`);
+                      if (inp) {
+                        addDynamicItem(inp.value);
+                        inp.value = '';
+                        inp.focus();
+                      }
+                    }}
+                  >
+                    {isRtl ? '+ إضافة' : '+ Add'}
+                  </button>
+                </div>
+              )}
+
+              {/* Ranking cards */}
               {rankItems.map((item, idx) => (
                 <div
-                  key={`rank-${item}-${idx}`}
+                  key={`rank-${idx}-${item}`}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -331,30 +398,14 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                     {item}
                   </span>
 
-                  {/* Move controls */}
+                  {/* Move + Delete controls */}
                   <div style={{ display: 'flex', gap: '0.35rem', flexShrink: 0 }}>
                     <button
                       type="button"
                       disabled={idx === 0}
                       onClick={() => moveItem(idx, idx - 1)}
                       title={isRtl ? 'تحريك لأعلى' : 'Move Up'}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '2rem',
-                        height: '2rem',
-                        borderRadius: '6px',
-                        border: '1px solid var(--border-color, #d1d5db)',
-                        background: idx === 0 ? 'var(--card-bg, #f3f4f6)' : 'var(--surface, #fff)',
-                        color: idx === 0 ? 'var(--text-disabled, #9ca3af)' : 'var(--primary, #6366f1)',
-                        cursor: idx === 0 ? 'not-allowed' : 'pointer',
-                        fontWeight: 700,
-                        fontSize: '1rem',
-                        lineHeight: 1,
-                        padding: 0,
-                        transition: 'background 0.15s, color 0.15s',
-                      }}
+                      style={arrowBtnStyle(idx === 0)}
                     >
                       ↑
                     </button>
@@ -363,29 +414,46 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                       disabled={idx === rankItems.length - 1}
                       onClick={() => moveItem(idx, idx + 1)}
                       title={isRtl ? 'تحريك لأسفل' : 'Move Down'}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '2rem',
-                        height: '2rem',
-                        borderRadius: '6px',
-                        border: '1px solid var(--border-color, #d1d5db)',
-                        background: idx === rankItems.length - 1 ? 'var(--card-bg, #f3f4f6)' : 'var(--surface, #fff)',
-                        color: idx === rankItems.length - 1 ? 'var(--text-disabled, #9ca3af)' : 'var(--primary, #6366f1)',
-                        cursor: idx === rankItems.length - 1 ? 'not-allowed' : 'pointer',
-                        fontWeight: 700,
-                        fontSize: '1rem',
-                        lineHeight: 1,
-                        padding: 0,
-                        transition: 'background 0.15s, color 0.15s',
-                      }}
+                      style={arrowBtnStyle(idx === rankItems.length - 1)}
                     >
                       ↓
                     </button>
+                    {isDynamic && (
+                      <button
+                        type="button"
+                        onClick={() => removeItem(idx)}
+                        title={isRtl ? 'حذف' : 'Remove'}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '2rem',
+                          height: '2rem',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border-color, #d1d5db)',
+                          background: 'var(--surface, #fff)',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          fontWeight: 700,
+                          fontSize: '0.9rem',
+                          lineHeight: 1,
+                          padding: 0,
+                          transition: 'background 0.15s, color 0.15s',
+                        }}
+                      >
+                        🗑️
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
+
+              {/* Empty state hint for dynamic mode */}
+              {isDynamic && rankItems.length === 0 && (
+                <p style={{ textAlign: 'center', color: 'var(--text-secondary, #6b7280)', fontSize: '0.85rem', padding: '1rem 0', margin: 0 }}>
+                  {isRtl ? 'لم تتم إضافة عناصر بعد. اكتب أعلاه واضغط Enter.' : 'No items added yet. Type above and press Enter.'}
+                </p>
+              )}
             </div>
           );
         })()}

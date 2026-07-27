@@ -124,7 +124,8 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
           <input className="input-field" value={formatLocalTime(tick)} readOnly />
         </div>
       );
-    case 'text':
+    case 'text': {
+      const isPhoneField = field.id === 'phone';
       return (
         <div className="precall-field" key={field.id}>
           <label className="precall-label" style={isReadOnly ? { display: 'flex', alignItems: 'center', gap: '0.35rem' } : undefined}>
@@ -134,8 +135,16 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
           <input
             className={`input-field ${hasError ? 'has-error' : ''}`}
             data-testid={`precall-${field.id}-input`}
+            type="text"
+            inputMode={isPhoneField ? 'numeric' : undefined}
+            pattern={isPhoneField ? '[0-9]*' : undefined}
+            maxLength={isPhoneField ? 15 : (field.maxLength || undefined)}
             value={value ?? ''}
-            onChange={(e) => onChange(field.id, e.target.value)}
+            onChange={(e) => {
+              const raw = e.target.value;
+              const val = isPhoneField ? raw.replace(/\D/g, '').slice(0, 15) : raw;
+              onChange(field.id, val);
+            }}
             placeholder={field.placeholder || ''}
             readOnly={isReadOnly}
             style={isReadOnly ? { background: 'var(--surface-2)', opacity: 0.85, cursor: 'default', pointerEvents: 'none' } : undefined}
@@ -148,6 +157,7 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
           )}
         </div>
       );
+    }
     case 'number':
       return (
         <div className="precall-field" key={field.id}>
@@ -155,10 +165,16 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
           <input
             className={`input-field ${hasError ? 'has-error' : ''}`}
             data-testid={`precall-${field.id}-input`}
-            type="number"
-            min={field.min != null ? field.min : undefined}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={field.maxLength || 15}
             value={value ?? ''}
-            onChange={(e) => onChange(field.id, e.target.value)}
+            onChange={(e) => {
+              const cleaned = e.target.value.replace(/\D/g, '');
+              const maxL = field.maxLength || 15;
+              onChange(field.id, cleaned.slice(0, maxL));
+            }}
             readOnly={isReadOnly}
           />
           {errorText && (
@@ -783,8 +799,8 @@ export default function PreCallChecklist() {
     }
     const cleanNum = manualNumber.trim();
     const digitsOnly = cleanNum.replace(/\D/g, '');
-    if (digitsOnly.length < 7 || digitsOnly.length > 15) {
-      toast.error('Invalid phone number format (must be 7-15 digits)');
+    if (digitsOnly.length < 8 || digitsOnly.length > 15) {
+      toast.error('Invalid phone number format (must be 8-15 digits)');
       return;
     }
 
@@ -1219,7 +1235,7 @@ export default function PreCallChecklist() {
             type="button"
             className="btn-primary"
             data-testid="precall-next-btn"
-            disabled={submitting}
+            disabled={submitting || !canProceed}
             onClick={onNext}
             style={{ minWidth: '160px' }}
             title="Proceed to the survey questionnaire"
@@ -1286,10 +1302,13 @@ export default function PreCallChecklist() {
                     <label className="form-label" style={{ fontWeight: 600 }}>{t('precallPhone') || 'Phone Number'}</label>
                     <input
                       type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={15}
                       className="input-field"
                       placeholder="e.g. 01012345678"
                       value={manualNumber}
-                      onChange={e => setManualNumber(e.target.value)}
+                      onChange={e => setManualNumber(e.target.value.replace(/\D/g, '').slice(0, 15))}
                       disabled={manualSaving}
                       autoFocus
                     />
@@ -1300,7 +1319,7 @@ export default function PreCallChecklist() {
                   <button type="button" className="btn-secondary" onClick={() => setIsManualModalOpen(false)} disabled={manualSaving}>
                     {t('cancelManualEntry') || 'Cancel Manual Entry'}
                   </button>
-                  <button type="submit" className="btn-primary" disabled={manualSaving || !manualNumber.trim()}>
+                  <button type="submit" className="btn-primary" disabled={manualSaving || manualNumber.replace(/\D/g, '').length < 8}>
                     {manualSaving ? <Loader2 size={16} className="spin-icon" /> : (t('enterNumberManually') || 'Enter Number Manually')}
                   </button>
                 </div>

@@ -243,15 +243,20 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
           <div className="form-group" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <input dir="auto"
               id={`input-${qId}`}
-              type="number"
+              type="text"
               inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={q.maxLength || undefined}
               className="input-field"
               placeholder={t('typeNumber') || t('typeAnswer')}
               value={answers[qId] ?? ''}
               onChange={(e) => {
                 if (activeInputIdRef) activeInputIdRef.current = e.target.id;
                 const raw = e.target.value;
-                const cleaned = raw.replace(/[^0-9.\-]/g, '');
+                let cleaned = raw.replace(/\D/g, '');
+                if (q.maxLength && cleaned.length > q.maxLength) {
+                  cleaned = cleaned.slice(0, q.maxLength);
+                }
                 handleAnswerChange(qId, cleaned);
               }}
               onKeyDown={(e) => {
@@ -264,7 +269,7 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                   }
                   return;
                 }
-                const allowed = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', '.', '-'];
+                const allowed = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
                 if (!allowed.includes(e.key) && !/^[0-9]$/.test(e.key)) {
                   e.preventDefault();
                 }
@@ -488,13 +493,19 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                   ) : sub.inputType === 'number' ? (
                     <input dir="auto"
                       id={subInputId}
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={sub.maxLength || undefined}
                       className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
                       value={val}
                       onChange={e => {
                         if (activeInputIdRef) activeInputIdRef.current = e.target.id;
                         const raw = e.target.value;
-                        const cleaned = raw.replace(/[^0-9.\-]/g, '');
+                        let cleaned = raw.replace(/\D/g, '');
+                        if (sub.maxLength && cleaned.length > sub.maxLength) {
+                          cleaned = cleaned.slice(0, sub.maxLength);
+                        }
                         handleAnswerChange(qId, { ...ansObj, [sub.id]: cleaned });
                       }}
                     />
@@ -1295,7 +1306,7 @@ export default function TakeSurvey({ mockSurvey }) {
     }
 
     // Number digit constraints check
-    if (q.type === 'number' && val !== undefined && val !== null && val !== '') {
+    if ((q.type === 'number' || q.type === 'number_ratio') && val !== undefined && val !== null && val !== '') {
       const digitCount = String(val).replace(/[^0-9]/g, '').length;
       if (q.minLength && digitCount < q.minLength) return `Must have at least ${q.minLength} digits`;
       if (q.maxLength && digitCount > q.maxLength) return `Must have at most ${q.maxLength} digits`;

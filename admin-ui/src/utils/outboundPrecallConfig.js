@@ -460,6 +460,13 @@ export function isFieldSatisfied(field, value) {
     if (isEmptyValue(t, value)) return true;
   }
   if (field.required && isEmptyValue(t, value)) return false;
+  if (field.id === 'phone') {
+    const str = String(value ?? '').trim();
+    if (str.startsWith('AUTO-')) return true;
+    const digits = str.replace(/\D/g, '');
+    if (field.required) return digits.length >= 8 && digits.length <= 15;
+    return digits.length === 0 || (digits.length >= 8 && digits.length <= 15);
+  }
   if (t === 'number') {
     const n = Number(value);
     if (Number.isNaN(n)) return !field.required;

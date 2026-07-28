@@ -16,6 +16,7 @@ import {
   precallNextValidation,
   precallNewFormValidation,
   evaluateCondition,
+  parseAgeYearsFromAnswers,
 } from '../utils/outboundPrecallConfig';
 import { EGYPTIAN_GOVERNORATES } from '../utils/governorates';
 import HandoverModal from '../components/HandoverModal';
@@ -444,9 +445,12 @@ export default function PreCallChecklist() {
           precallData = { surveyId: sidUrl, outboundPrecall: null, targetGovernorate: 'All', numberAssignmentMode: 'queue_only' };
         }
 
-        const [numberRes] = await Promise.all([
+        const [numberRes, eligibilityRes] = await Promise.all([
           (isEditMode || editAnswersRef.current)
             ? Promise.resolve({ data: { number: editAnswersRef.current?.phone || currentNumber?.number, serialNumber: editAnswersRef.current?.serial_number || currentNumber?.serialNumber } })
+            : Promise.resolve({ data: null }),
+          (isOnline && user?.role === 'agent')
+            ? api.get(`/agent/survey-eligibility${precallData.surveyId ? `?surveyId=${precallData.surveyId}` : ''}`, { signal }).catch(() => ({ data: null }))
             : Promise.resolve({ data: null })
         ]);
         if (cancelled) return;
@@ -468,22 +472,35 @@ export default function PreCallChecklist() {
         if (nextNum && nextNum.serialNumber) merged.serial_number = nextNum.serialNumber;
         if (!isEditMode) setIsEditMode(false);
 
+        // 1. Hydrate active session payload from backend if available
+        const activePayload = eligibilityRes?.data?.payload;
+        if (activePayload && typeof activePayload === 'object' && Object.keys(activePayload).length > 0) {
+          merged = { ...merged, ...activePayload };
+        }
+
+        // 2. Hydrate from explicit edit answers ref or persisted local draft
         if (editAnswersRef.current) {
           merged = { ...merged, ...editAnswersRef.current };
         } else if (draftKey) {
           try {
-            const raw = sessionStorage.getItem(draftKey);
+            const raw = localStorage.getItem(draftKey) || sessionStorage.getItem(draftKey);
             if (raw) {
               const parsed = JSON.parse(raw);
               if (parsed && typeof parsed === 'object') {
                 merged = { ...merged, ...parsed };
-                if (nextNum && nextNum.number && (!merged.phone || merged.phone !== nextNum.number)) {
-                  merged.phone = nextNum.number;
-                }
               }
             }
           } catch (_) { /* ignore bad draft */ }
         }
+
+        // Ensure current assigned phone & serial take precedence if missing in merged
+        if (eligibilityRes?.data?.precallSerialNumber && !merged.serial_number) {
+          merged.serial_number = eligibilityRes.data.precallSerialNumber;
+        }
+        if (nextNum && nextNum.number && (!merged.phone || merged.phone !== nextNum.number)) {
+          merged.phone = nextNum.number;
+        }
+
         setAnswers(merged);
         try {
           const cr = await api.get('/agent/precall-session-count', { signal });
@@ -519,7 +536,9 @@ export default function PreCallChecklist() {
     if (!draftKey || configLoading) return;
     const timer = setTimeout(() => {
       try {
-        sessionStorage.setItem(draftKey, JSON.stringify(answers));
+        const payloadStr = JSON.stringify(answers);
+        sessionStorage.setItem(draftKey, payloadStr);
+        localStorage.setItem(draftKey, payloadStr);
       } catch (_) { /* quota / private mode */ }
     }, 300);
     return () => clearTimeout(timer);
@@ -582,6 +601,26 @@ export default function PreCallChecklist() {
   const canSaveNew = useMemo(() => {
     return precallNewFormValidation(config.fields, answers);
   }, [answers, config.fields]);
+
+  const missingFieldsForNext = useMemo(() => {
+    if (!config?.fields) return [];
+    const missing = [];
+    for (const f of config.fields) {
+      if (f.id === 'interview_result') continue;
+      if (!isFieldVisible(f, answers)) continue;
+      if (f.required && !isFieldSatisfied(f, answers[f.id])) {
+        missing.push(f.label || f.id);
+      }
+    }
+    if (answers.call_result && String(answers.call_result) !== 'contacted') {
+      missing.push(t('callResultMustBeContacted') || 'Call Result must be "Contacted"');
+    }
+    const age = parseAgeYearsFromAnswers(answers);
+    if (Number.isFinite(age) && age < 18) {
+      missing.push(t('ageMustBe18OrOlder') || 'Respondent age must be 18 or older');
+    }
+    return missing;
+  }, [config?.fields, answers, t]);
 
   const completePrecallSubmission = async () => {
     const frozen = new Date();
@@ -1209,6 +1248,15 @@ export default function PreCallChecklist() {
           <CheckCircle2 size={16} color="var(--success)" />
           <span style={{ color: 'var(--success)' }}>
             All required info is logged. Click <strong>New Form</strong> to save and get the next number.
+          </span>
+        </div>
+      )}
+      {!canProceed && missingFieldsForNext.length > 0 && (
+        <div className="precall-hint" style={{ marginTop: '0.5rem', borderColor: 'rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.06)', color: 'var(--danger)' }}>
+          <AlertTriangle size={16} color="var(--danger)" style={{ flexShrink: 0 }} />
+          <span>
+            <strong>{t('missingRequiredFields') || 'Missing required fields to proceed:'}</strong>{' '}
+            {missingFieldsForNext.join(', ')}
           </span>
         </div>
       )}

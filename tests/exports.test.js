@@ -179,3 +179,81 @@ describe('GET /admin/export-survey/:id (legacy CSV)', () => {
     expect(res.headers['content-type']).toMatch(/text\/csv/i);
   });
 });
+
+// ── Choice Value Mapping Unit Tests ─────────────────────────────────────────────
+
+describe('Choice Value Mapping Logic', () => {
+  const responseService = require('../services/responseService');
+
+  it('maps single choice labels to choice.value and falls back to string label when value is empty', () => {
+    const mockSurvey = {
+      sections: [{
+        questions: [{
+          questionId: 'q_gender',
+          type: 'single_choice',
+          choices: [
+            { text: 'Male', value: '1' },
+            { text: 'Female', value: '2' },
+            { text: 'Other' }, // no value configured
+          ]
+        }]
+      }]
+    };
+
+    const map = responseService.buildChoiceValueMap(mockSurvey);
+    expect(map['q_gender']['Male']).toBe('1');
+    expect(map['q_gender']['Female']).toBe('2');
+    expect(map['q_gender']['Other']).toBe('Other');
+
+    expect(responseService.resolveAnswerValue('q_gender', 'Male', map)).toBe('1');
+    expect(responseService.resolveAnswerValue('q_gender', 'Female', map)).toBe('2');
+    expect(responseService.resolveAnswerValue('q_gender', 'Other', map)).toBe('Other');
+    expect(responseService.resolveAnswerValue('q_gender', 'UnknownLabel', map)).toBe('UnknownLabel');
+  });
+
+  it('maps array answers (multiple choice) and joins mapped values', () => {
+    const mockSurvey = {
+      sections: [{
+        questions: [{
+          questionId: 'q_interests',
+          type: 'multiple_choice',
+          choices: [
+            { text: 'Sports', value: '10' },
+            { text: 'Music', value: '20' },
+            { text: 'Tech', value: '30' },
+          ]
+        }]
+      }]
+    };
+
+    const map = responseService.buildChoiceValueMap(mockSurvey);
+    const resolvedArray = responseService.resolveAnswerValue('q_interests', ['Sports', 'Tech'], map);
+    expect(resolvedArray).toEqual(['10', '30']);
+
+    const parsed = responseService.splitOtherValues(resolvedArray);
+    expect(parsed.baseValue).toBe('10, 30');
+  });
+
+  it('maps Pre-Call checklist field options to their values', () => {
+    const mockSurvey = {
+      outboundPrecall: {
+        fields: [
+          {
+            id: 'phone_type',
+            type: 'segment',
+            options: [
+              { label: 'Mobile Phone', value: 'mobile' },
+              { label: 'Landline Phone', value: 'landline' },
+            ]
+          }
+        ]
+      }
+    };
+
+    const map = responseService.buildChoiceValueMap(mockSurvey);
+    expect(map['phone_type']['Mobile Phone']).toBe('mobile');
+    expect(map['phone_type']['mobile']).toBe('mobile');
+    expect(responseService.resolveAnswerValue('phone_type', 'Mobile Phone', map)).toBe('mobile');
+  });
+});
+

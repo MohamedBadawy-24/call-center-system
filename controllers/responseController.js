@@ -44,26 +44,36 @@ exports.getResponsesBySurveyId = async (req, res, next) => {
   }
 };
 
+const collectQuestionsFromSurvey = (survey) => {
+  const questions = [];
+  const processList = (qList) => {
+    (qList || []).forEach(q => {
+      if (q.type === 'group' && Array.isArray(q.questions)) {
+        processList(q.questions);
+      } else {
+        const id = q.questionId || (q._id ? q._id.toString() : undefined);
+        if (id) {
+          if (q.type === 'multi_input' && Array.isArray(q.subInputs) && q.subInputs.length > 0) {
+            q.subInputs.forEach(sub => {
+              questions.push({ id, subId: sub.id, text: `${q.text || ''} - ${sub.label}`, type: sub.inputType, options: sub.options || [] });
+            });
+          } else {
+            questions.push({ id, text: q.text || '', type: q.type, options: q.options || [], choices: q.choices || [] });
+          }
+        }
+      }
+    });
+  };
+
+  (survey?.sections || []).forEach(sec => processList(sec.questions));
+  return questions;
+};
+
 exports.exportCsv = async (req, res, next) => {
   try {
     const { survey, cursor, preScanResponses, splitOtherValues, buildChoiceValueMap, resolveAnswerValue, encodeValue } = await responseService.getSurveyAndCursor(req.params.id);
 
-    const questions = [];
-    survey.sections.forEach(section => {
-      section.questions.forEach(q => {
-        const id = q.questionId || (q._id ? q._id.toString() : undefined);
-        if (id) {
-          if (q.type === 'multi_input' && q.subInputs && q.subInputs.length > 0) {
-            q.subInputs.forEach(sub => {
-              questions.push({ id, subId: sub.id, text: `${q.text || ''} - ${sub.label}` });
-            });
-          } else {
-            questions.push({ id, text: q.text || '' });
-          }
-        }
-      });
-    });
-
+    const questions = collectQuestionsFromSurvey(survey);
     const choiceValueMap = buildChoiceValueMap(survey);
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -111,9 +121,8 @@ exports.exportCsv = async (req, res, next) => {
             rawValue = answer.value;
           }
         }
-        const resolvedBase = typeof rawValue === 'string' && !rawValue.startsWith('other:')
-          ? resolveAnswerValue(q.id, rawValue, choiceValueMap)
-          : rawValue;
+        const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
+        const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
         const parsed = splitOtherValues(resolvedBase);
         
         let val = encodeValue(parsed.baseValue);
@@ -160,22 +169,7 @@ exports.exportAdvanced = async (req, res, next) => {
       res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filenameBase + '.csv')}`);
       res.write('\uFEFF'); // BOM
 
-      const questions = [];
-      survey.sections.forEach(section => {
-        section.questions.forEach(q => {
-          const id = q.questionId || (q._id ? q._id.toString() : undefined);
-          if (id) {
-            if (q.type === 'multi_input' && q.subInputs && q.subInputs.length > 0) {
-              q.subInputs.forEach(sub => {
-                questions.push({ id, subId: sub.id, text: `${q.text || ''} - ${sub.label}`, type: sub.inputType, options: sub.options || [] });
-              });
-            } else {
-              questions.push({ id, text: q.text || '', type: q.type, options: q.options || [] });
-            }
-          }
-        });
-      });
-
+      const questions = collectQuestionsFromSurvey(survey);
       const choiceValueMap = buildChoiceValueMap(survey);
 
       const maxOtherCount = {};
@@ -222,9 +216,8 @@ exports.exportAdvanced = async (req, res, next) => {
               rawValue = answer.value;
             }
           }
-          const resolvedBase = typeof rawValue === 'string' && !rawValue.startsWith('other:')
-            ? resolveAnswerValue(q.id, rawValue, choiceValueMap)
-            : rawValue;
+          const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
+          const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
           const parsed = splitOtherValues(resolvedBase);
           
           let val = encodeValue(parsed.baseValue);
@@ -251,22 +244,7 @@ exports.exportAdvanced = async (req, res, next) => {
 
     const { survey, responses, preScanResponses, splitOtherValues, buildChoiceValueMap, resolveAnswerValue, encodeValue } = await responseService.getAdvancedInMemoryData(surveyId, req.query);
 
-    const questions = [];
-    survey.sections.forEach(section => {
-      section.questions.forEach(q => {
-        const id = q.questionId || (q._id ? q._id.toString() : undefined);
-        if (id) {
-          if (q.type === 'multi_input' && q.subInputs && q.subInputs.length > 0) {
-            q.subInputs.forEach(sub => {
-              questions.push({ id, subId: sub.id, text: `${q.text || ''} - ${sub.label}`, type: sub.inputType, options: sub.options || [] });
-            });
-          } else {
-            questions.push({ id, text: q.text || '', type: q.type, options: q.options || [] });
-          }
-        }
-      });
-    });
-
+    const questions = collectQuestionsFromSurvey(survey);
     const choiceValueMap = buildChoiceValueMap(survey);
 
     const maxOtherCount = {};
@@ -331,9 +309,8 @@ exports.exportAdvanced = async (req, res, next) => {
               rawValue = answer.value;
             }
           }
-          const resolvedBase = typeof rawValue === 'string' && !rawValue.startsWith('other:')
-            ? resolveAnswerValue(q.id, rawValue, choiceValueMap)
-            : rawValue;
+          const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
+          const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
           const parsed = splitOtherValues(resolvedBase);
           row[`Q${idx + 1}`] = encodeValue(parsed.baseValue);
 
@@ -364,12 +341,15 @@ exports.exportAdvanced = async (req, res, next) => {
         { name: 'SOURCE', label: 'Number Source', type: VariableType.String, width: 16 },
       ];
       questions.forEach((q, idx) => {
-        const isYesNo = q.options?.some(opt => ['Yes', 'No', 'نعم', 'لا'].includes(opt.trim()));
-        const isNumeric = q.type === 'number' || q.type === 'rating' || isYesNo;
+        const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
+        const qMap = choiceValueMap[qKey];
+        const hasNumericValues = qMap && Object.values(qMap).some(v => v !== '' && !isNaN(Number(v)));
+        const isYesNo = (q.options || []).some(opt => ['Yes', 'No', 'نعم', 'لا'].includes(typeof opt === 'string' ? opt.trim() : (opt?.label || '')));
+        const isNumeric = q.type === 'number' || q.type === 'number_ratio' || q.type === 'rating' || isYesNo || hasNumericValues;
         
         vars.push({
           name: `Q${idx + 1}`,
-          label: q.text.substring(0, 255),
+          label: (q.text || '').substring(0, 255),
           type: isNumeric ? VariableType.Numeric : VariableType.String,
           width: isNumeric ? 8 : 255,
           decimal: 0,
@@ -379,7 +359,7 @@ exports.exportAdvanced = async (req, res, next) => {
         for (let i = 1; i <= max; i++) {
           vars.push({
             name: `Q${idx + 1}_other_${i}`,
-            label: `${q.text.substring(0, 240)} (Other ${i})`,
+            label: `${(q.text || '').substring(0, 240)} (Other ${i})`,
             type: VariableType.String,
             width: 255,
             decimal: 0
@@ -408,19 +388,21 @@ exports.exportAdvanced = async (req, res, next) => {
               rawValue = answer.value;
             }
           }
-          const resolvedBase = typeof rawValue === 'string' && !rawValue.startsWith('other:')
-            ? resolveAnswerValue(q.id, rawValue, choiceValueMap)
-            : rawValue;
+          const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
+          const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
           const parsed = splitOtherValues(resolvedBase);
           const encoded = encodeValue(parsed.baseValue);
           
-          const isYesNo = q.options?.some(opt => ['Yes', 'No', 'نعم', 'لا'].includes(opt.trim()));
-          const isNumeric = q.type === 'number' || q.type === 'rating' || isYesNo;
+          const qMap = choiceValueMap[qKey];
+          const hasNumericValues = qMap && Object.values(qMap).some(v => v !== '' && !isNaN(Number(v)));
+          const isYesNo = (q.options || []).some(opt => ['Yes', 'No', 'نعم', 'لا'].includes(typeof opt === 'string' ? opt.trim() : (opt?.label || '')));
+          const isNumeric = q.type === 'number' || q.type === 'number_ratio' || q.type === 'rating' || isYesNo || hasNumericValues;
           
           if (isNumeric) {
-            rec.push(Number.isFinite(encoded) ? encoded : (Number(encoded) || 0));
+            const num = Number(encoded);
+            rec.push(Number.isFinite(num) ? num : (encoded != null && encoded !== '' ? Number(encoded) || 0 : 0));
           } else {
-            rec.push(String(encoded));
+            rec.push(String(encoded != null ? encoded : ''));
           }
 
           const max = maxOtherCount[q.id] || 0;

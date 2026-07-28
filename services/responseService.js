@@ -51,37 +51,131 @@ function splitOtherValues(answerValue) {
     }
   });
   return {
-    baseValue: baseParts.join(' | '),
+    baseValue: baseParts.join(', '),
     otherValues
   };
 }
 
 function buildChoiceValueMap(survey) {
   const map = {};
-  for (const section of (survey.sections || [])) {
-    for (const question of (section.questions || [])) {
-      if (!question.choices?.length) continue;
-      const inner = {};
-      let hasAny = false;
-      for (const choice of question.choices) {
-        if (choice.value && choice.value.trim()) {
-          inner[choice.text] = choice.value.trim();
-          hasAny = true;
+  if (!survey) return map;
+
+  const processOptionsList = (optionsList) => {
+    const itemMap = {};
+    if (!Array.isArray(optionsList)) return itemMap;
+
+    for (const item of optionsList) {
+      if (item == null) continue;
+      if (typeof item === 'object') {
+        const text = (item.text ?? item.label ?? item.value ?? '').toString().trim();
+        const val = (item.value != null && String(item.value).trim() !== '')
+          ? String(item.value).trim()
+          : text;
+
+        if (text) itemMap[text] = val;
+        if (val) itemMap[val] = val;
+      } else {
+        const textStr = String(item).trim();
+        if (textStr) itemMap[textStr] = textStr;
+      }
+    }
+    return itemMap;
+  };
+
+  const processQuestion = (q) => {
+    if (!q) return;
+    const qid = q.questionId || (q._id ? q._id.toString() : null);
+
+    if (qid) {
+      let itemMap = {};
+      if (Array.isArray(q.choices) && q.choices.length > 0) {
+        itemMap = processOptionsList(q.choices);
+      } else if (Array.isArray(q.options) && q.options.length > 0) {
+        itemMap = processOptionsList(q.options);
+      }
+      if (Object.keys(itemMap).length > 0) {
+        map[qid] = itemMap;
+      }
+    }
+
+    if (qid && Array.isArray(q.subInputs) && q.subInputs.length > 0) {
+      for (const sub of q.subInputs) {
+        if (!sub || !sub.id) continue;
+        const subKey = `${qid}_${sub.id}`;
+        if (Array.isArray(sub.options) && sub.options.length > 0) {
+          const subMap = processOptionsList(sub.options);
+          if (Object.keys(subMap).length > 0) {
+            map[subKey] = subMap;
+          }
         }
       }
-      if (hasAny) {
-        const qid = question.questionId || (question._id ? question._id.toString() : null);
-        if (qid) map[qid] = inner;
+    }
+
+    if (Array.isArray(q.questions)) {
+      for (const childQ of q.questions) {
+        processQuestion(childQ);
+      }
+    }
+  };
+
+  if (Array.isArray(survey.sections)) {
+    for (const section of survey.sections) {
+      if (Array.isArray(section.questions)) {
+        for (const q of section.questions) {
+          processQuestion(q);
+        }
       }
     }
   }
+
+  const precall = survey.outboundPrecall;
+  if (precall && Array.isArray(precall.fields)) {
+    for (const field of precall.fields) {
+      if (!field || !field.id) continue;
+      if (Array.isArray(field.options) && field.options.length > 0) {
+        const fieldMap = processOptionsList(field.options);
+        if (Object.keys(fieldMap).length > 0) {
+          map[field.id] = fieldMap;
+        }
+      }
+    }
+  }
+
   return map;
 }
 
-function resolveAnswerValue(questionId, rawAnswer, choiceValueMap) {
-  if (typeof rawAnswer !== 'string') return rawAnswer;
-  if (rawAnswer.startsWith('other:')) return rawAnswer;
-  return choiceValueMap[questionId]?.[rawAnswer] ?? rawAnswer;
+function resolveSingleAnswer(item, itemMap) {
+  if (item == null) return item;
+  if (typeof item === 'number' || typeof item === 'boolean') return item;
+  const str = String(item);
+
+  if (str.startsWith('other:')) {
+    const rest = str.substring(6);
+    const resolvedRest = resolveSingleAnswer(rest, itemMap);
+    return `other:${resolvedRest}`;
+  }
+  if (str.startsWith('Other: ')) {
+    const rest = str.substring(7);
+    const resolvedRest = resolveSingleAnswer(rest, itemMap);
+    return `Other: ${resolvedRest}`;
+  }
+
+  const trimmed = str.trim();
+  if (itemMap && itemMap[trimmed] !== undefined) {
+    return itemMap[trimmed];
+  }
+  return item;
+}
+
+function resolveAnswerValue(questionKey, rawAnswer, choiceValueMap) {
+  if (rawAnswer == null) return rawAnswer;
+  const itemMap = choiceValueMap ? choiceValueMap[questionKey] : null;
+
+  if (Array.isArray(rawAnswer)) {
+    return rawAnswer.map(element => resolveSingleAnswer(element, itemMap));
+  }
+
+  return resolveSingleAnswer(rawAnswer, itemMap);
 }
 
 exports.submitResponse = async (userId, userRole, data, io) => {
@@ -406,3 +500,8 @@ exports.getAdvancedInMemoryData = async (surveyId, queryParams) => {
   const responses = await Response.find(filter).populate('agentId', 'name email').sort({ completedAt: 1 }).lean();
   return { survey, responses, preScanResponses, splitOtherValues, buildChoiceValueMap, resolveAnswerValue, encodeValue };
 };
+
+exports.splitOtherValues = splitOtherValues;
+exports.buildChoiceValueMap = buildChoiceValueMap;
+exports.resolveAnswerValue = resolveAnswerValue;
+exports.encodeValue = encodeValue;

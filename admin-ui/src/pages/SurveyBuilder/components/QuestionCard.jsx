@@ -36,6 +36,8 @@ export default function QuestionCard({
   const isRtl = language === 'ar';
   const [collapsed, setCollapsed] = useState(false);
 
+  const sortableId = question._uid || question.questionId;
+
   const {
     attributes,
     listeners,
@@ -44,7 +46,7 @@ export default function QuestionCard({
     transition,
     isDragging,
   } = useSortable({
-    id: question.questionId,
+    id: sortableId,
     data: { type: 'question', sIdx, qIdx },
   });
 

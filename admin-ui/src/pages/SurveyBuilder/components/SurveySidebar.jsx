@@ -15,8 +15,8 @@ export default function SurveySidebar() {
     }
   };
 
-  const scrollToQuestion = (id) => {
-    const el = document.getElementById(`q-${id}`);
+  const scrollToQuestion = (sIdx, qIdx) => {
+    const el = document.getElementById(`q-${sIdx}-${qIdx}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
@@ -48,9 +48,9 @@ export default function SurveySidebar() {
               )}
               {sec.questions.map((q, qIdx) => (
                 <button
-                  key={q.questionId}
+                  key={q._uid || q.questionId}
                   type="button"
-                  onClick={() => scrollToQuestion(q.questionId)}
+                  onClick={() => scrollToQuestion(sIdx, qIdx)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '0.5rem',
                     padding: '0.4rem 0.5rem', border: 'none', background: 'transparent',

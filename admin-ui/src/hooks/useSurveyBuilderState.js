@@ -15,6 +15,7 @@ const flattenSections = (sections) => {
       if (item.type === 'group') {
         return (item.questions || []).map(q => ({
           ...q,
+          _uid: q._uid || crypto.randomUUID(),
           questionId: q.questionId || String(q._id),
           _groupId: item.groupId,
           _groupLabel: item.label
@@ -22,6 +23,7 @@ const flattenSections = (sections) => {
       }
       return [{
         ...item,
+        _uid: item._uid || crypto.randomUUID(),
         questionId: item.questionId || String(item._id)
       }];
     })
@@ -46,11 +48,11 @@ const serializeSections = (sections) => {
             type: 'group',
             groupId: q._groupId,
             label: q._groupLabel,
-            questions: groupQs.map(({ _groupId, _groupLabel, ...rest }) => rest)
+            questions: groupQs.map(({ _groupId, _groupLabel, _uid, ...rest }) => rest)
           });
         }
       } else {
-        nestedQuestions.push(q);
+        nestedQuestions.push((({ _uid, ...rest }) => rest)(q));
       }
     });
 

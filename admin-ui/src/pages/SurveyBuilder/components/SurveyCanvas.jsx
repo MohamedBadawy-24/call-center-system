@@ -5,6 +5,31 @@ import GroupContainer from './GroupContainer';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Plus, Layers } from 'lucide-react';
 
+/**
+ * Generate the next sequential question ID by inspecting the last question
+ * in the section and incrementing its trailing number.
+ * e.g. "q1" → "q2", "101" → "102", "SecA_9" → "SecA_10"
+ */
+function nextSequentialId(questions) {
+  if (!questions || questions.length === 0) return 'q1';
+  const lastId = questions[questions.length - 1].questionId || '';
+  const match = lastId.match(/^(.*?)(\d+)$/);
+  if (match) {
+    const prefix = match[1];
+    const nextNum = parseInt(match[2], 10) + 1;
+    return `${prefix}${nextNum}`;
+  }
+  return `q1`;
+}
+
+/** Ensure every question has a stable _uid for React reconciliation keys. */
+function ensureUid(question) {
+  if (!question._uid) {
+    return { ...question, _uid: crypto.randomUUID() };
+  }
+  return question;
+}
+
 export default function SurveyCanvas() {
   const { surveyState, updateState, isAdmin, createQuestionGroup, addQuestionToGroup } = useContext(SurveyBuilderContext);
 
@@ -49,12 +74,14 @@ export default function SurveyCanvas() {
       ...prev,
       sections: prev.sections.map((sec, idx) => {
         if (idx !== sIdx) return sec;
+        const newId = nextSequentialId(sec.questions);
         return {
           ...sec,
           questions: [
             ...sec.questions,
             {
-              questionId: crypto.randomUUID(),
+              _uid: crypto.randomUUID(),
+              questionId: newId,
               text: 'New Question',
               script: '',
               type: 'text',
@@ -160,7 +187,8 @@ export default function SurveyCanvas() {
         const idx = sec.questions.findIndex(q => q.questionId === questionId);
         if (idx === -1) return sec;
         const newQ = JSON.parse(JSON.stringify(sec.questions[idx]));
-        newQ.questionId = crypto.randomUUID();
+        newQ._uid = crypto.randomUUID();
+        newQ.questionId = nextSequentialId(sec.questions);
         newQ.text = newQ.text + ' (Copy)';
         
         if (newQ._groupId) {
@@ -215,7 +243,8 @@ export default function SurveyCanvas() {
   return (
     <div style={{ paddingRight: '0.5rem', paddingBottom: '4rem' }}>
       {surveyState.sections.map((sec, sIdx) => {
-        const questionIds = sec.questions.map(q => q.questionId);
+        const questionsWithUid = sec.questions.map(ensureUid);
+        const questionIds = questionsWithUid.map(q => q._uid);
 
         return (
           <div key={sIdx} className="glass-card" style={{ marginBottom: '1.5rem', padding: '1.25rem' }}>
@@ -241,7 +270,7 @@ export default function SurveyCanvas() {
                   const blocks = [];
                   let currentGroup = null;
                   
-                  sec.questions.forEach((q, qIdx) => {
+                  questionsWithUid.forEach((q, qIdx) => {
                     if (q._groupId) {
                       if (!currentGroup || currentGroup.id !== q._groupId) {
                         currentGroup = { id: q._groupId, label: q._groupLabel, questions: [] };
@@ -259,7 +288,7 @@ export default function SurveyCanvas() {
                       const { q, qIdx } = block;
                       return (
                         <QuestionCard
-                          key={`${sIdx}-${qIdx}-${q.questionId}`}
+                          key={q._uid}
                           question={q}
                           sIdx={sIdx}
                           qIdx={qIdx}
@@ -278,7 +307,7 @@ export default function SurveyCanvas() {
                         <GroupContainer key={`group-${block.group.id}-${idx}`} group={{ _id: block.group.id, label: block.group.label }}>
                           {block.group.questions.map(({ q, qIdx }) => (
                             <QuestionCard
-                              key={`${sIdx}-${qIdx}-${q.questionId}`}
+                              key={q._uid}
                               question={q}
                               sIdx={sIdx}
                               qIdx={qIdx}

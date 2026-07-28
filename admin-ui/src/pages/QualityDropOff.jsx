@@ -5,7 +5,35 @@ import { api } from '../api/client';
 import { UIContext } from '../context/UIContext';
 import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LabelList } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+
+const CustomTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div style={{
+        backgroundColor: 'var(--card-bg, #1e293b)',
+        border: '1px solid var(--glass-border, rgba(255,255,255,0.1))',
+        padding: '0.75rem 1rem',
+        borderRadius: '8px',
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)',
+        fontSize: '0.85rem',
+        color: 'var(--text-primary)'
+      }}>
+        <div style={{ fontWeight: 'bold', color: 'var(--primary)', marginBottom: '0.35rem' }}>
+          {data.name}: {data.questionText}
+        </div>
+        <div style={{ color: 'var(--danger)', fontWeight: 700, marginBottom: '0.25rem' }}>
+          Drop-Off Rate: {data.dropOffDisplay}
+        </div>
+        <div style={{ color: 'var(--text-secondary)' }}>
+          Answered Count: {data.answeredCount} / {data.totalResponses}
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 export default function QualityDropOff() {
   const { t } = useContext(UIContext);
@@ -54,6 +82,8 @@ export default function QualityDropOff() {
 
   if (loading) return <LoadingSpinner fullPage />;
 
+  const dynamicChartWidth = Math.max(dropOffData.length * 40, 800);
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ paddingBottom: '4rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
@@ -87,26 +117,18 @@ export default function QualityDropOff() {
             No data available for this survey.
           </div>
         ) : (
-          <div style={{ height: '400px' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dropOffData} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                <XAxis dataKey="name" stroke="var(--text-secondary)" tick={{ fill: 'var(--text-secondary)' }} />
-                <YAxis stroke="var(--text-secondary)" tick={{ fill: 'var(--text-secondary)' }} label={{ value: 'Drop-off %', angle: -90, position: 'insideLeft', fill: 'var(--text-secondary)' }} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: 'var(--card-bg)', border: 'var(--glass-border)', borderRadius: '8px' }}
-                  labelStyle={{ color: 'var(--primary)', fontWeight: 'bold' }}
-                  itemStyle={{ color: 'var(--text-primary)' }}
-                  formatter={(value, name, props) => {
-                    if (name === 'dropOffRatePct') return [`${value}%`, 'Drop-off Rate'];
-                    return [value, name];
-                  }}
-                />
-                <Bar dataKey="dropOffRatePct" fill="var(--danger)" radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey="dropOffDisplay" position="top" fill="var(--text-primary)" fontSize={12} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+            <div style={{ width: `${dynamicChartWidth}px`, height: '400px' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dropOffData} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                  <XAxis dataKey="name" stroke="var(--text-secondary)" tick={{ fill: 'var(--text-secondary)' }} />
+                  <YAxis stroke="var(--text-secondary)" tick={{ fill: 'var(--text-secondary)' }} label={{ value: 'Drop-off %', angle: -90, position: 'insideLeft', fill: 'var(--text-secondary)' }} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="dropOffRatePct" fill="var(--danger)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         )}
       </div>

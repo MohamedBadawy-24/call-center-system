@@ -69,6 +69,74 @@ const collectQuestionsFromSurvey = (survey) => {
   return questions;
 };
 
+function normalizeOption(opt) {
+  if (opt == null) return { label: '', value: '' };
+  if (typeof opt === 'object') {
+    const label = String(opt.label || opt.text || opt.value || '').trim();
+    const value = opt.value != null && String(opt.value).trim() !== '' ? String(opt.value).trim() : label;
+    return { label, value };
+  }
+  const str = String(opt).trim();
+  return { label: str, value: str };
+}
+
+function getQuestionOptions(q, preScanResponses = []) {
+  const rawOpts = (Array.isArray(q.choices) && q.choices.length > 0) ? q.choices : (q.options || []);
+  if (rawOpts.length > 0) {
+    return rawOpts.map(normalizeOption);
+  }
+  const seen = new Set();
+  const options = [];
+  (preScanResponses || []).forEach(r => {
+    (r.answers || []).forEach(a => {
+      if (a.questionId === q.id) {
+        let val = a.value;
+        if (q.subId && typeof val === 'object' && val !== null) {
+          val = val[q.subId];
+        }
+        if (Array.isArray(val)) {
+          val.forEach(v => {
+            if (v != null && !String(v).startsWith('other:')) {
+              const str = String(v).trim();
+              if (str && !seen.has(str)) {
+                seen.add(str);
+                options.push({ label: str, value: str });
+              }
+            }
+          });
+        }
+      }
+    });
+  });
+  return options;
+}
+
+function isOptionSelected(rawValue, opt, resolvedValue, qKey, choiceValueMap) {
+  if (rawValue == null) return false;
+  const arr = Array.isArray(rawValue) ? rawValue : [rawValue];
+  const resArr = Array.isArray(resolvedValue) ? resolvedValue : [resolvedValue];
+
+  const optValStr = String(opt.value).trim();
+  const optLabelStr = String(opt.label).trim();
+  const optMappedVal = choiceValueMap && choiceValueMap[qKey]
+    ? String(choiceValueMap[qKey][optLabelStr] || choiceValueMap[qKey][optValStr] || '')
+    : '';
+
+  for (let i = 0; i < arr.length; i++) {
+    const rawItem = arr[i];
+    const resItem = resArr[i];
+    if (rawItem == null) continue;
+    let rawStr = String(rawItem).trim();
+    if (rawStr.startsWith('other:')) rawStr = rawStr.substring(6).trim();
+    if (rawStr.startsWith('Other: ')) rawStr = rawStr.substring(7).trim();
+    const resStr = resItem != null ? String(resItem).trim() : '';
+
+    if (rawStr === optValStr || rawStr === optLabelStr || (optMappedVal && rawStr === optMappedVal)) return true;
+    if (resStr === optValStr || resStr === optLabelStr || (optMappedVal && resStr === optMappedVal)) return true;
+  }
+  return false;
+}
+
 exports.exportCsv = async (req, res, next) => {
   try {
     const { survey, cursor, preScanResponses, splitOtherValues, buildChoiceValueMap, resolveAnswerValue, encodeValue } = await responseService.getSurveyAndCursor(req.params.id);
@@ -92,10 +160,23 @@ exports.exportCsv = async (req, res, next) => {
 
     const headers = ['Submission Date', 'Status', 'Agent Name', 'Agent Email', 'Duration (sec)', 'Outcome Reason', 'Number Source'];
     questions.forEach((q, idx) => {
-      headers.push(q.text.replace(/,/g, ''));
-      const max = maxOtherCount[q.id] || 0;
-      for (let i = 1; i <= max; i++) {
-        headers.push(`Q${idx + 1}_other_${i}`);
+      const isMulti = q.type === 'multiple_choice';
+      const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
+
+      if (isMulti && options.length > 0) {
+        options.forEach(opt => {
+          headers.push(`${q.text.replace(/,/g, '')} - ${opt.label.replace(/,/g, '')}`);
+        });
+        const max = maxOtherCount[q.id] || 0;
+        for (let i = 1; i <= max; i++) {
+          headers.push(`Q${idx + 1}_other_${i}`);
+        }
+      } else {
+        headers.push(q.text.replace(/,/g, ''));
+        const max = maxOtherCount[q.id] || 0;
+        for (let i = 1; i <= max; i++) {
+          headers.push(`Q${idx + 1}_other_${i}`);
+        }
       }
     });
     res.write('\uFEFF'); // BOM for Excel UTF-8
@@ -122,18 +203,38 @@ exports.exportCsv = async (req, res, next) => {
           }
         }
         const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
-        const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
-        const parsed = splitOtherValues(resolvedBase);
-        
-        let val = encodeValue(parsed.baseValue);
-        const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : val;
-        row.push(`"${strVal}"`);
-        
-        const max = maxOtherCount[q.id] || 0;
-        for (let i = 1; i <= max; i++) {
-          let extraVal = encodeValue(parsed.otherValues[i - 1] || '');
-          const strExtra = typeof extraVal === 'string' ? extraVal.replace(/"/g, '""').replace(/\n/g, ' ') : extraVal;
-          row.push(`"${strExtra}"`);
+        const isMulti = q.type === 'multiple_choice';
+        const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
+
+        if (isMulti && options.length > 0) {
+          const resolvedValue = resolveAnswerValue(qKey, rawValue, choiceValueMap);
+          const parsed = splitOtherValues(rawValue);
+          options.forEach(opt => {
+            const selected = isOptionSelected(rawValue, opt, resolvedValue, qKey, choiceValueMap);
+            const val = selected ? encodeValue(opt.value) : '';
+            const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : (val != null ? val : '');
+            row.push(`"${strVal}"`);
+          });
+          const max = maxOtherCount[q.id] || 0;
+          for (let i = 1; i <= max; i++) {
+            let extraVal = encodeValue(parsed.otherValues[i - 1] || '');
+            const strExtra = typeof extraVal === 'string' ? extraVal.replace(/"/g, '""').replace(/\n/g, ' ') : extraVal;
+            row.push(`"${strExtra}"`);
+          }
+        } else {
+          const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
+          const parsed = splitOtherValues(resolvedBase);
+          
+          let val = encodeValue(parsed.baseValue);
+          const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : (val != null ? val : '');
+          row.push(`"${strVal}"`);
+          
+          const max = maxOtherCount[q.id] || 0;
+          for (let i = 1; i <= max; i++) {
+            let extraVal = encodeValue(parsed.otherValues[i - 1] || '');
+            const strExtra = typeof extraVal === 'string' ? extraVal.replace(/"/g, '""').replace(/\n/g, ' ') : extraVal;
+            row.push(`"${strExtra}"`);
+          }
         }
       });
       res.write(row.join(',') + '\n');
@@ -185,10 +286,23 @@ exports.exportAdvanced = async (req, res, next) => {
 
       const headers = ['Serial', 'Submission_Date', 'Status', 'Interview_Outcome', 'Outcome_Reason', 'Agent_Name', 'Duration_Secs', 'Number_Source'];
       questions.forEach((q, idx) => {
-        headers.push(q.text.replace(/,/g, ''));
-        const max = maxOtherCount[q.id] || 0;
-        for (let i = 1; i <= max; i++) {
-          headers.push(`Q${idx + 1}_other_${i}`);
+        const isMulti = q.type === 'multiple_choice';
+        const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
+
+        if (isMulti && options.length > 0) {
+          options.forEach(opt => {
+            headers.push(`${q.text.replace(/,/g, '')} - ${opt.label.replace(/,/g, '')}`);
+          });
+          const max = maxOtherCount[q.id] || 0;
+          for (let i = 1; i <= max; i++) {
+            headers.push(`Q${idx + 1}_other_${i}`);
+          }
+        } else {
+          headers.push(q.text.replace(/,/g, ''));
+          const max = maxOtherCount[q.id] || 0;
+          for (let i = 1; i <= max; i++) {
+            headers.push(`Q${idx + 1}_other_${i}`);
+          }
         }
       });
       res.write(headers.join(',') + '\n');
@@ -217,18 +331,38 @@ exports.exportAdvanced = async (req, res, next) => {
             }
           }
           const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
-          const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
-          const parsed = splitOtherValues(resolvedBase);
-          
-          let val = encodeValue(parsed.baseValue);
-          const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : val;
-          row.push(`"${strVal}"`);
-          
-          const max = maxOtherCount[q.id] || 0;
-          for (let i = 1; i <= max; i++) {
-            let extraVal = encodeValue(parsed.otherValues[i - 1] || '');
-            const strExtra = typeof extraVal === 'string' ? extraVal.replace(/"/g, '""').replace(/\n/g, ' ') : extraVal;
-            row.push(`"${strExtra}"`);
+          const isMulti = q.type === 'multiple_choice';
+          const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
+
+          if (isMulti && options.length > 0) {
+            const resolvedValue = resolveAnswerValue(qKey, rawValue, choiceValueMap);
+            const parsed = splitOtherValues(rawValue);
+            options.forEach(opt => {
+              const selected = isOptionSelected(rawValue, opt, resolvedValue, qKey, choiceValueMap);
+              const val = selected ? encodeValue(opt.value) : '';
+              const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : (val != null ? val : '');
+              row.push(`"${strVal}"`);
+            });
+            const max = maxOtherCount[q.id] || 0;
+            for (let i = 1; i <= max; i++) {
+              let extraVal = encodeValue(parsed.otherValues[i - 1] || '');
+              const strExtra = typeof extraVal === 'string' ? extraVal.replace(/"/g, '""').replace(/\n/g, ' ') : extraVal;
+              row.push(`"${strExtra}"`);
+            }
+          } else {
+            const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
+            const parsed = splitOtherValues(resolvedBase);
+            
+            let val = encodeValue(parsed.baseValue);
+            const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : (val != null ? val : '');
+            row.push(`"${strVal}"`);
+            
+            const max = maxOtherCount[q.id] || 0;
+            for (let i = 1; i <= max; i++) {
+              let extraVal = encodeValue(parsed.otherValues[i - 1] || '');
+              const strExtra = typeof extraVal === 'string' ? extraVal.replace(/"/g, '""').replace(/\n/g, ' ') : extraVal;
+              row.push(`"${strExtra}"`);
+            }
           }
         });
         res.write(row.join(',') + '\n');
@@ -277,10 +411,27 @@ exports.exportAdvanced = async (req, res, next) => {
       ];
 
       questions.forEach((q, idx) => {
-        cols.push({ header: q.text, key: `Q${idx + 1}`, width: 25 });
-        const max = maxOtherCount[q.id] || 0;
-        for (let i = 1; i <= max; i++) {
-          cols.push({ header: `Q${idx + 1}_other_${i}`, key: `Q${idx + 1}_other_${i}`, width: 25 });
+        const isMulti = q.type === 'multiple_choice';
+        const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
+
+        if (isMulti && options.length > 0) {
+          options.forEach((opt, oIdx) => {
+            cols.push({
+              header: `${q.text} - ${opt.label}`,
+              key: `Q${idx + 1}_opt_${oIdx + 1}`,
+              width: 25
+            });
+          });
+          const max = maxOtherCount[q.id] || 0;
+          for (let i = 1; i <= max; i++) {
+            cols.push({ header: `Q${idx + 1}_other_${i}`, key: `Q${idx + 1}_other_${i}`, width: 25 });
+          }
+        } else {
+          cols.push({ header: q.text, key: `Q${idx + 1}`, width: 25 });
+          const max = maxOtherCount[q.id] || 0;
+          for (let i = 1; i <= max; i++) {
+            cols.push({ header: `Q${idx + 1}_other_${i}`, key: `Q${idx + 1}_other_${i}`, width: 25 });
+          }
         }
       });
 
@@ -310,13 +461,29 @@ exports.exportAdvanced = async (req, res, next) => {
             }
           }
           const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
-          const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
-          const parsed = splitOtherValues(resolvedBase);
-          row[`Q${idx + 1}`] = encodeValue(parsed.baseValue);
+          const isMulti = q.type === 'multiple_choice';
+          const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
 
-          const max = maxOtherCount[q.id] || 0;
-          for (let i = 1; i <= max; i++) {
-            row[`Q${idx + 1}_other_${i}`] = encodeValue(parsed.otherValues[i - 1] || '');
+          if (isMulti && options.length > 0) {
+            const resolvedValue = resolveAnswerValue(qKey, rawValue, choiceValueMap);
+            const parsed = splitOtherValues(rawValue);
+            options.forEach((opt, oIdx) => {
+              const selected = isOptionSelected(rawValue, opt, resolvedValue, qKey, choiceValueMap);
+              row[`Q${idx + 1}_opt_${oIdx + 1}`] = selected ? encodeValue(opt.value) : '';
+            });
+            const max = maxOtherCount[q.id] || 0;
+            for (let i = 1; i <= max; i++) {
+              row[`Q${idx + 1}_other_${i}`] = encodeValue(parsed.otherValues[i - 1] || '');
+            }
+          } else {
+            const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
+            const parsed = splitOtherValues(resolvedBase);
+            row[`Q${idx + 1}`] = encodeValue(parsed.baseValue);
+
+            const max = maxOtherCount[q.id] || 0;
+            for (let i = 1; i <= max; i++) {
+              row[`Q${idx + 1}_other_${i}`] = encodeValue(parsed.otherValues[i - 1] || '');
+            }
           }
         });
 
@@ -340,30 +507,56 @@ exports.exportAdvanced = async (req, res, next) => {
         { name: 'DURATION', label: 'Duration (Secs)', type: VariableType.Numeric, width: 8, decimal: 0 },
         { name: 'SOURCE', label: 'Number Source', type: VariableType.String, width: 16 },
       ];
-      questions.forEach((q, idx) => {
-        const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
-        const qMap = choiceValueMap[qKey];
-        const hasNumericValues = qMap && Object.values(qMap).some(v => v !== '' && !isNaN(Number(v)));
-        const isYesNo = (q.options || []).some(opt => ['Yes', 'No', 'نعم', 'لا'].includes(typeof opt === 'string' ? opt.trim() : (opt?.label || '')));
-        const isNumeric = q.type === 'number' || q.type === 'number_ratio' || q.type === 'rating' || isYesNo || hasNumericValues;
-        
-        vars.push({
-          name: `Q${idx + 1}`,
-          label: (q.text || '').substring(0, 255),
-          type: isNumeric ? VariableType.Numeric : VariableType.String,
-          width: isNumeric ? 8 : 255,
-          decimal: 0,
-        });
 
-        const max = maxOtherCount[q.id] || 0;
-        for (let i = 1; i <= max; i++) {
-          vars.push({
-            name: `Q${idx + 1}_other_${i}`,
-            label: `${(q.text || '').substring(0, 240)} (Other ${i})`,
-            type: VariableType.String,
-            width: 255,
-            decimal: 0
+      questions.forEach((q, idx) => {
+        const isMulti = q.type === 'multiple_choice';
+        const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
+
+        if (isMulti && options.length > 0) {
+          options.forEach((opt, oIdx) => {
+            vars.push({
+              name: `Q${idx + 1}_${oIdx + 1}`.substring(0, 16),
+              label: `${(q.text || '').substring(0, 200)} - ${(opt.label || '').substring(0, 50)}`,
+              type: VariableType.Numeric,
+              width: 8,
+              decimal: 0,
+            });
           });
+          const max = maxOtherCount[q.id] || 0;
+          for (let i = 1; i <= max; i++) {
+            vars.push({
+              name: `Q${idx + 1}_oth_${i}`.substring(0, 16),
+              label: `${(q.text || '').substring(0, 240)} (Other ${i})`,
+              type: VariableType.String,
+              width: 255,
+              decimal: 0
+            });
+          }
+        } else {
+          const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
+          const qMap = choiceValueMap[qKey];
+          const hasNumericValues = qMap && Object.values(qMap).some(v => v !== '' && !isNaN(Number(v)));
+          const isYesNo = (q.options || []).some(opt => ['Yes', 'No', 'نعم', 'لا'].includes(typeof opt === 'string' ? opt.trim() : (opt?.label || '')));
+          const isNumeric = q.type === 'number' || q.type === 'number_ratio' || q.type === 'rating' || isYesNo || hasNumericValues;
+
+          vars.push({
+            name: `Q${idx + 1}`,
+            label: (q.text || '').substring(0, 255),
+            type: isNumeric ? VariableType.Numeric : VariableType.String,
+            width: isNumeric ? 8 : 255,
+            decimal: 0,
+          });
+
+          const max = maxOtherCount[q.id] || 0;
+          for (let i = 1; i <= max; i++) {
+            vars.push({
+              name: `Q${idx + 1}_other_${i}`,
+              label: `${(q.text || '').substring(0, 240)} (Other ${i})`,
+              type: VariableType.String,
+              width: 255,
+              decimal: 0
+            });
+          }
         }
       });
 
@@ -389,25 +582,41 @@ exports.exportAdvanced = async (req, res, next) => {
             }
           }
           const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
-          const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
-          const parsed = splitOtherValues(resolvedBase);
-          const encoded = encodeValue(parsed.baseValue);
-          
-          const qMap = choiceValueMap[qKey];
-          const hasNumericValues = qMap && Object.values(qMap).some(v => v !== '' && !isNaN(Number(v)));
-          const isYesNo = (q.options || []).some(opt => ['Yes', 'No', 'نعم', 'لا'].includes(typeof opt === 'string' ? opt.trim() : (opt?.label || '')));
-          const isNumeric = q.type === 'number' || q.type === 'number_ratio' || q.type === 'rating' || isYesNo || hasNumericValues;
-          
-          if (isNumeric) {
-            const num = Number(encoded);
-            rec.push(Number.isFinite(num) ? num : (encoded != null && encoded !== '' ? Number(encoded) || 0 : 0));
-          } else {
-            rec.push(String(encoded != null ? encoded : ''));
-          }
+          const isMulti = q.type === 'multiple_choice';
+          const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
 
-          const max = maxOtherCount[q.id] || 0;
-          for (let i = 1; i <= max; i++) {
-            rec.push(String(encodeValue(parsed.otherValues[i - 1] || '')));
+          if (isMulti && options.length > 0) {
+            const resolvedValue = resolveAnswerValue(qKey, rawValue, choiceValueMap);
+            const parsed = splitOtherValues(rawValue);
+            options.forEach(opt => {
+              const selected = isOptionSelected(rawValue, opt, resolvedValue, qKey, choiceValueMap);
+              rec.push(selected ? 1 : 0);
+            });
+            const max = maxOtherCount[q.id] || 0;
+            for (let i = 1; i <= max; i++) {
+              rec.push(String(encodeValue(parsed.otherValues[i - 1] || '')));
+            }
+          } else {
+            const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
+            const parsed = splitOtherValues(resolvedBase);
+            const encoded = encodeValue(parsed.baseValue);
+
+            const qMap = choiceValueMap[qKey];
+            const hasNumericValues = qMap && Object.values(qMap).some(v => v !== '' && !isNaN(Number(v)));
+            const isYesNo = (q.options || []).some(opt => ['Yes', 'No', 'نعم', 'لا'].includes(typeof opt === 'string' ? opt.trim() : (opt?.label || '')));
+            const isNumeric = q.type === 'number' || q.type === 'number_ratio' || q.type === 'rating' || isYesNo || hasNumericValues;
+
+            if (isNumeric) {
+              const num = Number(encoded);
+              rec.push(Number.isFinite(num) ? num : (encoded != null && encoded !== '' ? Number(encoded) || 0 : 0));
+            } else {
+              rec.push(String(encoded != null ? encoded : ''));
+            }
+
+            const max = maxOtherCount[q.id] || 0;
+            for (let i = 1; i <= max; i++) {
+              rec.push(String(encodeValue(parsed.otherValues[i - 1] || '')));
+            }
           }
         });
         return rec;

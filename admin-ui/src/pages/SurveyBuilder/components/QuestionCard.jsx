@@ -233,6 +233,15 @@ export default function QuestionCard({
                 </div>
               )}
 
+              {question.type === 'ranking' && isAdmin && (
+                <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+                  <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>
+                    <input dir="auto" type="checkbox" checked={!!question.selectBeforeRank} onChange={e => updateQ({ selectBeforeRank: e.target.checked })} />
+                    Require agent to select items before ranking (Select & Rank)
+                  </label>
+                </div>
+              )}
+
               {question.type === 'multiple_choice' && (
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
                   <div style={{ flex: 1 }}>

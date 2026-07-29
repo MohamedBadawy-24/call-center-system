@@ -285,9 +285,10 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
         {q.type === 'ranking' && (() => {
           const choiceTexts = (q.choices || []).map(c => c.text || c);
           const isDynamic = choiceTexts.length === 0;
-          const rankItems = Array.isArray(answers[qId]) ? answers[qId] : (isDynamic ? [] : [...choiceTexts]);
+          const isSelectAndRank = !!q.selectBeforeRank && !isDynamic;
+          const rankItems = Array.isArray(answers[qId]) ? answers[qId] : (isDynamic || isSelectAndRank ? [] : [...choiceTexts]);
           // Auto-initialize static ranking if answer not set yet
-          if (!isDynamic && (!Array.isArray(answers[qId]) || answers[qId].length === 0)) {
+          if (!isDynamic && !isSelectAndRank && (!Array.isArray(answers[qId]) || answers[qId].length === 0)) {
             setTimeout(() => handleAnswerChange(qId, [...choiceTexts]), 0);
           }
           const moveItem = (fromIdx, toIdx) => {
@@ -328,6 +329,31 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
 
           return (
             <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {/* Select & Rank checkboxes */}
+              {isSelectAndRank && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
+                    {isRtl ? 'اختر العناصر التي تريد ترتيبها:' : 'Select items to rank:'}
+                  </div>
+                  {choiceTexts.map((choiceTxt, cIdx) => (
+                    <label key={`sr-${cIdx}`} dir="auto" className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: 'var(--card-bg, #ffffff)', border: '1px solid var(--border-color, #e5e7eb)', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                      <input
+                        type="checkbox"
+                        className="custom-checkbox"
+                        checked={rankItems.includes(choiceTxt)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            handleAnswerChange(qId, [...rankItems, choiceTxt]);
+                          } else {
+                            handleAnswerChange(qId, rankItems.filter(v => v !== choiceTxt));
+                          }
+                        }}
+                      />
+                      <span style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--text-primary)' }}>{choiceTxt}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
               {/* Dynamic free-listing input */}
               {isDynamic && (
                 <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>

@@ -29,6 +29,7 @@ const QuestionSchema = new mongoose.Schema({
   }, // custom ID for logic refs
   required: { type: Boolean, default: false },
   optional: { type: Boolean, default: false },
+  selectBeforeRank: { type: Boolean, default: false },
   text: String,
   script: String, // What the agent reads
   category: String, // intro, screening, demographic, main

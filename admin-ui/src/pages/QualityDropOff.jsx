@@ -1,42 +1,15 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { History, TrendingDown } from 'lucide-react';
 import { api } from '../api/client';
-import { UIContext } from '../context/UIContext';
+import { useLanguage } from '../hooks/useLanguage';
 import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
-const CustomTooltip = ({ active, payload }) => {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload;
-    return (
-      <div style={{
-        backgroundColor: 'var(--card-bg, #1e293b)',
-        border: '1px solid var(--glass-border, rgba(255,255,255,0.1))',
-        padding: '0.75rem 1rem',
-        borderRadius: '8px',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)',
-        fontSize: '0.85rem',
-        color: 'var(--text-primary)'
-      }}>
-        <div style={{ fontWeight: 'bold', color: 'var(--primary)', marginBottom: '0.35rem' }}>
-          {data.name}: {data.questionText}
-        </div>
-        <div style={{ color: 'var(--danger)', fontWeight: 700, marginBottom: '0.25rem' }}>
-          Drop-Off Rate: {data.dropOffDisplay}
-        </div>
-        <div style={{ color: 'var(--text-secondary)' }}>
-          Answered Count: {data.answeredCount} / {data.totalResponses}
-        </div>
-      </div>
-    );
-  }
-  return null;
-};
-
 export default function QualityDropOff() {
-  const { t } = useContext(UIContext);
+  const { t, language } = useLanguage();
+  const isRtl = language === 'ar';
   const [surveys, setSurveys] = useState([]);
   const [selectedSurvey, setSelectedSurvey] = useState('');
   const [dropOffData, setDropOffData] = useState([]);
@@ -80,12 +53,40 @@ export default function QualityDropOff() {
     fetchDropOff();
   }, [selectedSurvey]);
 
+  const CustomTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div dir="auto" style={{
+          backgroundColor: 'var(--card-bg, #1e293b)',
+          border: '1px solid var(--glass-border, rgba(255,255,255,0.1))',
+          padding: '0.75rem 1rem',
+          borderRadius: '8px',
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)',
+          fontSize: '0.85rem',
+          color: 'var(--text-primary)'
+        }}>
+          <div style={{ fontWeight: 'bold', color: 'var(--primary)', marginBottom: '0.35rem' }}>
+            {data.name}: {data.questionText}
+          </div>
+          <div style={{ color: 'var(--danger)', fontWeight: 700, marginBottom: '0.25rem' }}>
+            {t('dropOffRatePerQuestion')}: {data.dropOffDisplay}
+          </div>
+          <div style={{ color: 'var(--text-secondary)' }}>
+            {t('answeredCount')}: {data.answeredCount} / {data.totalResponses}
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   if (loading) return <LoadingSpinner fullPage />;
 
   const dynamicChartWidth = Math.max(dropOffData.length * 40, 800);
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ paddingBottom: '4rem' }}>
+    <motion.div dir="auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ paddingBottom: '4rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: 0 }}>
           <TrendingDown size={32} color="var(--danger)" />
@@ -95,6 +96,7 @@ export default function QualityDropOff() {
         <div>
           <select 
             className="glass-input" 
+            dir="auto"
             value={selectedSurvey} 
             onChange={(e) => setSelectedSurvey(e.target.value)}
             style={{ padding: '0.5rem', borderRadius: 'var(--radius-md)', minWidth: '250px' }}
@@ -107,14 +109,14 @@ export default function QualityDropOff() {
       </div>
 
       <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
-        <h3 style={{ marginBottom: '1.5rem' }}>Drop-Off Rate per Question</h3>
+        <h3 style={{ marginBottom: '1.5rem' }}>{t('dropOffRatePerQuestion')}</h3>
         {chartLoading ? (
           <div style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div className="spinner"></div>
           </div>
         ) : dropOffData.length === 0 ? (
           <div style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
-            No data available for this survey.
+            {t('noDataFound')}
           </div>
         ) : (
           <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '0.5rem' }}>
@@ -134,14 +136,14 @@ export default function QualityDropOff() {
       </div>
 
       <div className="glass-card" style={{ padding: '1.5rem', overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
+        <table dir="auto" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
           <thead>
             <tr>
-              <th>#</th>
-              <th>Question Text</th>
-              <th>Answered Count</th>
-              <th>Total Responses</th>
-              <th style={{ color: 'var(--danger)' }}>Drop-Off Rate</th>
+              <th style={{ textAlign: isRtl ? 'right' : 'left' }}>#</th>
+              <th style={{ textAlign: isRtl ? 'right' : 'left' }}>{t('question')}</th>
+              <th style={{ textAlign: isRtl ? 'right' : 'left' }}>{t('answeredCount')}</th>
+              <th style={{ textAlign: isRtl ? 'right' : 'left' }}>{t('totalResponses')}</th>
+              <th style={{ color: 'var(--danger)', textAlign: isRtl ? 'right' : 'left' }}>{t('dropOffRatePerQuestion')}</th>
             </tr>
           </thead>
           <tbody>

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useContext } from 'react';
 import { api } from '../api/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { History, Search, ChevronDown, ChevronUp, User, ClipboardList, Clock } from 'lucide-react';
-import { UIContext } from '../context/UIContext';
+import { useLanguage } from '../hooks/useLanguage';
 import LoadingSpinner from '../components/LoadingSpinner';
 import FlagPopover from '../components/FlagPopover';
 
@@ -13,7 +13,8 @@ import { AuthContext } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 
 export default function ResponseHistory() {
-  const { t, language } = useContext(UIContext);
+  const { t, language } = useLanguage();
+  const isRtl = language === 'ar';
   const { user } = useContext(AuthContext);
   const [responses, setResponses] = useState([]);
   const [loading, setLoading] = useState(true);

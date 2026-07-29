@@ -9,11 +9,13 @@ import {
 } from 'lucide-react';
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
+import { useLanguage } from '../hooks/useLanguage';
 import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function AdminDashboard() {
-  const { t } = useContext(UIContext);
+  const { t, language } = useLanguage();
+  const isRtl = language === 'ar';
   const { user } = useContext(AuthContext);
   const [surveys, setSurveys] = useState([]);
   const [agentStats, setAgentStats] = useState([]);

@@ -1,13 +1,14 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
+import { useLanguage } from '../hooks/useLanguage';
 import { Search, AlertTriangle, CheckCircle, XCircle, ArrowLeft, GitCompare } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 export default function CampaignComparison() {
-  const { t, isRtl } = useContext(UIContext);
+  const { t, language } = useLanguage();
+  const isRtl = language === 'ar';
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
 
@@ -19,190 +20,182 @@ export default function CampaignComparison() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
-  // Load campaigns on mount
-  React.useEffect(() => {
-    api.get('/surveys').then(res => {
-      setSurveys(res.data || []);
+  const loadSurveys = async () => {
+    try {
+      const res = await api.get('/admin/surveys-stats');
+      const linked = res.data.filter(s => s.linkedCampaignId);
+      setSurveys(linked);
+      if (linked.length > 0) setSelectedSurveyId(linked[0]._id);
       setSurveysLoaded(true);
-    }).catch(console.error);
-  }, []);
-
-  const handleCompare = async () => {
-    if (!selectedSurveyId || !searchValue.trim()) {
-      toast.warning('Please select a campaign and enter a serial number or phone number.');
-      return;
+    } catch (err) {
+      toast.error(t('failedLoadCampaigns') || 'Failed to load campaigns for comparison');
     }
+  };
+
+  const handleCompare = async (e) => {
+    e.preventDefault();
+    if (!selectedSurveyId || !searchValue.trim()) return;
+
     setLoading(true);
     setError('');
     setResult(null);
+
     try {
-      const res = await api.get('/admin/compare', {
-        params: { surveyId: selectedSurveyId, searchValue: searchValue.trim() }
-      });
+      const res = await api.get(`/admin/compare/${selectedSurveyId}/${encodeURIComponent(searchValue.trim())}`);
       setResult(res.data);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to fetch comparison data.');
+      setError(err.response?.data?.message || t('failedCompareResponses') || 'Failed to compare responses');
     } finally {
       setLoading(false);
     }
   };
 
-  const getAnswerForQuestion = (response, questionId) => {
-    if (!response || !response.answers) return null;
-    const ans = response.answers.find(a => a.questionId === questionId);
-    return ans ? ans.value : null;
+  // Helper to extract a flat map of question answers
+  const getFlatAnswers = (responseDoc) => {
+    if (!responseDoc || !responseDoc.answers) return {};
+    return responseDoc.answers;
   };
 
-  const formatAnswer = (value) => {
-    if (value === null || value === undefined) return '—';
-    if (Array.isArray(value)) return value.map(v => formatAnswer(v)).join(', ');
-    if (typeof value === 'object') return Object.values(value).map(v => formatAnswer(v)).join(' | ');
-    return String(value);
-  };
+  // Merge questions from both surveys to show a comprehensive comparison table
+  const allQuestionsMap = new Map();
+  
+  if (result) {
+    const processSurvey = (survey) => {
+      if (!survey || !survey.sections) return;
+      survey.sections.forEach(sec => {
+        sec.questions.forEach(q => {
+          if (q.type === 'group') {
+            if (q.subInputs) {
+              q.subInputs.forEach(sub => {
+                const flatId = `${q.questionId}_${sub.id}`;
+                if (!allQuestionsMap.has(flatId)) {
+                  allQuestionsMap.set(flatId, { id: flatId, text: `${q.text} - ${sub.label}` });
+                }
+              });
+            }
+          } else {
+            if (!allQuestionsMap.has(q.questionId)) {
+              allQuestionsMap.set(q.questionId, { id: q.questionId, text: q.text });
+            }
+          }
+        });
+      });
+    };
 
-  const getAllQuestions = () => {
-    if (!result?.surveyA?.sections) return [];
-    const questions = [];
-    for (const section of result.surveyA.sections) {
-      for (const q of section.questions || []) {
-        questions.push({ ...q, sectionTitle: section.title });
-      }
-    }
-    return questions;
-  };
+    processSurvey(result.surveyA);
+    processSurvey(result.surveyB);
+  }
 
-  const allQuestions = result ? getAllQuestions() : [];
+  const allQuestions = Array.from(allQuestionsMap.values());
+  const ansA = result ? getFlatAnswers(result.responseA) : {};
+  const ansB = result ? getFlatAnswers(result.responseB) : {};
+
+  // Formatter for display
+  const formatAnswer = (val) => {
+    if (val === null || val === undefined || val === '') return <span style={{ color: 'var(--text-disabled)', fontStyle: 'italic' }}>—</span>;
+    if (Array.isArray(val)) return val.join(', ');
+    if (typeof val === 'boolean') return val ? (t('yes') || 'Yes') : (t('no') || 'No');
+    if (typeof val === 'object') return JSON.stringify(val);
+    return String(val);
+  };
 
   return (
-    <div className="fade-enter-active" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
-        <button className="btn-secondary" onClick={() => navigate(-1)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minHeight: '40px' }}>
-          <ArrowLeft size={16} />
-          {t('back') || 'Back'}
+    <div dir="auto" style={{ paddingBottom: '4rem', maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+        <button className="btn-secondary" onClick={() => navigate('/admin')} style={{ padding: '0.5rem' }}>
+          <ArrowLeft size={20} />
         </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <GitCompare size={28} style={{ color: 'var(--primary)' }} />
-          <h1 style={{ margin: 0 }}>{t('campaignComparison') || 'Campaign Comparison'}</h1>
-        </div>
+        <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: 0 }}>
+          <GitCompare size={32} color="var(--primary)" />
+          {t('campaignComparison') || 'Campaign Comparison'}
+        </h1>
       </div>
 
-      {/* Search Panel */}
-      <div className="glass-card" style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.1rem', marginBottom: '1.25rem', marginTop: 0 }}>
-          {t('selectCampaignAndSearch') || 'Select Campaign & Search'}
-        </h2>
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div style={{ flex: '1 1 280px' }}>
-            <label className="form-label">{t('campaigns') || 'Campaign'}</label>
-            <select
-              className="input-field"
-              value={selectedSurveyId}
-              onChange={e => setSelectedSurveyId(e.target.value)}
-            >
-              <option value="">{t('selectCampaign') || '— Select a campaign —'}</option>
-              {surveys
-                .filter(s => s.isActive !== false)
-                .map(s => (
-                  <option key={s._id} value={s._id}>{s.title}</option>
+      <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
+        <h3 style={{ marginBottom: '1rem' }}>{t('compareQualityAgentResponses') || 'Compare Quality vs Agent Responses'}</h3>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+          {t('compareDescription') || "Select an Agent Campaign that has a linked Quality Campaign, then search by the record's identifier (Serial Number or Phone) to see the responses side-by-side."}
+        </p>
+
+        {!surveysLoaded ? (
+          <button className="btn-primary" onClick={loadSurveys}>{t('loadLinkedCampaigns') || 'Load Linked Campaigns'}</button>
+        ) : (
+          <form onSubmit={handleCompare} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 300px' }}>
+              <label className="form-label">{t('selectAgentCampaign') || 'Select Agent Campaign'}</label>
+              <select className="input-field" value={selectedSurveyId} onChange={(e) => setSelectedSurveyId(e.target.value)} required>
+                <option value="">-- {t('selectCampaign') || 'Select Campaign'} --</option>
+                {surveys.map(s => (
+                  <option key={s._id} value={s._id}>{s.title} ({t('matchBy') || 'Match by'}: {s.comparisonMatchField})</option>
                 ))}
-            </select>
-          </div>
+              </select>
+            </div>
+            
+            <div style={{ flex: '1 1 250px' }}>
+              <label className="form-label">{t('searchIdentifier') || 'Search Identifier'}</label>
+              <div className="search-container" style={{ margin: 0 }}>
+                <Search className="search-icon" size={20} />
+                <input 
+                  type="text" 
+                  placeholder={t('serialOrPhone') || "Serial # or Phone..."} 
+                  className="search-input"
+                  value={searchValue}
+                  onChange={(e) => setSearchValue(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
 
-          <div style={{ flex: '1 1 240px' }}>
-            <label className="form-label">{t('serialOrPhone') || 'Serial or Phone Number'}</label>
-            <input
-              className="input-field"
-              type="text"
-              placeholder="e.g. 1001 or 01012345678"
-              value={searchValue}
-              onChange={e => setSearchValue(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleCompare()}
-            />
-          </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', height: '68px' }}>
+              <button type="submit" className="btn-primary" disabled={loading} style={{ height: '42px', padding: '0 2rem' }}>
+                {loading ? (t('searching') || 'Searching...') : (t('compare') || 'Compare')}
+              </button>
+            </div>
+          </form>
+        )}
 
-          <div>
-            <button
-              className="btn-primary"
-              onClick={handleCompare}
-              disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minHeight: '46px' }}
-            >
-              {loading ? (
-                <span className="spinner" style={{ width: '18px', height: '18px' }} />
-              ) : (
-                <Search size={18} />
-              )}
-              {t('compare') || 'Compare'}
-            </button>
+        {error && (
+          <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+            <AlertTriangle size={20} />
+            {error}
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Error State */}
-      {error && (
-        <div className="glass-card" style={{ borderColor: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-          <AlertTriangle size={24} style={{ color: 'var(--danger)', flexShrink: 0 }} />
-          <p style={{ margin: 0, color: 'var(--danger)', fontWeight: 600 }}>{error}</p>
-        </div>
-      )}
-
-      {/* Result */}
       {result && (
         <>
-          {/* Campaign Labels */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
             <div className="glass-card" style={{ background: 'hsla(var(--p-h), var(--p-s), var(--p-l), 0.08)', borderColor: 'var(--primary)' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--primary)', marginBottom: '0.4rem' }}>
-                {t('targetAudienceAgent') || 'Agent Campaign'}
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--primary)', marginBottom: '0.4rem' }}>
+                {t('agentCampaign') || 'Agent Campaign'}
               </div>
               <div style={{ fontWeight: 700, fontSize: '1rem' }}>{result.surveyA?.title}</div>
-              <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                Serial: <strong>{result.serialA || '—'}</strong>
-                {result.phoneNumber && <span> · Phone: <strong>{result.phoneNumber}</strong></span>}
-              </div>
-              {result.responseA?.agentId && (
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
-                  Agent: {result.responseA.agentId.name || result.responseA.agentId.email}
-                </div>
-              )}
             </div>
-
             <div className="glass-card" style={{ background: 'hsla(260, 80%, 65%, 0.08)', borderColor: 'var(--accent)' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent)', marginBottom: '0.4rem' }}>
-                {t('targetAudienceQuality') || 'Quality Campaign'}
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.4rem' }}>
+                {t('qualityCampaign') || 'Quality Campaign'}
               </div>
               <div style={{ fontWeight: 700, fontSize: '1rem' }}>{result.surveyB?.title}</div>
-              <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                Serial: <strong>{result.serialB || '—'}</strong>
-              </div>
-              {result.responseB?.agentId && (
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
-                  Agent: {result.responseB.agentId.name || result.responseB.agentId.email}
-                </div>
-              )}
             </div>
           </div>
 
-          {/* No response banners */}
           {!result.responseA && (
             <div className="glass-card" style={{ borderColor: 'var(--warning)', display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem', padding: '1rem 1.5rem' }}>
               <AlertTriangle size={20} style={{ color: 'var(--warning)', flexShrink: 0 }} />
-              <span style={{ color: 'var(--warning)', fontWeight: 600 }}>No response found in the Agent campaign for this record.</span>
+              <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{t('noResponseFoundAgent') || 'No response found in the Agent campaign for this record.'}</span>
             </div>
           )}
           {!result.responseB && (
             <div className="glass-card" style={{ borderColor: 'var(--warning)', display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem', padding: '1rem 1.5rem' }}>
               <AlertTriangle size={20} style={{ color: 'var(--warning)', flexShrink: 0 }} />
-              <span style={{ color: 'var(--warning)', fontWeight: 600 }}>No response found in the Quality campaign for this record.</span>
+              <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{t('noResponseFoundQuality') || 'No response found in the Quality campaign for this record.'}</span>
             </div>
           )}
 
-          {/* Comparison Table */}
           {result.responseA && result.responseB && allQuestions.length > 0 && (
             <div className="glass-card" style={{ overflow: 'hidden', padding: 0 }}>
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', borderSpacing: 0 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: 'var(--primary-low)' }}>
                       <th style={{ padding: '0.85rem 1.25rem', textAlign: isRtl ? 'right' : 'left', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', width: '35%', borderBottom: '1px solid var(--border-color)' }}>

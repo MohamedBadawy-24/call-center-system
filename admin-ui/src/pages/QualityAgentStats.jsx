@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Download, Search, Filter } from 'lucide-react';
 import { api } from '../api/client';
-import { UIContext } from '../context/UIContext';
+import { useLanguage } from '../hooks/useLanguage';
 import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function QualityAgentStats() {
-  const { t } = useContext(UIContext);
+  const { t, language } = useLanguage();
+  const isRtl = language === 'ar';
   const [stats, setStats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('daily');
@@ -49,7 +50,7 @@ export default function QualityAgentStats() {
   if (loading) return <LoadingSpinner fullPage />;
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ paddingBottom: '4rem' }}>
+    <motion.div dir="auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ paddingBottom: '4rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: 0 }}>
           <Filter size={32} color="var(--primary)" />
@@ -58,6 +59,7 @@ export default function QualityAgentStats() {
 
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <select 
+            dir="auto"
             className="glass-input" 
             value={period} 
             onChange={(e) => setPeriod(e.target.value)}
@@ -68,8 +70,8 @@ export default function QualityAgentStats() {
             <option value="monthly">Monthly</option>
           </select>
           
-          <button className="btn-primary" onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Download size={16} /> Export to Excel
+          <button dir="auto" className="btn-primary" onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Download size={16} /> {t('exportData') || 'Export to Excel'}
           </button>
         </div>
       </div>
@@ -77,8 +79,9 @@ export default function QualityAgentStats() {
       <div className="search-container" style={{ marginBottom: '2rem' }}>
         <Search className="search-icon" size={20} />
         <input 
+          dir="auto"
           type="text" 
-          placeholder="Search by agent name..." 
+          placeholder={t('searchPlaceholder') || 'Search by agent name...'} 
           className="search-input"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -86,24 +89,24 @@ export default function QualityAgentStats() {
       </div>
 
       <div className="glass-card" style={{ padding: '1.5rem', overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
+        <table dir="auto" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
           <thead>
             <tr>
-              <th>Date / Period</th>
-              <th>Agent Name</th>
-              <th>Total Calls</th>
-              <th style={{ color: 'var(--success)' }}>Completed</th>
-              <th style={{ color: 'var(--warning)' }}>Partial</th>
-              <th style={{ color: 'var(--danger)' }}>Disqualified</th>
-              <th style={{ color: 'var(--accent)' }}>Refused</th>
-              <th>Avg Duration</th>
+              <th style={{ textAlign: isRtl ? 'right' : 'left' }}>{t('date')}</th>
+              <th style={{ textAlign: isRtl ? 'right' : 'left' }}>{t('agentName')}</th>
+              <th style={{ textAlign: isRtl ? 'right' : 'left' }}>{t('totalCalls')}</th>
+              <th style={{ color: 'var(--success)', textAlign: isRtl ? 'right' : 'left' }}>{t('completed')}</th>
+              <th style={{ color: 'var(--warning)', textAlign: isRtl ? 'right' : 'left' }}>{t('partial')}</th>
+              <th style={{ color: 'var(--danger)', textAlign: isRtl ? 'right' : 'left' }}>{t('disqualified')}</th>
+              <th style={{ color: 'var(--accent)', textAlign: isRtl ? 'right' : 'left' }}>{t('refused') || 'Refused'}</th>
+              <th style={{ textAlign: isRtl ? 'right' : 'left' }}>{t('avgDuration')}</th>
             </tr>
           </thead>
           <tbody>
             {filteredStats.map((row, idx) => {
               const mins = Math.floor(row.avgDurationSecs / 60);
               const secs = row.avgDurationSecs % 60;
-              const durationStr = `${mins}m ${secs}s`;
+              const durationStr = isRtl ? `${mins} دقيقة ${secs} ثانية` : `${mins}m ${secs}s`;
               
               return (
                 <motion.tr key={`${row.agentId}-${row.date}-${idx}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -120,7 +123,7 @@ export default function QualityAgentStats() {
             })}
             {filteredStats.length === 0 && (
               <tr>
-                <td colSpan="8" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>No data found</td>
+                <td colSpan="8" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>{t('noDataFound')}</td>
               </tr>
             )}
           </tbody>

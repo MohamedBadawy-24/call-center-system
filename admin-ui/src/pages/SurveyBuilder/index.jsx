@@ -1,6 +1,7 @@
 import React, { useContext } from 'react';
 import { useParams } from 'react-router-dom';
 import { SurveyBuilderProvider, SurveyBuilderContext } from './SurveyBuilderContext';
+import { useLanguage } from '../../hooks/useLanguage';
 import SurveyToolbar from './components/SurveyToolbar';
 import SettingsTab from './tabs/SettingsTab';
 import PrecallTab from './tabs/PrecallTab';
@@ -10,6 +11,7 @@ import PreviewTab from './tabs/PreviewTab';
 import { Loader2 } from 'lucide-react';
 
 function SurveyBuilderContent() {
+  const { t } = useLanguage();
   const { loading, activeTab, isAdmin, surveyId, surveyState } = useContext(SurveyBuilderContext);
 
   if (loading) {
@@ -26,13 +28,13 @@ function SurveyBuilderContent() {
       
       {!isAdmin && (
          <div style={{ padding: '1rem', background: 'rgba(59, 130, 246, 0.05)', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.1)', color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-           <p dir="auto" style={{ margin: 0 }}><strong>Note:</strong> You are in Audit mode. Configuration is read-only.</p>
+           <p dir="auto" style={{ margin: 0 }}>{t('auditModeNote') || 'Note: You are in Audit mode. Configuration is read-only.'}</p>
          </div>
       )}
 
       {isAdmin && surveyState?.isActive && (
          <div style={{ padding: '1rem', background: 'rgba(245, 158, 11, 0.05)', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.2)', color: 'var(--warning)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-           <p dir="auto" style={{ margin: 0 }}><strong>Warning:</strong> This campaign is Active. You cannot modify its questions. End the campaign to edit the questionnaire.</p>
+           <p dir="auto" style={{ margin: 0 }}>{t('campaignActiveWarning') || 'Warning: This campaign is Active.'}</p>
          </div>
       )}
 

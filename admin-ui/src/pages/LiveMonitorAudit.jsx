@@ -18,11 +18,13 @@ import { Monitor, Maximize2, X, Activity, MessageSquare, Send, ClipboardList, Ch
 import { api, SOCKET_BASE } from '../api/client';
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
+import { useLanguage } from '../hooks/useLanguage';
 import { toast } from 'react-toastify';
 import { normalizeOutboundPrecall } from '../utils/outboundPrecallConfig';
 
 export default function LiveMonitorAudit() {
-  const { t, language } = useContext(UIContext);
+  const { t, language } = useLanguage();
+  const isRtl = language === 'ar';
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
 
@@ -370,12 +372,12 @@ export default function LiveMonitorAudit() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem', fontSize: '0.875rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)' }}>
                     <Clock size={16} />
-                    <span>Duration: <strong style={{ color: 'var(--text-primary)' }}>{timers[agent._id] || '00:00:00'}</strong></span>
+                    <span>{t('duration') || 'Duration:'} <strong style={{ color: 'var(--text-primary)' }}>{timers[agent._id] || '00:00:00'}</strong></span>
                   </div>
                   {!isOffDuty && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)' }}>
                       <PhoneCall size={16} />
-                      <span>Surveys: <strong style={{ color: 'var(--text-primary)' }}>{agent.completed || 0}</strong></span>
+                      <span>{t('surveys') || 'Surveys:'} <strong style={{ color: 'var(--text-primary)' }}>{agent.completed || 0}</strong></span>
                     </div>
                   )}
                 </div>
@@ -523,7 +525,7 @@ export default function LiveMonitorAudit() {
                         Session Stats Today
                       </h4>
                       {statsLoading ? (
-                        <p>Loading stats...</p>
+                        <p>{t('loadingStats') || 'Loading stats...'}</p>
                       ) : (
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
                           <div className="glass-card" style={{ padding: '0.75rem', textAlign: 'center', margin: 0 }}>
@@ -603,7 +605,7 @@ export default function LiveMonitorAudit() {
                         {/* Quality Evaluation Section */}
                         {auditPrecallData && auditPrecallData.precall && (
                           <form onSubmit={handleAuditSubmit}>
-                            <h4 style={{ margin: '0 0 1rem 0' }}>Evaluation Outcome</h4>
+                            <h4 style={{ margin: '0 0 1rem 0' }}>{t('evaluationOutcome') || 'Evaluation Outcome'}</h4>
                             
                             <AnimatePresence>
                               {auditSuccess && (
@@ -661,7 +663,7 @@ export default function LiveMonitorAudit() {
                             </div>
 
                             <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                              <label className="form-label">Notes</label>
+                              <label className="form-label">{t('feedbackNotes') || 'Feedback Notes'}</label>
                               <textarea
                                 className="input-field"
                                 rows="3"

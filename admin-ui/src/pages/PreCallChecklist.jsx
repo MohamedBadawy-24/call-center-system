@@ -6,6 +6,7 @@ import { CheckCircle2, ClipboardList, Phone, User, Hash, CalendarClock, Loader2,
 
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
+import { useLanguage } from '../hooks/useLanguage';
 import { offlineDb } from '../utils/offlineDb';
 import {
   normalizeOutboundPrecall,
@@ -290,7 +291,9 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
 }
 
 export default function PreCallChecklist() {
-  const { t, isOnline } = useContext(UIContext);
+  const { isOnline } = useContext(UIContext);
+  const { t, language } = useLanguage();
+  const isRtl = language === 'ar';
   const { user, setUser } = useContext(AuthContext);
   const navigate = useNavigate();
 
@@ -1167,7 +1170,7 @@ export default function PreCallChecklist() {
                         ) : (
                           /* ── Standard phone queue mode ── */
                           <>
-                            <label className="precall-label" style={{ fontWeight: 600, color: 'var(--primary)' }}>Target Governorate</label>
+                            <label className="precall-label" style={{ fontWeight: 600, color: 'var(--primary)' }}>{t('targetGovernorate') || 'Target Governorate'}</label>
                             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
                               <select
                                 className="input-field"
@@ -1247,7 +1250,7 @@ export default function PreCallChecklist() {
         <div className="precall-hint" style={{ marginTop: '0.25rem', borderColor: 'hsla(150, 70%, 40%, 0.4)', background: 'hsla(150, 70%, 40%, 0.06)' }}>
           <CheckCircle2 size={16} color="var(--success)" />
           <span style={{ color: 'var(--success)' }}>
-            All required info is logged. Click <strong>New Form</strong> to save and get the next number.
+            {t('allRequiredInfoLogged') || 'All required info is logged.'} Click <strong>New Form</strong> to save and get the next number.
           </span>
         </div>
       )}
@@ -1336,7 +1339,7 @@ export default function PreCallChecklist() {
               <div style={{ padding: '1.5rem', borderBottom: 'var(--glass-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <Phone size={20} color="var(--primary)" />
-                  <h2 style={{ marginBottom: 0, fontSize: '1.25rem' }}>No Numbers Available</h2>
+                  <h2 style={{ marginBottom: 0, fontSize: '1.25rem' }}>{t('noNumbersAvailable') || 'No Numbers Available'}</h2>
                 </div>
                 <button className="nav-action-btn" onClick={() => !manualSaving && setIsManualModalOpen(false)}><X size={20} /></button>
               </div>

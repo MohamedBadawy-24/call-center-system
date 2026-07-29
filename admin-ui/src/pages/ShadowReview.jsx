@@ -2,12 +2,13 @@ import React, { useState, useContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Monitor, Search, Save, User, FileText, CheckCircle } from 'lucide-react';
 import { api } from '../api/client';
-import { UIContext } from '../context/UIContext';
+import { useLanguage } from '../hooks/useLanguage';
 import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function ShadowReview() {
-  const { t } = useContext(UIContext);
+  const { t, language } = useLanguage();
+  const isRtl = language === 'ar';
   const [serialNumber, setSerialNumber] = useState('');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);

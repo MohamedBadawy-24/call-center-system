@@ -1,15 +1,16 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { motion } from 'framer-motion';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { Activity, Clock, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-import { UIContext } from '../context/UIContext';
+import { useLanguage } from '../hooks/useLanguage';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function Analytics() {
-  const { t } = useContext(UIContext);
+  const { t, language } = useLanguage();
+  const isRtl = language === 'ar';
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -40,7 +41,7 @@ export default function Analytics() {
   };
 
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="visible" style={{ paddingBottom: '4rem' }}>
+    <motion.div dir="auto" variants={containerVariants} initial="hidden" animate="visible" style={{ paddingBottom: '4rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
         <motion.h1 variants={itemVariants} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: 0 }}>
           <Activity size={32} color="var(--primary)" />
@@ -56,7 +57,7 @@ export default function Analytics() {
 
       {data.length === 0 ? (
         <motion.div variants={itemVariants} className="glass-card" style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-          <h3>No data available for the last 7 days.</h3>
+          <h3>{t('noDataLast7Days')}</h3>
         </motion.div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '2rem' }}>

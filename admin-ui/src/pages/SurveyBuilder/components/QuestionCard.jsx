@@ -373,7 +373,7 @@ export default function QuestionCard({
                                   const label = labelInput.value.trim();
                                   if (!label) return;
                                   const existingOpts = sub.options || [];
-                                  const code = (codeInput?.value || '').trim() || String(existingOpts.length + 1);
+                                  const code = (codeInput?.value || '').trim() || label;
                                   const newOpt = { label, value: code, id: Math.random().toString(36).substring(2, 9) };
                                   const newSubs = [...(question.subInputs || [])];
                                   newSubs[sIdx] = { ...newSubs[sIdx], options: [...existingOpts, newOpt] };
@@ -397,7 +397,7 @@ export default function QuestionCard({
                                   const label = (labelInput?.value || '').trim();
                                   if (!label) return;
                                   const existingOpts = sub.options || [];
-                                  const code = codeInput.value.trim() || String(existingOpts.length + 1);
+                                  const code = codeInput.value.trim() || label;
                                   const newOpt = { label, value: code, id: Math.random().toString(36).substring(2, 9) };
                                   const newSubs = [...(question.subInputs || [])];
                                   newSubs[sIdx] = { ...newSubs[sIdx], options: [...existingOpts, newOpt] };
@@ -416,7 +416,7 @@ export default function QuestionCard({
                                 const label = labelInput.value.trim();
                                 if (!label) return;
                                 const existingOpts = sub.options || [];
-                                const code = (codeInput?.value || '').trim() || String(existingOpts.length + 1);
+                                const code = (codeInput?.value || '').trim() || label;
                                 const newOpt = { label, value: code, id: Math.random().toString(36).substring(2, 9) };
                                 const newSubs = [...(question.subInputs || [])];
                                 newSubs[sIdx] = { ...newSubs[sIdx], options: [...existingOpts, newOpt] };
@@ -439,7 +439,7 @@ export default function QuestionCard({
                                 background: 'var(--primary-low, rgba(59,130,246,0.1))', color: 'var(--primary)',
                                 borderRadius: '999px', padding: '0.2rem 0.6rem', fontSize: '0.8rem', fontWeight: 600
                               }}>
-                                {norm.label} {norm.value && norm.value !== norm.label ? `(${norm.value})` : `(${norm.value})`}
+                                {norm.label === norm.value ? norm.label : `${norm.label} (${norm.value})`}
                                 {isAdmin && (
                                   <button type="button" style={{
                                     background: 'none', border: 'none', cursor: 'pointer', padding: 0,

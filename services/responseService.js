@@ -291,6 +291,12 @@ exports.submitResponse = async (userId, userRole, data, io) => {
       offlineCompletedAt: isOfflineSync && data.completedAt ? new Date(data.completedAt) : undefined,
     };
     if (finalSerial) responseData.serialNumber = finalSerial;
+    if (data.agentNote && typeof data.agentNote === 'object' && data.agentNote.text) {
+      responseData.agentNote = {
+        text: String(data.agentNote.text).slice(0, 2000),
+        referenceQuestionId: data.agentNote.referenceQuestionId || 'general',
+      };
+    }
 
     let saved;
     if (finalSerial) {

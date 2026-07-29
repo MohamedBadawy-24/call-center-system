@@ -323,7 +323,7 @@ export default function QuestionCard({
                       onChange={e => {
                         const newSubs = [...(question.subInputs || [])];
                         newSubs[sIdx] = { ...newSubs[sIdx], inputType: e.target.value };
-                        if (e.target.value !== 'dropdown' && e.target.value !== 'choice') newSubs[sIdx] = { ...newSubs[sIdx], options: [] };
+                        if (e.target.value !== 'dropdown' && e.target.value !== 'choice' && e.target.value !== 'multiple_choice') newSubs[sIdx] = { ...newSubs[sIdx], options: [] };
                         updateQ({ subInputs: newSubs });
                       }}
                       disabled={!isAdmin}
@@ -333,6 +333,7 @@ export default function QuestionCard({
                       <option value="date">Date</option>
                       <option value="dropdown">Dropdown</option>
                       <option value="choice">Choice (Radio)</option>
+                      <option value="multiple_choice">Multiple Choice (Checkbox)</option>
                     </select>
                     <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 600 }}>
                       <input dir="auto" 
@@ -354,7 +355,7 @@ export default function QuestionCard({
                         updateQ({ subInputs: newSubs });
                       }}>Del</button>
                     )}
-                    {(sub.inputType === 'dropdown' || sub.inputType === 'choice') && (
+                    {(sub.inputType === 'dropdown' || sub.inputType === 'choice' || sub.inputType === 'multiple_choice') && (
                       <div style={{ width: '100%', marginTop: '0.25rem' }}>
                         {/* Mini Options Builder */}
                         {isAdmin && (

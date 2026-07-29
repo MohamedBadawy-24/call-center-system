@@ -550,6 +550,39 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                         );
                       })}
                     </div>
+                  ) : sub.inputType === 'multiple_choice' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
+                      {(sub.options || []).map((opt, i) => {
+                        const checkId = `${subInputId}-opt-${i}`;
+                        const currArr = Array.isArray(val) ? val : [];
+                        const isChecked = currArr.includes(opt);
+                        return (
+                          <label key={i} htmlFor={checkId} style={{
+                            display: 'flex', alignItems: 'center', gap: '0.6rem',
+                            padding: '0.6rem 0.75rem', borderRadius: '8px', cursor: 'pointer',
+                            border: isChecked ? '2px solid var(--primary)' : '1px solid var(--border-color)',
+                            background: isChecked ? 'rgba(59,130,246,0.06)' : 'var(--surface, #fff)',
+                            transition: 'all 0.15s ease'
+                          }}>
+                            <input
+                              type="checkbox"
+                              id={checkId}
+                              value={opt}
+                              checked={isChecked}
+                              onChange={e => {
+                                if (activeInputIdRef) activeInputIdRef.current = checkId;
+                                const nextArr = isChecked
+                                  ? currArr.filter(item => item !== opt)
+                                  : [...currArr, opt];
+                                handleAnswerChange(qId, { ...ansObj, [sub.id]: nextArr });
+                              }}
+                              style={{ accentColor: 'var(--primary)' }}
+                            />
+                            <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)' }}>{opt}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   ) : (
                     <input dir="auto"
                       id={subInputId}
@@ -607,6 +640,9 @@ export default function TakeSurvey({ mockSurvey }) {
   const [questions, setQuestions] = useState([]);
   /** intro | questions | interview */
   const [phase, setPhase] = useState('intro');
+  const [showAgentNote, setShowAgentNote] = useState(false);
+  const [agentNoteText, setAgentNoteText] = useState('');
+  const [agentNoteRefQuestion, setAgentNoteRefQuestion] = useState('general');
   const [answers, setAnswers] = useState({});
   const [otherValues, setOtherValues] = useState({});
   const [fieldErrors, setFieldErrors] = useState({});
@@ -1163,6 +1199,12 @@ export default function TakeSurvey({ mockSurvey }) {
       outcomeReason: finalReason,
       precallSerialNumber: precallSerialNumber || '',
     };
+    if (agentNoteText.trim()) {
+      payload.agentNote = {
+        text: agentNoteText.trim(),
+        referenceQuestionId: agentNoteRefQuestion || 'general',
+      };
+    }
     const offlinePayload = {
       ...payload,
       serialNumber: precallSerialNumber || '',
@@ -1937,6 +1979,84 @@ export default function TakeSurvey({ mockSurvey }) {
             />
           </div>
         )}
+
+        {/* End-of-Call Note Component */}
+        <div style={{ marginBottom: '1.25rem' }}>
+          {!showAgentNote ? (
+            <button
+              dir="auto"
+              type="button"
+              className="btn-secondary"
+              onClick={() => setShowAgentNote(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}
+            >
+              📝 {t('addCallNote') || 'Add Call Note'}
+            </button>
+          ) : (
+            <div style={{
+              padding: '1rem',
+              background: 'rgba(0,0,0,0.02)',
+              borderRadius: '10px',
+              border: '1px solid var(--border-color)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                  📝 {t('agentCallNote') || 'Agent Call Note'}
+                </span>
+                <button
+                  type="button"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '0.8rem', fontWeight: 600 }}
+                  onClick={() => {
+                    setShowAgentNote(false);
+                    setAgentNoteText('');
+                    setAgentNoteRefQuestion('general');
+                  }}
+                >
+                  ✕ {t('removeNote') || 'Remove Note'}
+                </button>
+              </div>
+
+              <div>
+                <label dir="auto" className="form-label" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', display: 'block' }}>
+                  {t('referToQuestion') || 'Refer to Question'}
+                </label>
+                <select
+                  className="input-field"
+                  style={{ width: '100%', maxWidth: '100%' }}
+                  value={agentNoteRefQuestion}
+                  onChange={e => setAgentNoteRefQuestion(e.target.value)}
+                >
+                  <option value="general">{t('generalEntireSurvey') || 'General / Entire Survey'}</option>
+                  {questions.map((q) => {
+                    const qId = q.questionId || q.id || String(q._id);
+                    return (
+                      <option key={qId} value={qId}>
+                        {qId} - {q.text ? (q.text.length > 50 ? q.text.substring(0, 50) + '...' : q.text) : 'Question'}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div>
+                <label dir="auto" className="form-label" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', display: 'block' }}>
+                  {t('noteContent') || 'Note Content'}
+                </label>
+                <textarea dir="auto"
+                  className="input-field"
+                  rows={3}
+                  placeholder={t('typeNotePlaceholder') || 'Add any contextual note regarding this call or specific question...'}
+                  value={agentNoteText}
+                  onChange={e => setAgentNoteText(e.target.value)}
+                  style={{ width: '100%', resize: 'vertical' }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
           <button dir="auto" type="button" className="btn-primary" onClick={() => submitResponse()} disabled={!answers.interview_result}>
             {t('submitSurvey')}

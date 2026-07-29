@@ -38,6 +38,10 @@ const ResponseSchema = new mongoose.Schema({
   syncedAt: { type: Date },
   offlineStartedAt: { type: Date },
   offlineCompletedAt: { type: Date },
+  agentNote: {
+    text: { type: String },
+    referenceQuestionId: { type: String },
+  },
 });
 
 ResponseSchema.index({ agentId: 1, startedAt: -1 });

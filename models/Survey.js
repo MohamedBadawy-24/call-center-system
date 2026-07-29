@@ -53,7 +53,7 @@ const QuestionSchema = new mongoose.Schema({
   subInputs: [{
     id: String,
     label: String,
-    inputType: { type: String, enum: ['short_text', 'number', 'date', 'dropdown'] },
+    inputType: { type: String, enum: ['short_text', 'number', 'date', 'dropdown', 'choice'] },
     options: [String],
     required: { type: Boolean, default: false }
   }],

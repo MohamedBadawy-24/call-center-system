@@ -520,6 +520,36 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                         handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value });
                       }}
                     />
+                  ) : sub.inputType === 'choice' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
+                      {(sub.options || []).map((opt, i) => {
+                        const radioId = `${subInputId}-opt-${i}`;
+                        const radioName = `radio-${qId}-${sub.id}`;
+                        return (
+                          <label key={i} htmlFor={radioId} style={{
+                            display: 'flex', alignItems: 'center', gap: '0.6rem',
+                            padding: '0.6rem 0.75rem', borderRadius: '8px', cursor: 'pointer',
+                            border: val === opt ? '2px solid var(--primary)' : '1px solid var(--border-color)',
+                            background: val === opt ? 'rgba(59,130,246,0.06)' : 'var(--surface, #fff)',
+                            transition: 'all 0.15s ease'
+                          }}>
+                            <input
+                              type="radio"
+                              id={radioId}
+                              name={radioName}
+                              value={opt}
+                              checked={val === opt}
+                              onChange={e => {
+                                if (activeInputIdRef) activeInputIdRef.current = radioId;
+                                handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value });
+                              }}
+                              style={{ accentColor: 'var(--primary)' }}
+                            />
+                            <span style={{ fontWeight: val === opt ? 600 : 400, color: 'var(--text-primary)' }}>{opt}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   ) : (
                     <input dir="auto"
                       id={subInputId}

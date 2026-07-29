@@ -310,7 +310,7 @@ export default function QuestionCard({
                       value={sub.label || ''}
                       onChange={e => {
                         const newSubs = [...(question.subInputs || [])];
-                        newSubs[sIdx].label = e.target.value;
+                        newSubs[sIdx] = { ...newSubs[sIdx], label: e.target.value };
                         updateQ({ subInputs: newSubs });
                       }}
                       placeholder="Input Label"
@@ -322,8 +322,8 @@ export default function QuestionCard({
                       value={sub.inputType || 'short_text'}
                       onChange={e => {
                         const newSubs = [...(question.subInputs || [])];
-                        newSubs[sIdx].inputType = e.target.value;
-                        if (e.target.value !== 'dropdown') newSubs[sIdx].options = [];
+                        newSubs[sIdx] = { ...newSubs[sIdx], inputType: e.target.value };
+                        if (e.target.value !== 'dropdown' && e.target.value !== 'choice') newSubs[sIdx] = { ...newSubs[sIdx], options: [] };
                         updateQ({ subInputs: newSubs });
                       }}
                       disabled={!isAdmin}
@@ -332,6 +332,7 @@ export default function QuestionCard({
                       <option value="number">Number</option>
                       <option value="date">Date</option>
                       <option value="dropdown">Dropdown</option>
+                      <option value="choice">Choice (Radio)</option>
                     </select>
                     <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 600 }}>
                       <input dir="auto" 
@@ -339,7 +340,7 @@ export default function QuestionCard({
                         checked={!!sub.required} 
                         onChange={e => {
                           const newSubs = [...(question.subInputs || [])];
-                          newSubs[sIdx].required = e.target.checked;
+                          newSubs[sIdx] = { ...newSubs[sIdx], required: e.target.checked };
                           updateQ({ subInputs: newSubs });
                         }}
                         disabled={!isAdmin} 
@@ -353,19 +354,69 @@ export default function QuestionCard({
                         updateQ({ subInputs: newSubs });
                       }}>Del</button>
                     )}
-                    {sub.inputType === 'dropdown' && (
+                    {(sub.inputType === 'dropdown' || sub.inputType === 'choice') && (
                       <div style={{ width: '100%', marginTop: '0.25rem' }}>
-                        <input dir="auto"
-                          className="input-field"
-                          placeholder="Options (comma separated)"
-                          value={(sub.options || []).join(', ')}
-                          onChange={e => {
-                            const newSubs = [...(question.subInputs || [])];
-                            newSubs[sIdx].options = e.target.value.split(',').map(v => v.trim()).filter(v => v);
-                            updateQ({ subInputs: newSubs });
-                          }}
-                          readOnly={!isAdmin}
-                        />
+                        {/* Mini Options Builder */}
+                        {isAdmin && (
+                          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                            <input dir="auto"
+                              className="input-field"
+                              style={{ flex: 1 }}
+                              placeholder="Type option…"
+                              data-sub-option-input={`${sIdx}`}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const val = e.target.value.trim();
+                                  if (!val) return;
+                                  const newSubs = [...(question.subInputs || [])];
+                                  newSubs[sIdx] = { ...newSubs[sIdx], options: [...(newSubs[sIdx].options || []), val] };
+                                  updateQ({ subInputs: newSubs });
+                                  e.target.value = '';
+                                }
+                              }}
+                            />
+                            <button dir="auto" type="button" className="btn-primary" style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+                              onClick={() => {
+                                const input = document.querySelector(`[data-sub-option-input="${sIdx}"]`);
+                                if (!input) return;
+                                const val = input.value.trim();
+                                if (!val) return;
+                                const newSubs = [...(question.subInputs || [])];
+                                newSubs[sIdx] = { ...newSubs[sIdx], options: [...(newSubs[sIdx].options || []), val] };
+                                updateQ({ subInputs: newSubs });
+                                input.value = '';
+                                input.focus();
+                              }}
+                            >+ Add</button>
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                          {(sub.options || []).map((opt, oIdx) => (
+                            <span key={oIdx} style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                              background: 'var(--primary-low, rgba(59,130,246,0.1))', color: 'var(--primary)',
+                              borderRadius: '999px', padding: '0.2rem 0.6rem', fontSize: '0.8rem', fontWeight: 600
+                            }}>
+                              {opt}
+                              {isAdmin && (
+                                <button type="button" style={{
+                                  background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                                  color: 'var(--danger)', fontWeight: 'bold', fontSize: '0.9rem', lineHeight: 1
+                                }} onClick={() => {
+                                  const newSubs = [...(question.subInputs || [])];
+                                  const newOpts = [...(newSubs[sIdx].options || [])];
+                                  newOpts.splice(oIdx, 1);
+                                  newSubs[sIdx] = { ...newSubs[sIdx], options: newOpts };
+                                  updateQ({ subInputs: newSubs });
+                                }}>&times;</button>
+                              )}
+                            </span>
+                          ))}
+                          {(sub.options || []).length === 0 && (
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>No options added yet</span>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>

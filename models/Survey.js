@@ -54,7 +54,7 @@ const QuestionSchema = new mongoose.Schema({
     id: String,
     label: String,
     inputType: { type: String, enum: ['short_text', 'number', 'date', 'dropdown', 'choice', 'multiple_choice'] },
-    options: [String],
+    options: [mongoose.Schema.Types.Mixed],
     required: { type: Boolean, default: false }
   }],
 

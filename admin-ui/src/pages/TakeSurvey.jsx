@@ -486,9 +486,13 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                       }}
                     >
                       <option value="">-- Select --</option>
-                      {(sub.options || []).map((opt, i) => (
-                        <option key={i} value={opt}>{opt}</option>
-                      ))}
+                      {(sub.options || []).map((opt, i) => {
+                        const optLabel = typeof opt === 'object' && opt !== null ? (opt.label || opt.text || opt.value || '') : String(opt);
+                        const optVal = typeof opt === 'object' && opt !== null ? (opt.value != null ? String(opt.value) : optLabel) : String(opt);
+                        return (
+                          <option key={i} value={optVal}>{optLabel}</option>
+                        );
+                      })}
                     </select>
                   ) : sub.inputType === 'number' ? (
                     <input dir="auto"
@@ -523,29 +527,32 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                   ) : sub.inputType === 'choice' ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
                       {(sub.options || []).map((opt, i) => {
+                        const optLabel = typeof opt === 'object' && opt !== null ? (opt.label || opt.text || opt.value || '') : String(opt);
+                        const optVal = typeof opt === 'object' && opt !== null ? (opt.value != null ? String(opt.value) : optLabel) : String(opt);
                         const radioId = `${subInputId}-opt-${i}`;
                         const radioName = `radio-${qId}-${sub.id}`;
+                        const isChecked = String(val) === optVal;
                         return (
                           <label key={i} htmlFor={radioId} style={{
                             display: 'flex', alignItems: 'center', gap: '0.6rem',
                             padding: '0.6rem 0.75rem', borderRadius: '8px', cursor: 'pointer',
-                            border: val === opt ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                            background: val === opt ? 'rgba(59,130,246,0.06)' : 'var(--surface, #fff)',
+                            border: isChecked ? '2px solid var(--primary)' : '1px solid var(--border-color)',
+                            background: isChecked ? 'rgba(59,130,246,0.06)' : 'var(--surface, #fff)',
                             transition: 'all 0.15s ease'
                           }}>
                             <input
                               type="radio"
                               id={radioId}
                               name={radioName}
-                              value={opt}
-                              checked={val === opt}
+                              value={optVal}
+                              checked={isChecked}
                               onChange={e => {
                                 if (activeInputIdRef) activeInputIdRef.current = radioId;
                                 handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value });
                               }}
                               style={{ accentColor: 'var(--primary)' }}
                             />
-                            <span style={{ fontWeight: val === opt ? 600 : 400, color: 'var(--text-primary)' }}>{opt}</span>
+                            <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)' }}>{optLabel}</span>
                           </label>
                         );
                       })}
@@ -553,9 +560,11 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                   ) : sub.inputType === 'multiple_choice' ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
                       {(sub.options || []).map((opt, i) => {
+                        const optLabel = typeof opt === 'object' && opt !== null ? (opt.label || opt.text || opt.value || '') : String(opt);
+                        const optVal = typeof opt === 'object' && opt !== null ? (opt.value != null ? String(opt.value) : optLabel) : String(opt);
                         const checkId = `${subInputId}-opt-${i}`;
-                        const currArr = Array.isArray(val) ? val : [];
-                        const isChecked = currArr.includes(opt);
+                        const currArr = Array.isArray(val) ? val.map(v => String(v)) : [];
+                        const isChecked = currArr.includes(optVal);
                         return (
                           <label key={i} htmlFor={checkId} style={{
                             display: 'flex', alignItems: 'center', gap: '0.6rem',
@@ -567,18 +576,18 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                             <input
                               type="checkbox"
                               id={checkId}
-                              value={opt}
+                              value={optVal}
                               checked={isChecked}
                               onChange={e => {
                                 if (activeInputIdRef) activeInputIdRef.current = checkId;
                                 const nextArr = isChecked
-                                  ? currArr.filter(item => item !== opt)
-                                  : [...currArr, opt];
+                                  ? currArr.filter(item => item !== optVal)
+                                  : [...currArr, optVal];
                                 handleAnswerChange(qId, { ...ansObj, [sub.id]: nextArr });
                               }}
                               style={{ accentColor: 'var(--primary)' }}
                             />
-                            <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)' }}>{opt}</span>
+                            <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)' }}>{optLabel}</span>
                           </label>
                         );
                       })}

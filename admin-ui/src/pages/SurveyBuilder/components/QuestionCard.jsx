@@ -359,61 +359,102 @@ export default function QuestionCard({
                       <div style={{ width: '100%', marginTop: '0.25rem' }}>
                         {/* Mini Options Builder */}
                         {isAdmin && (
-                          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
                             <input dir="auto"
                               className="input-field"
-                              style={{ flex: 1 }}
-                              placeholder="Type option…"
-                              data-sub-option-input={`${sIdx}`}
+                              style={{ flex: 2, minWidth: '130px' }}
+                              placeholder="Label (e.g. Yes, Male)"
+                              data-sub-opt-label={`${sIdx}`}
                               onKeyDown={e => {
                                 if (e.key === 'Enter') {
                                   e.preventDefault();
-                                  const val = e.target.value.trim();
-                                  if (!val) return;
+                                  const labelInput = e.target;
+                                  const codeInput = document.querySelector(`[data-sub-opt-code="${sIdx}"]`);
+                                  const label = labelInput.value.trim();
+                                  if (!label) return;
+                                  const existingOpts = sub.options || [];
+                                  const code = (codeInput?.value || '').trim() || String(existingOpts.length + 1);
+                                  const newOpt = { label, value: code, id: Math.random().toString(36).substring(2, 9) };
                                   const newSubs = [...(question.subInputs || [])];
-                                  newSubs[sIdx] = { ...newSubs[sIdx], options: [...(newSubs[sIdx].options || []), val] };
+                                  newSubs[sIdx] = { ...newSubs[sIdx], options: [...existingOpts, newOpt] };
                                   updateQ({ subInputs: newSubs });
-                                  e.target.value = '';
+                                  labelInput.value = '';
+                                  if (codeInput) codeInput.value = '';
+                                  labelInput.focus();
+                                }
+                              }}
+                            />
+                            <input dir="auto"
+                              className="input-field"
+                              style={{ flex: 1, minWidth: '90px' }}
+                              placeholder="Value / Code"
+                              data-sub-opt-code={`${sIdx}`}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const codeInput = e.target;
+                                  const labelInput = document.querySelector(`[data-sub-opt-label="${sIdx}"]`);
+                                  const label = (labelInput?.value || '').trim();
+                                  if (!label) return;
+                                  const existingOpts = sub.options || [];
+                                  const code = codeInput.value.trim() || String(existingOpts.length + 1);
+                                  const newOpt = { label, value: code, id: Math.random().toString(36).substring(2, 9) };
+                                  const newSubs = [...(question.subInputs || [])];
+                                  newSubs[sIdx] = { ...newSubs[sIdx], options: [...existingOpts, newOpt] };
+                                  updateQ({ subInputs: newSubs });
+                                  if (labelInput) labelInput.value = '';
+                                  codeInput.value = '';
+                                  if (labelInput) labelInput.focus();
                                 }
                               }}
                             />
                             <button dir="auto" type="button" className="btn-primary" style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
                               onClick={() => {
-                                const input = document.querySelector(`[data-sub-option-input="${sIdx}"]`);
-                                if (!input) return;
-                                const val = input.value.trim();
-                                if (!val) return;
+                                const labelInput = document.querySelector(`[data-sub-opt-label="${sIdx}"]`);
+                                const codeInput = document.querySelector(`[data-sub-opt-code="${sIdx}"]`);
+                                if (!labelInput) return;
+                                const label = labelInput.value.trim();
+                                if (!label) return;
+                                const existingOpts = sub.options || [];
+                                const code = (codeInput?.value || '').trim() || String(existingOpts.length + 1);
+                                const newOpt = { label, value: code, id: Math.random().toString(36).substring(2, 9) };
                                 const newSubs = [...(question.subInputs || [])];
-                                newSubs[sIdx] = { ...newSubs[sIdx], options: [...(newSubs[sIdx].options || []), val] };
+                                newSubs[sIdx] = { ...newSubs[sIdx], options: [...existingOpts, newOpt] };
                                 updateQ({ subInputs: newSubs });
-                                input.value = '';
-                                input.focus();
+                                labelInput.value = '';
+                                if (codeInput) codeInput.value = '';
+                                labelInput.focus();
                               }}
                             >+ Add</button>
                           </div>
                         )}
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                          {(sub.options || []).map((opt, oIdx) => (
-                            <span key={oIdx} style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-                              background: 'var(--primary-low, rgba(59,130,246,0.1))', color: 'var(--primary)',
-                              borderRadius: '999px', padding: '0.2rem 0.6rem', fontSize: '0.8rem', fontWeight: 600
-                            }}>
-                              {opt}
-                              {isAdmin && (
-                                <button type="button" style={{
-                                  background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                                  color: 'var(--danger)', fontWeight: 'bold', fontSize: '0.9rem', lineHeight: 1
-                                }} onClick={() => {
-                                  const newSubs = [...(question.subInputs || [])];
-                                  const newOpts = [...(newSubs[sIdx].options || [])];
-                                  newOpts.splice(oIdx, 1);
-                                  newSubs[sIdx] = { ...newSubs[sIdx], options: newOpts };
-                                  updateQ({ subInputs: newSubs });
-                                }}>&times;</button>
-                              )}
-                            </span>
-                          ))}
+                          {(sub.options || []).map((opt, oIdx) => {
+                            const norm = typeof opt === 'object' && opt !== null
+                              ? { label: opt.label || opt.text || opt.value || '', value: opt.value != null ? String(opt.value) : (opt.label || '') }
+                              : { label: String(opt), value: String(opt) };
+                            return (
+                              <span key={oIdx} style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                                background: 'var(--primary-low, rgba(59,130,246,0.1))', color: 'var(--primary)',
+                                borderRadius: '999px', padding: '0.2rem 0.6rem', fontSize: '0.8rem', fontWeight: 600
+                              }}>
+                                {norm.label} {norm.value && norm.value !== norm.label ? `(${norm.value})` : `(${norm.value})`}
+                                {isAdmin && (
+                                  <button type="button" style={{
+                                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                                    color: 'var(--danger)', fontWeight: 'bold', fontSize: '0.9rem', lineHeight: 1
+                                  }} onClick={() => {
+                                    const newSubs = [...(question.subInputs || [])];
+                                    const newOpts = [...(newSubs[sIdx].options || [])];
+                                    newOpts.splice(oIdx, 1);
+                                    newSubs[sIdx] = { ...newSubs[sIdx], options: newOpts };
+                                    updateQ({ subInputs: newSubs });
+                                  }}>&times;</button>
+                                )}
+                              </span>
+                            );
+                          })}
                           {(sub.options || []).length === 0 && (
                             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>No options added yet</span>
                           )}

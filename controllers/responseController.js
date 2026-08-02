@@ -582,9 +582,8 @@ exports.exportAdvanced = async (req, res, next) => {
           } else {
             opts.forEach(opt => {
               const val = opt.value != null && opt.value !== '' ? opt.value : (opt.text || opt.label);
-                valueLabels.push({ value: String(val).substring(0, 255), label: String(opt.label || opt.text || '').substring(0, 60) });
-              });
-            }
+              valueLabels.push({ value: String(val).substring(0, 255), label: String(opt.label || opt.text || '').substring(0, 60) });
+            });
           }
         }
         return { type, width, valueLabels: valueLabels.length > 0 ? valueLabels : undefined };

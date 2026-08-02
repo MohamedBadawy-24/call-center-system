@@ -718,7 +718,8 @@ exports.exportAdvanced = async (req, res, next) => {
               const meta = getSPSSMetadata(q);
               if (meta.type === VariableType.Numeric) {
                 const rawParsed = splitOtherValues(rawValue);
-                const num = Number(getFinalExportValue(rawParsed.baseValue, qKey, choiceValueMap, encodeValue));
+                const numVal = getFinalExportValue(rawParsed.baseValue, qKey, choiceValueMap, encodeValue);
+                const num = (numVal === '' || numVal == null) ? NaN : Number(numVal);
                 rec[vars[varIdx++].name] = Number.isFinite(num) ? num : null;
               } else {
                 // Force string fallback to match variables schema

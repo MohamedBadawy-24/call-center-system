@@ -574,16 +574,18 @@ exports.exportAdvanced = async (req, res, next) => {
       const records = [];
       responses.forEach(r => {
         try {
-          const rec = [
-            safeString(r.serialNumber || 'N/A', 16),
-            safeString(new Date(r.completedAt || r.startedAt).toISOString(), 32),
-            safeString(r.status, 16),
-            safeString(r.interviewOutcome, 32),
-            safeString(r.outcomeReason || '', 128),
-            safeString(r.agentId?.name || 'Unknown', 64),
-            Number.isFinite(Number(r.durationSecs)) ? Number(r.durationSecs) : 0,
-            safeString(r.numberSource || 'queue', 16),
-          ];
+          const rec = {};
+          let varIdx = 0;
+          
+          rec[vars[varIdx++].name] = safeString(r.serialNumber || 'N/A', 16);
+          rec[vars[varIdx++].name] = safeString(new Date(r.completedAt || r.startedAt).toISOString(), 32);
+          rec[vars[varIdx++].name] = safeString(r.status, 16);
+          rec[vars[varIdx++].name] = safeString(r.interviewOutcome, 32);
+          rec[vars[varIdx++].name] = safeString(r.outcomeReason || '', 128);
+          rec[vars[varIdx++].name] = safeString(r.agentId?.name || 'Unknown', 64);
+          rec[vars[varIdx++].name] = Number.isFinite(Number(r.durationSecs)) ? Number(r.durationSecs) : 0;
+          rec[vars[varIdx++].name] = safeString(r.numberSource || 'queue', 16);
+
           questions.forEach(q => {
             const answer = (r.answers || []).find(a => a.questionId === q.id);
             let rawValue = null;
@@ -603,11 +605,11 @@ exports.exportAdvanced = async (req, res, next) => {
               const parsed = splitOtherValues(rawValue);
               options.forEach(opt => {
                 const selected = isOptionSelected(rawValue, opt, resolvedValue, qKey, choiceValueMap);
-                rec.push(selected ? 1 : 0);
+                rec[vars[varIdx++].name] = selected ? 1 : 0;
               });
               const max = maxOtherCount[q.id] || 0;
               for (let i = 1; i <= max; i++) {
-                rec.push(safeString(encodeValue(parsed.otherValues[i - 1] || ''), 255));
+                rec[vars[varIdx++].name] = safeString(encodeValue(parsed.otherValues[i - 1] || ''), 255);
               }
             } else {
               const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
@@ -615,11 +617,11 @@ exports.exportAdvanced = async (req, res, next) => {
               const encoded = encodeValue(parsed.baseValue);
 
               // Force string fallback to match variables schema
-              rec.push(safeString(encoded != null ? encoded : '', 255));
+              rec[vars[varIdx++].name] = safeString(encoded != null ? encoded : '', 255);
 
               const max = maxOtherCount[q.id] || 0;
               for (let i = 1; i <= max; i++) {
-                rec.push(safeString(encodeValue(parsed.otherValues[i - 1] || ''), 255));
+                rec[vars[varIdx++].name] = safeString(encodeValue(parsed.otherValues[i - 1] || ''), 255);
               }
             }
           });

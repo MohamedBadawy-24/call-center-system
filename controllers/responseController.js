@@ -522,6 +522,39 @@ exports.exportAdvanced = async (req, res, next) => {
     }
 
     if (format === 'sav') {
+
+      const getSPSSMetadata = (q) => {
+        let type = VariableType.String;
+        let width = 255;
+        let valueLabels = [];
+        
+        const isChoiceType = q.type === 'choice' || q.type === 'dropdown';
+        if (isChoiceType) {
+          const opts = (Array.isArray(q.choices) && q.choices.length > 0) ? q.choices : (q.options || []);
+          if (opts.length > 0) {
+            const allNumeric = !q.allowOther && opts.every(opt => {
+              const val = opt.value != null && opt.value !== '' ? opt.value : (opt.text || opt.label);
+              return !isNaN(Number(val));
+            });
+            
+            if (allNumeric) {
+              type = VariableType.Numeric;
+              width = 8;
+              opts.forEach(opt => {
+                const val = opt.value != null && opt.value !== '' ? opt.value : (opt.text || opt.label);
+                valueLabels.push({ value: Number(val), label: String(opt.label || opt.text || '').substring(0, 60) });
+              });
+            } else {
+              opts.forEach(opt => {
+                const val = opt.value != null && opt.value !== '' ? opt.value : (opt.text || opt.label);
+                valueLabels.push({ value: String(val).substring(0, 255), label: String(opt.label || opt.text || '').substring(0, 60) });
+              });
+            }
+          }
+        }
+        return { type, width, valueLabels: valueLabels.length > 0 ? valueLabels : undefined };
+      };
+
       const vars = [
         { name: 'SERIAL', label: 'Serial Number', type: VariableType.String, width: 16 },
         { name: 'S_DATE', label: 'Submission Date', type: VariableType.String, width: 32 },
@@ -565,13 +598,15 @@ exports.exportAdvanced = async (req, res, next) => {
               decimal: 0
             });
           }
-        } else {
+                } else {
+          const meta = getSPSSMetadata(q);
           vars.push({
             name: getVarName(),
             label: (q.text || '').substring(0, 100),
-            type: VariableType.String, // Force string fallback for all other dynamic fields
-            width: 255,
+            type: meta.type,
+            width: meta.width,
             decimal: 0,
+            valueLabels: meta.valueLabels
           });
 
           const max = maxOtherCount[q.id] || 0;
@@ -638,13 +673,20 @@ exports.exportAdvanced = async (req, res, next) => {
               for (let i = 1; i <= max; i++) {
                 rec[vars[varIdx++].name] = safeString(encodeValue(parsed.otherValues[i - 1] || ''), 255);
               }
-            } else {
+                        } else {
               const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
               const parsed = splitOtherValues(resolvedBase);
               const encoded = encodeValue(parsed.baseValue);
-
-              // Force string fallback to match variables schema
-              rec[vars[varIdx++].name] = safeString(encoded != null ? encoded : '', 255);
+              
+              const meta = getSPSSMetadata(q);
+              if (meta.type === VariableType.Numeric) {
+                const rawParsed = splitOtherValues(rawValue);
+                const num = Number(encodeValue(rawParsed.baseValue));
+                rec[vars[varIdx++].name] = Number.isFinite(num) ? num : null;
+              } else {
+                // Force string fallback to match variables schema
+                rec[vars[varIdx++].name] = safeString(encoded != null ? encoded : '', 255);
+              }
 
               const max = maxOtherCount[q.id] || 0;
               for (let i = 1; i <= max; i++) {

@@ -80,13 +80,18 @@ function normalizeOption(opt) {
   return { label: str, value: str };
 }
 
+function buildActiveOptionsMap(questions, preScanResponses) {
+  const map = {};
+  questions.forEach(q => {
+    if (q.type === 'multiple_choice') {
+      map[qKey] = getQuestionOptions(q, preScanResponses);
+    }
+  });
+  return map;
+}
+
 function getQuestionOptions(q, preScanResponses = []) {
-  const rawOpts = (Array.isArray(q.choices) && q.choices.length > 0) ? q.choices : (q.options || []);
-  if (rawOpts.length > 0) {
-    return rawOpts.map(normalizeOption);
-  }
-  const seen = new Set();
-  const options = [];
+  const seenValues = new Set();
   (preScanResponses || []).forEach(r => {
     (r.answers || []).forEach(a => {
       if (a.questionId === q.id) {
@@ -97,16 +102,23 @@ function getQuestionOptions(q, preScanResponses = []) {
         if (Array.isArray(val)) {
           val.forEach(v => {
             if (v != null && !String(v).startsWith('other:')) {
-              const str = String(v).trim();
-              if (str && !seen.has(str)) {
-                seen.add(str);
-                options.push({ label: str, value: str });
-              }
+              seenValues.add(String(v).trim());
             }
           });
         }
       }
     });
+  });
+
+  const rawOpts = (Array.isArray(q.choices) && q.choices.length > 0) ? q.choices : (q.options || []);
+  if (rawOpts.length > 0) {
+    const normalized = rawOpts.map(normalizeOption);
+    return normalized.filter(opt => seenValues.has(String(opt.value).trim()) || seenValues.has(String(opt.label).trim()));
+  }
+  
+  const options = [];
+  seenValues.forEach(str => {
+    options.push({ label: str, value: str });
   });
   return options;
 }
@@ -158,12 +170,15 @@ exports.exportCsv = async (req, res, next) => {
       });
     });
 
+    const activeOptionsMap = buildActiveOptionsMap(questions, preScanResponses);
+
     const headers = ['Submission Date', 'Status', 'Agent Name', 'Agent Email', 'Duration (sec)', 'Outcome Reason', 'Number Source'];
     questions.forEach((q, idx) => {
       const isMulti = q.type === 'multiple_choice';
-      const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
+      const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
+        const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
-      if (isMulti && options.length > 0) {
+      if (isMulti) {
         options.forEach(opt => {
           headers.push(`${q.text.replace(/,/g, '')} - ${opt.label.replace(/,/g, '')}`);
         });
@@ -204,9 +219,10 @@ exports.exportCsv = async (req, res, next) => {
         }
         const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
         const isMulti = q.type === 'multiple_choice';
-        const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
+        const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
+        const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
-        if (isMulti && options.length > 0) {
+        if (isMulti) {
           const resolvedValue = resolveAnswerValue(qKey, rawValue, choiceValueMap);
           const parsed = splitOtherValues(rawValue);
           options.forEach(opt => {
@@ -284,12 +300,15 @@ exports.exportAdvanced = async (req, res, next) => {
         });
       });
 
+    const activeOptionsMap = buildActiveOptionsMap(questions, preScanResponses);
+
       const headers = ['Serial', 'Submission_Date', 'Status', 'Interview_Outcome', 'Outcome_Reason', 'Agent_Name', 'Duration_Secs', 'Number_Source'];
       questions.forEach((q, idx) => {
         const isMulti = q.type === 'multiple_choice';
-        const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
+        const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
+        const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
-        if (isMulti && options.length > 0) {
+        if (isMulti) {
           options.forEach(opt => {
             headers.push(`${q.text.replace(/,/g, '')} - ${opt.label.replace(/,/g, '')}`);
           });
@@ -332,9 +351,10 @@ exports.exportAdvanced = async (req, res, next) => {
           }
           const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
           const isMulti = q.type === 'multiple_choice';
-          const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
+          const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
+        const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
-          if (isMulti && options.length > 0) {
+          if (isMulti) {
             const resolvedValue = resolveAnswerValue(qKey, rawValue, choiceValueMap);
             const parsed = splitOtherValues(rawValue);
             options.forEach(opt => {
@@ -392,6 +412,8 @@ exports.exportAdvanced = async (req, res, next) => {
       });
     });
 
+    const activeOptionsMap = buildActiveOptionsMap(questions, preScanResponses);
+
     const filenameBase = `export_${survey.title.replace(/\s+/g, '_')}_${Date.now()}`;
 
     if (format === 'xlsx') {
@@ -412,9 +434,10 @@ exports.exportAdvanced = async (req, res, next) => {
 
       questions.forEach((q, idx) => {
         const isMulti = q.type === 'multiple_choice';
-        const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
+        const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
+        const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
-        if (isMulti && options.length > 0) {
+        if (isMulti) {
           options.forEach((opt, oIdx) => {
             cols.push({
               header: `${q.text} - ${opt.label}`,
@@ -462,9 +485,10 @@ exports.exportAdvanced = async (req, res, next) => {
           }
           const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
           const isMulti = q.type === 'multiple_choice';
-          const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
+          const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
+        const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
-          if (isMulti && options.length > 0) {
+          if (isMulti) {
             const resolvedValue = resolveAnswerValue(qKey, rawValue, choiceValueMap);
             const parsed = splitOtherValues(rawValue);
             options.forEach((opt, oIdx) => {
@@ -517,9 +541,10 @@ exports.exportAdvanced = async (req, res, next) => {
 
       questions.forEach((q, idx) => {
         const isMulti = q.type === 'multiple_choice';
-        const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
+        const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
+        const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
-        if (isMulti && options.length > 0) {
+        if (isMulti) {
           options.forEach((opt, oIdx) => {
             vars.push({
               name: getVarName(),
@@ -598,9 +623,10 @@ exports.exportAdvanced = async (req, res, next) => {
             }
             const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
             const isMulti = q.type === 'multiple_choice';
-            const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
+            const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
+        const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
-            if (isMulti && options.length > 0) {
+            if (isMulti) {
               const resolvedValue = resolveAnswerValue(qKey, rawValue, choiceValueMap);
               const parsed = splitOtherValues(rawValue);
               options.forEach(opt => {

@@ -80,6 +80,24 @@ function normalizeOption(opt) {
   return { label: str, value: str };
 }
 
+function getFinalExportValue(baseValue, qKey, choiceValueMap, encodeValue) {
+  if (!choiceValueMap || !choiceValueMap[qKey]) return encodeValue(baseValue);
+  const map = choiceValueMap[qKey];
+  
+  // Check if baseValue is already an export code
+  if (map[baseValue] !== undefined) return baseValue;
+  
+  // Check if baseValue is a label, then return its export code
+  for (const code in map) {
+    if (String(map[code]).trim() === String(baseValue).trim()) {
+      return code;
+    }
+  }
+  
+  // Fallback
+  return encodeValue(baseValue);
+}
+
 function buildActiveOptionsMap(questions, preScanResponses) {
   const map = {};
   questions.forEach(q => {
@@ -260,7 +278,7 @@ exports.exportCsv = async (req, res, next) => {
           const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
           const parsed = splitOtherValues(resolvedBase);
           
-          let val = encodeValue(parsed.baseValue);
+          let val = getFinalExportValue(parsed.baseValue, qKey, choiceValueMap, encodeValue);
           const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : (val != null ? val : '');
           row.push(`"${strVal}"`);
           
@@ -392,7 +410,7 @@ exports.exportAdvanced = async (req, res, next) => {
             const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
             const parsed = splitOtherValues(resolvedBase);
             
-            let val = encodeValue(parsed.baseValue);
+            let val = getFinalExportValue(parsed.baseValue, qKey, choiceValueMap, encodeValue);
             const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : (val != null ? val : '');
             row.push(`"${strVal}"`);
             
@@ -521,7 +539,7 @@ exports.exportAdvanced = async (req, res, next) => {
           } else {
             const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
             const parsed = splitOtherValues(resolvedBase);
-            row[`Q${idx + 1}`] = encodeValue(parsed.baseValue);
+            row[`Q${idx + 1}`] = getFinalExportValue(parsed.baseValue, qKey, choiceValueMap, encodeValue);
 
             const max = maxOtherCount[q.id] || 0;
             for (let i = 1; i <= max; i++) {
@@ -695,12 +713,12 @@ exports.exportAdvanced = async (req, res, next) => {
                         } else {
               const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
               const parsed = splitOtherValues(resolvedBase);
-              const encoded = encodeValue(parsed.baseValue);
+              const encoded = getFinalExportValue(parsed.baseValue, qKey, choiceValueMap, encodeValue);
               
               const meta = getSPSSMetadata(q);
               if (meta.type === VariableType.Numeric) {
                 const rawParsed = splitOtherValues(rawValue);
-                const num = Number(encodeValue(rawParsed.baseValue));
+                const num = Number(getFinalExportValue(rawParsed.baseValue, qKey, choiceValueMap, encodeValue));
                 rec[vars[varIdx++].name] = Number.isFinite(num) ? num : null;
               } else {
                 // Force string fallback to match variables schema

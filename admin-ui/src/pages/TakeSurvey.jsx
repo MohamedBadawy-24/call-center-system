@@ -773,24 +773,27 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                 </div>
               );
             })}
-            {q.allowOther && (
-              <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border-color)' }}>
-                <label className="font-semibold text-gray-800 text-lg flex gap-1 items-center mb-3">
-                  {t('otherSpecify') || 'Other (Specify)'}
-                </label>
-                <input dir="auto"
-                  type="text"
-                  className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
-                  value={ansObj.other_text || ''}
-                  onChange={e => {
-                    if (activeInputIdRef) activeInputIdRef.current = `input-${qId}-other`;
-                    handleAnswerChange(qId, { ...ansObj, other_text: e.target.value });
-                  }}
-                  id={`input-${qId}-other`}
-                  placeholder={t('typeAnswer')}
-                />
-              </div>
-            )}
+            {q.allowOther && (() => {
+              const rootAnsObj = (typeof answers[qId] === 'object' && answers[qId] !== null && !Array.isArray(answers[qId])) ? answers[qId] : {};
+              return (
+                <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border-color)' }}>
+                  <label className="font-semibold text-gray-800 text-lg flex gap-1 items-center mb-3">
+                    {t('otherSpecify') || 'Other (Specify)'}
+                  </label>
+                  <input dir="auto"
+                    type="text"
+                    className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                    value={rootAnsObj.other_text || ''}
+                    onChange={e => {
+                      if (activeInputIdRef) activeInputIdRef.current = `input-${qId}-other`;
+                      handleAnswerChange(qId, { ...rootAnsObj, other_text: e.target.value });
+                    }}
+                    id={`input-${qId}-other`}
+                    placeholder={t('typeAnswer')}
+                  />
+                </div>
+              );
+            })()}
           </div>
         )}
 

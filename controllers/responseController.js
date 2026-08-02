@@ -622,7 +622,7 @@ exports.exportAdvanced = async (req, res, next) => {
               type: VariableType.Numeric, // 1/0 is strictly numeric
               width: 8,
               decimal: 0,
-              valueLabels: [{ value: 0, label: 'Not Selected' }, { value: 1, label: 'Selected' }]
+              valueLabels: [{ value: 0, label: 'Not Selected' }, { value: 1, label: String(opt.label || opt.text || opt.value || 'Selected').substring(0, 60) }]
             });
           });
           const max = maxOtherCount[q.id] || 0;
@@ -718,8 +718,8 @@ exports.exportAdvanced = async (req, res, next) => {
               const meta = getSPSSMetadata(q);
               if (meta.type === VariableType.Numeric) {
                 const rawParsed = splitOtherValues(rawValue);
-                const numVal = getFinalExportValue(rawParsed.baseValue, qKey, choiceValueMap, encodeValue);
-                const num = (numVal === '' || numVal == null) ? NaN : Number(numVal);
+                const finalVal = getFinalExportValue(rawParsed.baseValue, qKey, choiceValueMap, encodeValue);
+                const num = (finalVal !== '' && finalVal != null) ? Number(finalVal) : NaN;
                 rec[vars[varIdx++].name] = Number.isFinite(num) ? num : null;
               } else {
                 // Force string fallback to match variables schema

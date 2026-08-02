@@ -616,13 +616,15 @@ exports.exportAdvanced = async (req, res, next) => {
 
         if (isMulti) {
           options.forEach((opt, oIdx) => {
+            const exportCode = Number(opt.value);
+            const val = Number.isFinite(exportCode) ? exportCode : 1;
             vars.push({
               name: getVarName(),
               label: `${(q.text || '').substring(0, 60)} - ${(opt.label || '').substring(0, 50)}`,
-              type: VariableType.Numeric, // 1/0 is strictly numeric
+              type: VariableType.Numeric,
               width: 8,
               decimal: 0,
-              valueLabels: [{ value: 0, label: 'Not Selected' }, { value: 1, label: String(opt.label || opt.text || opt.value || 'Selected').substring(0, 60) }]
+              valueLabels: [{ value: val, label: String(opt.label || opt.text || opt.value || 'Selected').substring(0, 60) }]
             });
           });
           const max = maxOtherCount[q.id] || 0;
@@ -635,7 +637,7 @@ exports.exportAdvanced = async (req, res, next) => {
               decimal: 0
             });
           }
-                } else {
+        } else {
           const meta = getSPSSMetadata(q);
           vars.push({
             name: getVarName(),
@@ -700,17 +702,24 @@ exports.exportAdvanced = async (req, res, next) => {
         const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
             if (isMulti) {
-              const resolvedValue = resolveAnswerValue(qKey, rawValue, choiceValueMap);
-              const parsed = splitOtherValues(rawValue);
-              options.forEach(opt => {
-                const selected = isOptionSelected(rawValue, opt, resolvedValue, qKey, choiceValueMap);
-                rec[vars[varIdx++].name] = selected ? 1 : 0;
-              });
-              const max = maxOtherCount[q.id] || 0;
-              for (let i = 1; i <= max; i++) {
-                rec[vars[varIdx++].name] = safeString(encodeValue(parsed.otherValues[i - 1] || ''), 255);
-              }
-                        } else {
+                const map = activeOptionsMap[qKey] || {};
+                Object.values(map).forEach(opt => {
+                  let selected = false;
+                  if (Array.isArray(rawValue)) {
+                    selected = rawValue.includes(opt.value) || rawValue.includes(opt.label);
+                  } else {
+                    selected = rawValue === opt.value || rawValue === opt.label;
+                  }
+                  const exportCode = Number(opt.value);
+                  const val = Number.isFinite(exportCode) ? exportCode : 1;
+                  rec[vars[varIdx++].name] = selected ? val : null;
+                });
+                const parsed = splitOtherValues(rawValue);
+                const max = maxOtherCount[q.id] || 0;
+                for (let i = 1; i <= max; i++) {
+                  rec[vars[varIdx++].name] = safeString(encodeValue(parsed.otherValues[i - 1] || ''), 255);
+                }
+            } else {
               const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
               const parsed = splitOtherValues(resolvedBase);
               const encoded = getFinalExportValue(parsed.baseValue, qKey, choiceValueMap, encodeValue);

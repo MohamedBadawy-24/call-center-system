@@ -567,22 +567,21 @@ exports.exportAdvanced = async (req, res, next) => {
         const isChoiceType = ['single_choice', 'choice', 'dropdown'].includes(q.type);
         if (isChoiceType) {
           const opts = (Array.isArray(q.choices) && q.choices.length > 0) ? q.choices : (q.options || []);
-          if (opts.length > 0) {
-            const allNumeric = !q.allowOther && opts.every(opt => {
+          const allNumeric = !q.allowOther && opts.length > 0 && opts.every(opt => {
+            const val = opt.value != null && opt.value !== '' ? opt.value : (opt.text || opt.label);
+            return !isNaN(Number(val));
+          });
+          
+          if (allNumeric) {
+            type = VariableType.Numeric;
+            width = 8;
+            opts.forEach(opt => {
               const val = opt.value != null && opt.value !== '' ? opt.value : (opt.text || opt.label);
-              return !isNaN(Number(val));
+              valueLabels.push({ value: Number(val), label: String(opt.label || opt.text || '').substring(0, 60) });
             });
-            
-            if (allNumeric) {
-              type = VariableType.Numeric;
-              width = 8;
-              opts.forEach(opt => {
-                const val = opt.value != null && opt.value !== '' ? opt.value : (opt.text || opt.label);
-                valueLabels.push({ value: Number(val), label: String(opt.label || opt.text || '').substring(0, 60) });
-              });
-            } else {
-              opts.forEach(opt => {
-                const val = opt.value != null && opt.value !== '' ? opt.value : (opt.text || opt.label);
+          } else {
+            opts.forEach(opt => {
+              const val = opt.value != null && opt.value !== '' ? opt.value : (opt.text || opt.label);
                 valueLabels.push({ value: String(val).substring(0, 255), label: String(opt.label || opt.text || '').substring(0, 60) });
               });
             }

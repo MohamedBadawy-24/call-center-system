@@ -84,6 +84,7 @@ function buildActiveOptionsMap(questions, preScanResponses) {
   const map = {};
   questions.forEach(q => {
     if (q.type === 'multiple_choice') {
+      const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
       map[qKey] = getQuestionOptions(q, preScanResponses);
     }
   });

@@ -516,7 +516,7 @@ exports.exportAdvanced = async (req, res, next) => {
           options.forEach((opt, oIdx) => {
             vars.push({
               name: `Q${idx + 1}_${oIdx + 1}`.substring(0, 16),
-              label: `${(q.text || '').substring(0, 200)} - ${(opt.label || '').substring(0, 50)}`,
+              label: `${(q.text || '').substring(0, 60)} - ${(opt.label || '').substring(0, 50)}`,
               type: VariableType.Numeric,
               width: 8,
               decimal: 0,
@@ -526,7 +526,7 @@ exports.exportAdvanced = async (req, res, next) => {
           for (let i = 1; i <= max; i++) {
             vars.push({
               name: `Q${idx + 1}_oth_${i}`.substring(0, 16),
-              label: `${(q.text || '').substring(0, 240)} (Other ${i})`,
+              label: `${(q.text || '').substring(0, 80)} (Other ${i})`,
               type: VariableType.String,
               width: 255,
               decimal: 0
@@ -541,7 +541,7 @@ exports.exportAdvanced = async (req, res, next) => {
 
           vars.push({
             name: `Q${idx + 1}`,
-            label: (q.text || '').substring(0, 255),
+            label: (q.text || '').substring(0, 100),
             type: isNumeric ? VariableType.Numeric : VariableType.String,
             width: isNumeric ? 8 : 255,
             decimal: 0,
@@ -551,7 +551,7 @@ exports.exportAdvanced = async (req, res, next) => {
           for (let i = 1; i <= max; i++) {
             vars.push({
               name: `Q${idx + 1}_other_${i}`,
-              label: `${(q.text || '').substring(0, 240)} (Other ${i})`,
+              label: `${(q.text || '').substring(0, 80)} (Other ${i})`,
               type: VariableType.String,
               width: 255,
               decimal: 0
@@ -559,6 +559,16 @@ exports.exportAdvanced = async (req, res, next) => {
           }
         }
       });
+
+      const safeString = (str, maxBytes) => {
+        if (!str) return '';
+        let s = String(str);
+        if (Buffer.byteLength(s, 'utf8') <= maxBytes) return s;
+        let buf = Buffer.from(s, 'utf8').slice(0, maxBytes);
+        while (buf.length > 0 && (buf[buf.length - 1] & 0xC0) === 0x80) buf = buf.slice(0, -1);
+        if (buf.length > 0 && (buf[buf.length - 1] & 0x80) !== 0) buf = buf.slice(0, -1);
+        return buf.toString('utf8');
+      };
 
       const records = responses.map(r => {
         const rec = [
@@ -594,7 +604,7 @@ exports.exportAdvanced = async (req, res, next) => {
             });
             const max = maxOtherCount[q.id] || 0;
             for (let i = 1; i <= max; i++) {
-              rec.push(String(encodeValue(parsed.otherValues[i - 1] || '')));
+              rec.push(safeString(encodeValue(parsed.otherValues[i - 1] || ''), 255));
             }
           } else {
             const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
@@ -610,12 +620,12 @@ exports.exportAdvanced = async (req, res, next) => {
               const num = Number(encoded);
               rec.push(Number.isFinite(num) ? num : (encoded != null && encoded !== '' ? Number(encoded) || 0 : 0));
             } else {
-              rec.push(String(encoded != null ? encoded : ''));
+              rec.push(safeString(encoded != null ? encoded : '', 255));
             }
 
             const max = maxOtherCount[q.id] || 0;
             for (let i = 1; i <= max; i++) {
-              rec.push(String(encodeValue(parsed.otherValues[i - 1] || '')));
+              rec.push(safeString(encodeValue(parsed.otherValues[i - 1] || ''), 255));
             }
           }
         });

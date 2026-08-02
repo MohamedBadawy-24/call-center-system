@@ -276,9 +276,39 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
               }}
               style={{ flex: 1 }}
             />
-            {q.type === 'number_ratio' && (
+            {(q.type === 'number_ratio' || (q.type === 'number' && q.isRatio)) && (
               <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-secondary)' }}>%</span>
             )}
+          </div>
+        )}
+
+        {q.type === 'year' && (
+          <div className="form-group" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <select
+              id={`input-${qId}`}
+              className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+              value={answers[qId] || ''}
+              onChange={(e) => {
+                if (activeInputIdRef) activeInputIdRef.current = e.target.id;
+                handleAnswerChange(qId, e.target.value);
+                if (survey?.layoutMode !== 'multi') {
+                  setTimeout(() => handleNextQuestion(), 150);
+                }
+              }}
+            >
+              <option value="">{t('selectYear') || 'Select Year...'}</option>
+              {(() => {
+                const opts = [];
+                const from = q.yearRange?.from || 1900;
+                const to = q.yearRange?.to || new Date().getFullYear();
+                const start = Math.min(from, to);
+                const end = Math.max(from, to);
+                for (let y = end; y >= start; y--) {
+                  opts.push(<option key={y} value={y}>{y}</option>);
+                }
+                return opts;
+              })()}
+            </select>
           </div>
         )}
 
@@ -496,8 +526,8 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
               const val = ansObj[sub.id] ?? '';
               const subInputId = `input-${qId}-${sub.id}`;
               return (
-                <div key={sub.id || `sub-${subIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                  <label className="form-label" style={{ display: 'flex', gap: '0.25rem' }}>
+                <div key={sub.id || `sub-${subIdx}`} className="bg-white border border-gray-200 rounded-xl p-5 mb-4 shadow-sm transition-all focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 flex flex-col gap-y-4">
+                  <label className="font-semibold text-gray-800 text-lg flex gap-1 items-center">
                     {sub.label}
                     {sub.required && <span style={{ color: 'var(--danger)' }}>*</span>}
                   </label>
@@ -559,13 +589,7 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                         const radioName = `radio-${qId}-${sub.id}`;
                         const isChecked = String(val) === optVal;
                         return (
-                          <label key={i} htmlFor={radioId} style={{
-                            display: 'flex', alignItems: 'center', gap: '0.6rem',
-                            padding: '0.6rem 0.75rem', borderRadius: '8px', cursor: 'pointer',
-                            border: isChecked ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                            background: isChecked ? 'rgba(59,130,246,0.06)' : 'var(--surface, #fff)',
-                            transition: 'all 0.15s ease'
-                          }}>
+                          <label key={i} htmlFor={radioId} className={`flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer hover:bg-gray-50 ${isChecked ? 'bg-blue-50' : 'bg-white'}`}>
                             <input
                               type="radio"
                               id={radioId}
@@ -574,7 +598,12 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                               checked={isChecked}
                               onChange={e => {
                                 if (activeInputIdRef) activeInputIdRef.current = radioId;
-                                handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value });
+                                const nextAnsObj = { ...ansObj };
+                                (q.subInputs || []).forEach(siblingSub => {
+                                  if (siblingSub.inputType === 'multiple_choice') nextAnsObj[siblingSub.id] = [];
+                                });
+                                nextAnsObj[sub.id] = e.target.value;
+                                handleAnswerChange(qId, nextAnsObj);
                               }}
                               style={{ accentColor: 'var(--primary)' }}
                             />
@@ -582,6 +611,49 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                           </label>
                         );
                       })}
+                      {sub.allowOther && (() => {
+                        const otherRadioId = `${subInputId}-opt-other`;
+                        const radioName = `radio-${qId}-${sub.id}`;
+                        const isChecked = typeof val === 'string' && val.startsWith("Other: ");
+                        const otherValue = isChecked ? val.substring(7) : "";
+                        return (
+                          <div key="other-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <label htmlFor={otherRadioId} className={`flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer hover:bg-gray-50 ${isChecked ? 'bg-blue-50' : 'bg-white'}`}>
+                              <input
+                                type="radio"
+                                id={otherRadioId}
+                                name={radioName}
+                                value="Other"
+                                checked={isChecked}
+                                onChange={e => {
+                                  if (activeInputIdRef) activeInputIdRef.current = otherRadioId;
+                                  const nextAnsObj = { ...ansObj };
+                                  (q.subInputs || []).forEach(siblingSub => {
+                                    if (siblingSub.inputType === 'multiple_choice') nextAnsObj[siblingSub.id] = [];
+                                  });
+                                  nextAnsObj[sub.id] = "Other: ";
+                                  handleAnswerChange(qId, nextAnsObj);
+                                }}
+                                style={{ accentColor: 'var(--primary)' }}
+                              />
+                              <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)' }}>{t('other') || 'Other'}</span>
+                            </label>
+                            {isChecked && (
+                              <input dir="auto"
+                                type="text"
+                                id={`${subInputId}-other-text`}
+                                className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                                placeholder={t('typeAnswer')}
+                                value={otherValue}
+                                onChange={e => {
+                                  if (activeInputIdRef) activeInputIdRef.current = `${subInputId}-other-text`;
+                                  handleAnswerChange(qId, { ...ansObj, [sub.id]: "Other: " + e.target.value });
+                                }}
+                              />
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ) : sub.inputType === 'multiple_choice' ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
@@ -592,13 +664,7 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                         const currArr = Array.isArray(val) ? val.map(v => String(v)) : [];
                         const isChecked = currArr.includes(optVal);
                         return (
-                          <label key={i} htmlFor={checkId} style={{
-                            display: 'flex', alignItems: 'center', gap: '0.6rem',
-                            padding: '0.6rem 0.75rem', borderRadius: '8px', cursor: 'pointer',
-                            border: isChecked ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                            background: isChecked ? 'rgba(59,130,246,0.06)' : 'var(--surface, #fff)',
-                            transition: 'all 0.15s ease'
-                          }}>
+                          <label key={i} htmlFor={checkId} className={`flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer hover:bg-gray-50 ${isChecked ? 'bg-blue-50' : 'bg-white'}`}>
                             <input
                               type="checkbox"
                               id={checkId}
@@ -609,7 +675,12 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                                 const nextArr = isChecked
                                   ? currArr.filter(item => item !== optVal)
                                   : [...currArr, optVal];
-                                handleAnswerChange(qId, { ...ansObj, [sub.id]: nextArr });
+                                const nextAnsObj = { ...ansObj };
+                                (q.subInputs || []).forEach(siblingSub => {
+                                  if (siblingSub.inputType === 'choice') delete nextAnsObj[siblingSub.id];
+                                });
+                                nextAnsObj[sub.id] = nextArr;
+                                handleAnswerChange(qId, nextAnsObj);
                               }}
                               style={{ accentColor: 'var(--primary)' }}
                             />
@@ -617,7 +688,76 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                           </label>
                         );
                       })}
+                      {sub.allowOther && (() => {
+                        const checkId = `${subInputId}-opt-other`;
+                        const currArr = Array.isArray(val) ? val.map(v => String(v)) : [];
+                        const otherEntry = currArr.find(v => v.startsWith("Other: "));
+                        const isChecked = !!otherEntry;
+                        const otherValue = isChecked ? otherEntry.substring(7) : "";
+                        return (
+                          <div key="other-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <label htmlFor={checkId} className={`flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer hover:bg-gray-50 ${isChecked ? 'bg-blue-50' : 'bg-white'}`}>
+                              <input
+                                type="checkbox"
+                                id={checkId}
+                                checked={isChecked}
+                                onChange={e => {
+                                  if (activeInputIdRef) activeInputIdRef.current = checkId;
+                                  const nextArr = isChecked
+                                    ? currArr.filter(item => !item.startsWith("Other: "))
+                                    : [...currArr, "Other: "];
+                                  const nextAnsObj = { ...ansObj };
+                                  (q.subInputs || []).forEach(siblingSub => {
+                                    if (siblingSub.inputType === 'choice') delete nextAnsObj[siblingSub.id];
+                                  });
+                                  nextAnsObj[sub.id] = nextArr;
+                                  handleAnswerChange(qId, nextAnsObj);
+                                }}
+                                style={{ accentColor: 'var(--primary)' }}
+                              />
+                              <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)' }}>{t('other') || 'Other'}</span>
+                            </label>
+                            {isChecked && (
+                              <input dir="auto"
+                                type="text"
+                                id={`${subInputId}-other-text`}
+                                className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                                placeholder={t('typeAnswer')}
+                                value={otherValue}
+                                onChange={e => {
+                                  if (activeInputIdRef) activeInputIdRef.current = `${subInputId}-other-text`;
+                                  const nextArr = currArr.map(item => item.startsWith("Other: ") ? "Other: " + e.target.value : item);
+                                  handleAnswerChange(qId, { ...ansObj, [sub.id]: nextArr });
+                                }}
+                              />
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
+                  ) : sub.inputType === 'year' ? (
+                    <select
+                      id={subInputId}
+                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                      value={val}
+                      onChange={e => {
+                        if (activeInputIdRef) activeInputIdRef.current = e.target.id;
+                        handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value });
+                      }}
+                    >
+                      <option value="">{t('selectYear') || 'Select Year...'}</option>
+                      {(() => {
+                        const opts = [];
+                        const from = sub.yearRange?.from || 1900;
+                        const to = sub.yearRange?.to || new Date().getFullYear();
+                        const start = Math.min(from, to);
+                        const end = Math.max(from, to);
+                        for (let y = end; y >= start; y--) {
+                          opts.push(<option key={y} value={y}>{y}</option>);
+                        }
+                        return opts;
+                      })()}
+                    </select>
                   ) : (
                     <input dir="auto"
                       id={subInputId}
@@ -633,6 +773,24 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                 </div>
               );
             })}
+            {q.allowOther && (
+              <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border-color)' }}>
+                <label className="font-semibold text-gray-800 text-lg flex gap-1 items-center mb-3">
+                  {t('otherSpecify') || 'Other (Specify)'}
+                </label>
+                <input dir="auto"
+                  type="text"
+                  className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                  value={ansObj.other_text || ''}
+                  onChange={e => {
+                    if (activeInputIdRef) activeInputIdRef.current = `input-${qId}-other`;
+                    handleAnswerChange(qId, { ...ansObj, other_text: e.target.value });
+                  }}
+                  id={`input-${qId}-other`}
+                  placeholder={t('typeAnswer')}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -1444,7 +1602,7 @@ export default function TakeSurvey({ mockSurvey }) {
             sumVal = parseFloat(val) || 0;
           }
 
-          if (q.type === 'number_ratio') {
+          if (q.type === 'number_ratio' || (q.type === 'number' && q.isRatio)) {
             const derivedSum = (sumVal / 100) * expected;
             if (derivedSum !== expected) {
               return q.crossValidation.errorMessage || `Total percentage must equal 100% (Derived total: ${derivedSum}, Target: ${expected})`;

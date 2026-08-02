@@ -33,7 +33,12 @@ const QuestionSchema = new mongoose.Schema({
   text: String,
   script: String, // What the agent reads
   category: String, // intro, screening, demographic, main
-  type: String, // text, single_choice, multiple_choice, number, number_ratio, info, multi_input, ranking, group
+  type: String, // text, single_choice, multiple_choice, number, number_ratio, info, multi_input, ranking, group, year
+  isRatio: { type: Boolean, default: false },
+  yearRange: {
+    from: Number,
+    to: Number
+  },
   choices: [ChoiceSchema],
   allowOther: { type: Boolean, default: false },
   allowMultipleOther: { type: Boolean, default: false },
@@ -54,7 +59,13 @@ const QuestionSchema = new mongoose.Schema({
   subInputs: [{
     id: String,
     label: String,
-    inputType: { type: String, enum: ['short_text', 'number', 'date', 'dropdown', 'choice', 'multiple_choice'] },
+    inputType: { type: String, enum: ['short_text', 'number', 'date', 'dropdown', 'choice', 'multiple_choice', 'year'] },
+    isRatio: { type: Boolean, default: false },
+    allowOther: { type: Boolean, default: false },
+    yearRange: {
+      from: Number,
+      to: Number
+    },
     options: [mongoose.Schema.Types.Mixed],
     required: { type: Boolean, default: false }
   }],

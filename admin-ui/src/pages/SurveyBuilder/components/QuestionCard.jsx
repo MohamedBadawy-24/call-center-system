@@ -134,13 +134,13 @@ export default function QuestionCard({
             </div>
             <div style={{ flex: 1, minWidth: '150px' }}>
               <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>Question Type</label>
-              <select className="input-field" value={question.type} onChange={e => updateQ({ type: e.target.value, choices: ['text', 'number', 'number_ratio', 'info', 'multi_input'].includes(e.target.value) ? [] : question.choices })} disabled={!isAdmin}>
+              <select className="input-field" value={question.type} onChange={e => updateQ({ type: e.target.value, choices: ['text', 'number', 'number_ratio', 'info', 'multi_input', 'year'].includes(e.target.value) ? [] : question.choices })} disabled={!isAdmin}>
                 <option value="text">Text (Open Answer)</option>
                 <option value="single_choice">Single Choice</option>
                 <option value="multiple_choice">Multiple Choice</option>
                 <option value="ranking">Ranking / Ordering</option>
                 <option value="number">Number</option>
-                <option value="number_ratio">Number (Ratio/Percentage)</option>
+                <option value="year">Year (Dropdown)</option>
                 <option value="info">Info / Notice (No Input)</option>
                 <option value="multi_input">Multiple Inputs (Composite)</option>
               </select>
@@ -275,8 +275,26 @@ export default function QuestionCard({
             </div>
           )}
 
+          {question.type === 'year' && (
+            <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', gap: '1rem' }}>
+              <div style={{ flex: 1 }}>
+                <label className="form-label" style={{ fontSize: '0.8rem' }}>From Year</label>
+                <input type="number" className="input-field" value={question.yearRange?.from || ''} onChange={e => updateQ({ yearRange: { ...question.yearRange, from: parseInt(e.target.value) } })} disabled={!isAdmin} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label className="form-label" style={{ fontSize: '0.8rem' }}>To Year</label>
+                <input type="number" className="input-field" value={question.yearRange?.to || ''} onChange={e => updateQ({ yearRange: { ...question.yearRange, to: parseInt(e.target.value) } })} disabled={!isAdmin} />
+              </div>
+            </div>
+          )}
+
           {question.type === 'number' && (
             <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, fontSize: '0.85rem', marginBottom: '1rem', cursor: isAdmin ? 'pointer' : 'default' }}>
+                <input dir="auto" type="checkbox" checked={!!question.isRatio} onChange={e => updateQ({ isRatio: e.target.checked })} disabled={!isAdmin} />
+                Treat as Percentage / Ratio (%)
+              </label>
+
               <label className="form-label" style={{ marginBottom: '0.5rem', display: 'block' }}>Digit Length Constraints (Optional)</label>
               <div style={{ display: 'flex', gap: '1rem' }}>
                 <div style={{ flex: 1 }}>
@@ -309,7 +327,13 @@ export default function QuestionCard({
 
           {question.type === 'multi_input' && (
             <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-              <label dir="auto" className="form-label" style={{ marginBottom: '0.25rem', display: 'block' }}>Sub-Inputs</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <label dir="auto" className="form-label" style={{ marginBottom: 0 }}>Sub-Inputs</label>
+                <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, cursor: isAdmin ? 'pointer' : 'default' }}>
+                  <input type="checkbox" checked={!!question.allowOther} onChange={e => updateQ({ allowOther: e.target.checked })} disabled={!isAdmin} />
+                  Allow "Other" text input
+                </label>
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {(question.subInputs || []).map((sub, sIdx) => (
                   <div key={sub.id} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', background: '#fff', padding: '0.5rem', border: '1px solid var(--border-color)', borderRadius: '6px' }}>
@@ -343,6 +367,7 @@ export default function QuestionCard({
                       <option value="dropdown">Dropdown</option>
                       <option value="choice">Choice (Radio)</option>
                       <option value="multiple_choice">Multiple Choice (Checkbox)</option>
+                      <option value="year">Year (Dropdown)</option>
                     </select>
                     <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 600 }}>
                       <input dir="auto" 
@@ -364,8 +389,40 @@ export default function QuestionCard({
                         updateQ({ subInputs: newSubs });
                       }}>Del</button>
                     )}
-                    {(sub.inputType === 'dropdown' || sub.inputType === 'choice' || sub.inputType === 'multiple_choice') && (
+                    {sub.inputType === 'year' && (
+                      <div style={{ width: '100%', display: 'flex', gap: '1rem', marginTop: '0.25rem', padding: '0.5rem', background: 'rgba(0,0,0,0.02)', borderRadius: '6px' }}>
+                        <div style={{ flex: 1 }}>
+                          <label className="form-label" style={{ fontSize: '0.75rem' }}>From Year</label>
+                          <input type="number" className="input-field" value={sub.yearRange?.from || ''} onChange={e => {
+                            const newSubs = [...(question.subInputs || [])];
+                            newSubs[sIdx] = { ...newSubs[sIdx], yearRange: { ...newSubs[sIdx].yearRange, from: parseInt(e.target.value) } };
+                            updateQ({ subInputs: newSubs });
+                          }} disabled={!isAdmin} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <label className="form-label" style={{ fontSize: '0.75rem' }}>To Year</label>
+                          <input type="number" className="input-field" value={sub.yearRange?.to || ''} onChange={e => {
+                            const newSubs = [...(question.subInputs || [])];
+                            newSubs[sIdx] = { ...newSubs[sIdx], yearRange: { ...newSubs[sIdx].yearRange, to: parseInt(e.target.value) } };
+                            updateQ({ subInputs: newSubs });
+                          }} disabled={!isAdmin} />
+                        </div>
+                      </div>
+                    )}
+                    {sub.inputType === 'number' && (
                       <div style={{ width: '100%', marginTop: '0.25rem' }}>
+                        <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 600 }}>
+                          <input type="checkbox" checked={!!sub.isRatio} onChange={e => {
+                            const newSubs = [...(question.subInputs || [])];
+                            newSubs[sIdx] = { ...newSubs[sIdx], isRatio: e.target.checked };
+                            updateQ({ subInputs: newSubs });
+                          }} disabled={!isAdmin} />
+                          Treat as Percentage / Ratio (%)
+                        </label>
+                      </div>
+                    )}
+                        {(sub.inputType === 'dropdown' || sub.inputType === 'choice' || sub.inputType === 'multiple_choice') && (
+                          <div style={{ width: '100%', marginTop: '0.25rem' }}>
                         {/* Mini Options Builder */}
                         {isAdmin && (
                           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>

@@ -277,6 +277,18 @@ export default function PrecallTab() {
                     <input dir="auto" className="input-field" type="number" value={field.min != null ? field.min : ''} onChange={(e) => updateField(fIdx, { min: e.target.value === '' ? undefined : Number(e.target.value) })} readOnly={!isAdmin} />
                   </>
                 )}
+                {field.type === 'year' && (
+                  <div style={{ display: 'flex', gap: '1rem', marginTop: '0.75rem' }}>
+                    <div style={{ flex: 1 }}>
+                      <label dir="auto" className="form-label" style={{ display: 'block' }}>From Year</label>
+                      <input dir="auto" className="input-field" type="number" value={field.yearRange?.from || ''} onChange={(e) => updateField(fIdx, { yearRange: { ...field.yearRange, from: parseInt(e.target.value) } })} readOnly={!isAdmin} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label dir="auto" className="form-label" style={{ display: 'block' }}>To Year</label>
+                      <input dir="auto" className="input-field" type="number" value={field.yearRange?.to || ''} onChange={(e) => updateField(fIdx, { yearRange: { ...field.yearRange, to: parseInt(e.target.value) } })} readOnly={!isAdmin} />
+                    </div>
+                  </div>
+                )}
                 {(field.type === 'segment' || field.type === 'select') && (
                   <div style={{ marginTop: '0.75rem' }}>
                     <div className="form-label" style={{ marginBottom: '0.5rem' }}>Options (value + label)</div>

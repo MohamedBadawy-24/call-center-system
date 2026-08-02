@@ -55,6 +55,7 @@ export const OUTBOUND_FIELD_TYPES = [
   { value: 'number', label: 'Number' },
   { value: 'segment', label: 'Segmented buttons (2+)' },
   { value: 'select', label: 'Dropdown' },
+  { value: 'year', label: 'Year (Dropdown)' },
 ];
 
 export const DEFAULT_META = {

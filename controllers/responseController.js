@@ -508,6 +508,13 @@ exports.exportAdvanced = async (req, res, next) => {
         { name: 'SOURCE', label: 'Number Source', type: VariableType.String, width: 16 },
       ];
 
+      let varCounter = 1;
+      const getVarName = () => {
+        const name = `VAR_${varCounter}`;
+        varCounter++;
+        return name;
+      };
+
       questions.forEach((q, idx) => {
         const isMulti = q.type === 'multiple_choice';
         const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
@@ -515,9 +522,9 @@ exports.exportAdvanced = async (req, res, next) => {
         if (isMulti && options.length > 0) {
           options.forEach((opt, oIdx) => {
             vars.push({
-              name: `Q${idx + 1}_${oIdx + 1}`.substring(0, 16),
+              name: getVarName(),
               label: `${(q.text || '').substring(0, 60)} - ${(opt.label || '').substring(0, 50)}`,
-              type: VariableType.Numeric,
+              type: VariableType.Numeric, // 1/0 is strictly numeric
               width: 8,
               decimal: 0,
             });
@@ -525,7 +532,7 @@ exports.exportAdvanced = async (req, res, next) => {
           const max = maxOtherCount[q.id] || 0;
           for (let i = 1; i <= max; i++) {
             vars.push({
-              name: `Q${idx + 1}_oth_${i}`.substring(0, 16),
+              name: getVarName(),
               label: `${(q.text || '').substring(0, 80)} (Other ${i})`,
               type: VariableType.String,
               width: 255,
@@ -533,24 +540,18 @@ exports.exportAdvanced = async (req, res, next) => {
             });
           }
         } else {
-          const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
-          const qMap = choiceValueMap[qKey];
-          const hasNumericValues = qMap && Object.values(qMap).some(v => v !== '' && !isNaN(Number(v)));
-          const isYesNo = (q.options || []).some(opt => ['Yes', 'No', 'نعم', 'لا'].includes(typeof opt === 'string' ? opt.trim() : (opt?.label || '')));
-          const isNumeric = q.type === 'number' || q.type === 'number_ratio' || q.type === 'rating' || isYesNo || hasNumericValues;
-
           vars.push({
-            name: `Q${idx + 1}`,
+            name: getVarName(),
             label: (q.text || '').substring(0, 100),
-            type: isNumeric ? VariableType.Numeric : VariableType.String,
-            width: isNumeric ? 8 : 255,
+            type: VariableType.String, // Force string fallback for all other dynamic fields
+            width: 255,
             decimal: 0,
           });
 
           const max = maxOtherCount[q.id] || 0;
           for (let i = 1; i <= max; i++) {
             vars.push({
-              name: `Q${idx + 1}_other_${i}`,
+              name: getVarName(),
               label: `${(q.text || '').substring(0, 80)} (Other ${i})`,
               type: VariableType.String,
               width: 255,
@@ -570,71 +571,74 @@ exports.exportAdvanced = async (req, res, next) => {
         return buf.toString('utf8');
       };
 
-      const records = responses.map(r => {
-        const rec = [
-          r.serialNumber || 'N/A',
-          new Date(r.completedAt || r.startedAt).toISOString(),
-          r.status,
-          r.interviewOutcome,
-          r.outcomeReason || '',
-          r.agentId?.name || 'Unknown',
-          r.durationSecs || 0,
-          r.numberSource || 'queue',
-        ];
-        questions.forEach(q => {
-          const answer = (r.answers || []).find(a => a.questionId === q.id);
-          let rawValue = null;
-          if (answer) {
-            if (q.subId && typeof answer.value === 'object' && answer.value !== null) {
-              rawValue = answer.value[q.subId];
-            } else if (!q.subId) {
-              rawValue = answer.value;
+      const records = [];
+      responses.forEach(r => {
+        try {
+          const rec = [
+            safeString(r.serialNumber || 'N/A', 16),
+            safeString(new Date(r.completedAt || r.startedAt).toISOString(), 32),
+            safeString(r.status, 16),
+            safeString(r.interviewOutcome, 32),
+            safeString(r.outcomeReason || '', 128),
+            safeString(r.agentId?.name || 'Unknown', 64),
+            Number.isFinite(Number(r.durationSecs)) ? Number(r.durationSecs) : 0,
+            safeString(r.numberSource || 'queue', 16),
+          ];
+          questions.forEach(q => {
+            const answer = (r.answers || []).find(a => a.questionId === q.id);
+            let rawValue = null;
+            if (answer) {
+              if (q.subId && typeof answer.value === 'object' && answer.value !== null) {
+                rawValue = answer.value[q.subId];
+              } else if (!q.subId) {
+                rawValue = answer.value;
+              }
             }
-          }
-          const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
-          const isMulti = q.type === 'multiple_choice';
-          const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
+            const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
+            const isMulti = q.type === 'multiple_choice';
+            const options = isMulti ? getQuestionOptions(q, preScanResponses) : [];
 
-          if (isMulti && options.length > 0) {
-            const resolvedValue = resolveAnswerValue(qKey, rawValue, choiceValueMap);
-            const parsed = splitOtherValues(rawValue);
-            options.forEach(opt => {
-              const selected = isOptionSelected(rawValue, opt, resolvedValue, qKey, choiceValueMap);
-              rec.push(selected ? 1 : 0);
-            });
-            const max = maxOtherCount[q.id] || 0;
-            for (let i = 1; i <= max; i++) {
-              rec.push(safeString(encodeValue(parsed.otherValues[i - 1] || ''), 255));
-            }
-          } else {
-            const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
-            const parsed = splitOtherValues(resolvedBase);
-            const encoded = encodeValue(parsed.baseValue);
-
-            const qMap = choiceValueMap[qKey];
-            const hasNumericValues = qMap && Object.values(qMap).some(v => v !== '' && !isNaN(Number(v)));
-            const isYesNo = (q.options || []).some(opt => ['Yes', 'No', 'نعم', 'لا'].includes(typeof opt === 'string' ? opt.trim() : (opt?.label || '')));
-            const isNumeric = q.type === 'number' || q.type === 'number_ratio' || q.type === 'rating' || isYesNo || hasNumericValues;
-
-            if (isNumeric) {
-              const num = Number(encoded);
-              rec.push(Number.isFinite(num) ? num : (encoded != null && encoded !== '' ? Number(encoded) || 0 : 0));
+            if (isMulti && options.length > 0) {
+              const resolvedValue = resolveAnswerValue(qKey, rawValue, choiceValueMap);
+              const parsed = splitOtherValues(rawValue);
+              options.forEach(opt => {
+                const selected = isOptionSelected(rawValue, opt, resolvedValue, qKey, choiceValueMap);
+                rec.push(selected ? 1 : 0);
+              });
+              const max = maxOtherCount[q.id] || 0;
+              for (let i = 1; i <= max; i++) {
+                rec.push(safeString(encodeValue(parsed.otherValues[i - 1] || ''), 255));
+              }
             } else {
-              rec.push(safeString(encoded != null ? encoded : '', 255));
-            }
+              const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
+              const parsed = splitOtherValues(resolvedBase);
+              const encoded = encodeValue(parsed.baseValue);
 
-            const max = maxOtherCount[q.id] || 0;
-            for (let i = 1; i <= max; i++) {
-              rec.push(safeString(encodeValue(parsed.otherValues[i - 1] || ''), 255));
+              // Force string fallback to match variables schema
+              rec.push(safeString(encoded != null ? encoded : '', 255));
+
+              const max = maxOtherCount[q.id] || 0;
+              for (let i = 1; i <= max; i++) {
+                rec.push(safeString(encodeValue(parsed.otherValues[i - 1] || ''), 255));
+              }
             }
-          }
-        });
-        return rec;
+          });
+          records.push(rec);
+        } catch (err) {
+          logger.error(`SPSS Row Error mapping response ${r._id}:`, err);
+        }
       });
 
       const { saveToFile } = require('sav-writer');
       const tempFile = path.join(__dirname, '..', 'uploads', `${filenameBase}.sav`);
-      saveToFile(tempFile, records, vars);
+      
+      try {
+        saveToFile(tempFile, records, vars);
+      } catch (err) {
+        logger.error(`SPSS File Creation Error for survey ${surveyId}:`, err);
+        return res.status(500).json({ error: 'Failed to create SPSS file. ' + err.message });
+      }
+
       res.download(tempFile, `${filenameBase}.sav`, () => {
         if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
       });

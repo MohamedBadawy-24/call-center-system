@@ -83,7 +83,25 @@ function normalizeOption(opt) {
 function buildActiveOptionsMap(questions, preScanResponses) {
   const map = {};
   questions.forEach(q => {
-    if (q.type === 'multiple_choice') {
+    let hasArrayAnswers = false;
+    for (let r of preScanResponses) {
+      for (let a of (r.answers || [])) {
+        if (a.questionId === q.id) {
+          let val = a.value;
+          if (q.subId && typeof val === 'object' && val !== null) {
+            val = val[q.subId];
+          }
+          if (Array.isArray(val)) {
+            hasArrayAnswers = true;
+            break;
+          }
+        }
+      }
+      if (hasArrayAnswers) break;
+    }
+
+    if (q.type === 'multiple_choice' || hasArrayAnswers) {
+      q._treatAsMulti = true;
       const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
       map[qKey] = getQuestionOptions(q, preScanResponses);
     }
@@ -175,7 +193,7 @@ exports.exportCsv = async (req, res, next) => {
 
     const headers = ['Submission Date', 'Status', 'Agent Name', 'Agent Email', 'Duration (sec)', 'Outcome Reason', 'Number Source'];
     questions.forEach((q, idx) => {
-      const isMulti = q.type === 'multiple_choice';
+      const isMulti = q.type === 'multiple_choice' || q._treatAsMulti;
       const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
         const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
@@ -219,7 +237,7 @@ exports.exportCsv = async (req, res, next) => {
           }
         }
         const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
-        const isMulti = q.type === 'multiple_choice';
+        const isMulti = q.type === 'multiple_choice' || q._treatAsMulti;
         const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
         const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
@@ -305,7 +323,7 @@ exports.exportAdvanced = async (req, res, next) => {
 
       const headers = ['Serial', 'Submission_Date', 'Status', 'Interview_Outcome', 'Outcome_Reason', 'Agent_Name', 'Duration_Secs', 'Number_Source'];
       questions.forEach((q, idx) => {
-        const isMulti = q.type === 'multiple_choice';
+        const isMulti = q.type === 'multiple_choice' || q._treatAsMulti;
         const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
         const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
@@ -351,7 +369,7 @@ exports.exportAdvanced = async (req, res, next) => {
             }
           }
           const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
-          const isMulti = q.type === 'multiple_choice';
+          const isMulti = q.type === 'multiple_choice' || q._treatAsMulti;
           const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
         const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
@@ -434,7 +452,7 @@ exports.exportAdvanced = async (req, res, next) => {
       ];
 
       questions.forEach((q, idx) => {
-        const isMulti = q.type === 'multiple_choice';
+        const isMulti = q.type === 'multiple_choice' || q._treatAsMulti;
         const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
         const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
@@ -485,7 +503,7 @@ exports.exportAdvanced = async (req, res, next) => {
             }
           }
           const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
-          const isMulti = q.type === 'multiple_choice';
+          const isMulti = q.type === 'multiple_choice' || q._treatAsMulti;
           const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
         const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
@@ -528,7 +546,7 @@ exports.exportAdvanced = async (req, res, next) => {
         let width = 255;
         let valueLabels = [];
         
-        const isChoiceType = q.type === 'choice' || q.type === 'dropdown';
+        const isChoiceType = ['single_choice', 'choice', 'dropdown'].includes(q.type);
         if (isChoiceType) {
           const opts = (Array.isArray(q.choices) && q.choices.length > 0) ? q.choices : (q.options || []);
           if (opts.length > 0) {
@@ -574,7 +592,7 @@ exports.exportAdvanced = async (req, res, next) => {
       };
 
       questions.forEach((q, idx) => {
-        const isMulti = q.type === 'multiple_choice';
+        const isMulti = q.type === 'multiple_choice' || q._treatAsMulti;
         const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
         const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
@@ -586,6 +604,7 @@ exports.exportAdvanced = async (req, res, next) => {
               type: VariableType.Numeric, // 1/0 is strictly numeric
               width: 8,
               decimal: 0,
+              valueLabels: [{ value: 0, label: 'Not Selected' }, { value: 1, label: 'Selected' }]
             });
           });
           const max = maxOtherCount[q.id] || 0;
@@ -658,7 +677,7 @@ exports.exportAdvanced = async (req, res, next) => {
               }
             }
             const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
-            const isMulti = q.type === 'multiple_choice';
+            const isMulti = q.type === 'multiple_choice' || q._treatAsMulti;
             const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
         const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 

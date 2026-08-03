@@ -118,7 +118,7 @@ function buildActiveOptionsMap(questions, preScanResponses) {
       if (hasArrayAnswers) break;
     }
 
-    if (q.type === 'multiple_choice' || hasArrayAnswers) {
+    if (q.type === 'multiple_choice' || (hasArrayAnswers && !['single_choice', 'choice', 'dropdown', 'number', 'short_text'].includes(q.type))) {
       q._treatAsMulti = true;
       const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
       map[qKey] = getQuestionOptions(q, preScanResponses);

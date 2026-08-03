@@ -38,3 +38,12 @@ test-results/
 blob-report/
 .playwright-artifacts/
 *.log
+
+# Temporary test files and scripts
+*.sav
+*.zip
+dump_db.js
+fix-*.js
+query_*.js
+read_sav.py
+campaigns_test.json

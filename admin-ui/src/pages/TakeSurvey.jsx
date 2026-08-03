@@ -97,17 +97,20 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
         {(q.type === 'single_choice' || q.type === 'multiple_choice') && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
             <div className="choice-grid" style={{ marginTop: 0 }}>
-              {choices.map((c, i) => (
+              {choices.map((c, i) => {
+                const cVal = c.isOther ? c.text : (c.value || c.text);
+                return (
                 <button 
                   key={i} 
-                  className={`choice-btn ${isSelected(c.text) ? 'active' : ''}`} 
-                  onClick={() => q.type === 'multiple_choice' ? toggleChoiceForQuestion(q, c.text) : setSingleChoiceForQuestion(q, c.text, c.logic)}
-                  style={isSelected(c.text) ? { backgroundColor: 'var(--primary)', color: 'white', borderColor: 'var(--primary)' } : {}}
+                  className={`choice-btn ${isSelected(cVal) ? 'active' : ''}`} 
+                  onClick={() => q.type === 'multiple_choice' ? toggleChoiceForQuestion(q, cVal) : setSingleChoiceForQuestion(q, cVal, c.logic)}
+                  style={isSelected(cVal) ? { backgroundColor: 'var(--primary)', color: 'white', borderColor: 'var(--primary)' } : {}}
                   type="button"
                 >
                   {c.text}
                 </button>
-              ))}
+                );
+              })}
             </div>
 
             {isSelected('Other') && (
@@ -313,13 +316,15 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
         )}
 
         {q.type === 'ranking' && (() => {
-          const choiceTexts = (q.choices || []).map(c => c.text || c);
-          const isDynamic = choiceTexts.length === 0;
+          const choiceVals = (q.choices || []).map(c => c.value || c.text || c);
+          const choiceLabelMap = {};
+          (q.choices || []).forEach(c => { choiceLabelMap[c.value || c.text || c] = c.text || c; });
+          const isDynamic = choiceVals.length === 0;
           const isSelectAndRank = !!q.selectBeforeRank && !isDynamic;
-          const rankItems = Array.isArray(answers[qId]) ? answers[qId] : (isDynamic || isSelectAndRank ? [] : [...choiceTexts]);
+          const rankItems = Array.isArray(answers[qId]) ? answers[qId] : (isDynamic || isSelectAndRank ? [] : [...choiceVals]);
           // Auto-initialize static ranking if answer not set yet
           if (!isDynamic && !isSelectAndRank && (!Array.isArray(answers[qId]) || answers[qId].length === 0)) {
-            setTimeout(() => handleAnswerChange(qId, [...choiceTexts]), 0);
+            setTimeout(() => handleAnswerChange(qId, [...choiceVals]), 0);
           }
           const moveItem = (fromIdx, toIdx) => {
             const next = [...rankItems];
@@ -365,21 +370,21 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                   <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
                     {isRtl ? 'اختر العناصر التي تريد ترتيبها:' : 'Select items to rank:'}
                   </div>
-                  {choiceTexts.map((choiceTxt, cIdx) => (
+                  {choiceVals.map((choiceVal, cIdx) => (
                     <label key={`sr-${cIdx}`} dir="auto" className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: 'var(--card-bg, #ffffff)', border: '1px solid var(--border-color, #e5e7eb)', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                       <input
                         type="checkbox"
                         className="custom-checkbox"
-                        checked={rankItems.includes(choiceTxt)}
+                        checked={rankItems.includes(choiceVal)}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            handleAnswerChange(qId, [...rankItems, choiceTxt]);
+                            handleAnswerChange(qId, [...rankItems, choiceVal]);
                           } else {
-                            handleAnswerChange(qId, rankItems.filter(v => v !== choiceTxt));
+                            handleAnswerChange(qId, rankItems.filter(v => v !== choiceVal));
                           }
                         }}
                       />
-                      <span style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--text-primary)' }}>{choiceTxt}</span>
+                      <span style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--text-primary)' }}>{choiceLabelMap[choiceVal] || choiceVal}</span>
                     </label>
                   ))}
                 </div>
@@ -456,7 +461,7 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
 
                   {/* Item label */}
                   <span style={{ flex: 1, fontWeight: 500, fontSize: '0.95rem', color: 'var(--text-primary, #1f2937)' }}>
-                    {item}
+                    {choiceLabelMap[item] || item}
                   </span>
 
                   {/* Move + Delete controls */}
@@ -1660,7 +1665,7 @@ export default function TakeSurvey({ mockSurvey }) {
     const val = providedAnswers[qId];
     let activeChoiceLogic = choiceLogic;
     if (!activeChoiceLogic && currentQ.type === 'single_choice' && currentQ.choices) {
-      const selectedChoice = currentQ.choices.find(c => c.text === val);
+      const selectedChoice = currentQ.choices.find(c => (c.value || c.text) === val || c.text === val);
       if (selectedChoice?.logic) {
         activeChoiceLogic = selectedChoice.logic;
       }
@@ -1931,7 +1936,7 @@ export default function TakeSurvey({ mockSurvey }) {
       const qId = q.id || q.questionId || String(q._id);
       const val = answers[qId];
       if (q.type === 'single_choice' && q.choices) {
-        const selectedChoice = q.choices.find(c => c.text === val);
+        const selectedChoice = q.choices.find(c => (c.value || c.text) === val || c.text === val);
         if (selectedChoice?.logic) {
           activeChoiceLogic = selectedChoice.logic;
           break;

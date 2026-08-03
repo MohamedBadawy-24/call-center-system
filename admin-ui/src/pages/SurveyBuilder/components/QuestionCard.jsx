@@ -62,7 +62,7 @@ export default function QuestionCard({
       id: q.questionId,
       label: q.text || q.questionId,
       type: q.type,
-      options: (q.choices || []).map(c => ({ value: c.text, label: c.text })),
+      options: (q.choices || []).map(c => ({ value: c.value || c.text, label: c.text })),
     }))
   ).filter(f => f.id !== question.questionId); // Prevent self-reference
 

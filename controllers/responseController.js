@@ -55,10 +55,10 @@ const collectQuestionsFromSurvey = (survey) => {
         if (id) {
           if (q.type === 'multi_input' && Array.isArray(q.subInputs) && q.subInputs.length > 0) {
             q.subInputs.forEach(sub => {
-              questions.push({ id, subId: sub.id, text: `${q.text || ''} - ${sub.label}`, type: sub.inputType, options: sub.options || [] });
+              questions.push({ id, subId: sub.id, text: `${q.text || ''} - ${sub.label}`, type: sub.inputType, options: sub.options || [], allowOther: sub.allowOther });
             });
           } else {
-            questions.push({ id, text: q.text || '', type: q.type, options: q.options || [], choices: q.choices || [] });
+            questions.push({ id, text: q.text || '', type: q.type, options: q.options || [], choices: q.choices || [], allowOther: q.allowOther });
           }
         }
       }
@@ -700,8 +700,7 @@ exports.exportAdvanced = async (req, res, next) => {
         const options = isMulti ? (activeOptionsMap[__qKey] || []) : [];
 
             if (isMulti) {
-                const map = activeOptionsMap[qKey] || {};
-                Object.values(map).forEach(opt => {
+                options.forEach(opt => {
                   let selected = false;
                   if (Array.isArray(rawValue)) {
                     selected = rawValue.includes(opt.value) || rawValue.includes(opt.label);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useMemo } from 'react';
 import { api } from '../api/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { History, Search, ChevronDown, ChevronUp, User, ClipboardList, Clock } from 'lucide-react';
@@ -167,13 +167,58 @@ export default function ResponseHistory() {
     return questionId;
   };
 
-  const formatCellValue = (value) => {
+  const codeToLabelMap = useMemo(() => {
+    const map = {};
+    surveys.forEach(survey => {
+      (survey.sections || []).forEach(sec => {
+        const processQ = (qList) => {
+          (qList || []).forEach(q => {
+            if (q.type === 'group' && Array.isArray(q.questions)) {
+              processQ(q.questions);
+            } else {
+              const qId = q.questionId || q._id;
+              if (qId) {
+                if (!map[qId]) map[qId] = {};
+                (q.choices || []).forEach(c => {
+                  const val = c.value || c.text || c;
+                  const text = c.text || c;
+                  map[qId][String(val).trim()] = text;
+                });
+                (q.options || []).forEach(opt => {
+                  const val = typeof opt === 'object' ? (opt.value || opt.label || opt) : opt;
+                  const text = typeof opt === 'object' ? (opt.label || opt.text || opt) : opt;
+                  map[qId][String(val).trim()] = text;
+                });
+                if (q.type === 'multi_input' && q.subInputs) {
+                  q.subInputs.forEach(sub => {
+                    (sub.options || []).forEach(opt => {
+                      const val = typeof opt === 'object' ? (opt.value || opt.label || opt) : opt;
+                      const text = typeof opt === 'object' ? (opt.label || opt.text || opt) : opt;
+                      map[qId][String(val).trim()] = text;
+                    });
+                  });
+                }
+              }
+            }
+          });
+        };
+        processQ(sec.questions);
+      });
+    });
+    return map;
+  }, [surveys]);
+
+  const formatCellValue = (value, questionId = null) => {
     if (value === null || value === undefined || value === '') return '—';
-    if (Array.isArray(value)) return value.map(v => formatCellValue(v)).join(', ');
+    if (Array.isArray(value)) return value.map(v => formatCellValue(v, questionId)).join(', ');
     if (typeof value === 'object') {
-      return Object.values(value).map(v => formatCellValue(v)).join(' | ');
+      return Object.values(value).map(v => formatCellValue(v, questionId)).join(' | ');
     }
-    return String(value);
+    const valStr = String(value).trim();
+    if (questionId && codeToLabelMap[questionId] && codeToLabelMap[questionId][valStr]) {
+      return codeToLabelMap[questionId][valStr];
+    }
+    return valStr;
   };
 
   const filteredResponses = responses.filter(r => {
@@ -575,7 +620,7 @@ export default function ResponseHistory() {
                                       <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
                                         {getQuestionText(r.surveyId, ans.questionId)}
                                       </div>
-                                      <div style={{ fontWeight: 600 }}>{formatCellValue(ans.value)}</div>
+                                      <div style={{ fontWeight: 600 }}>{formatCellValue(ans.value, ans.questionId)}</div>
                                     </div>
                                   ))
                                 ) : (

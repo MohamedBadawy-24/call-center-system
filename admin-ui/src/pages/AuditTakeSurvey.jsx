@@ -265,7 +265,7 @@ export default function AuditTakeSurvey() {
     const val = providedAnswers[qId];
     let activeChoiceLogic = choiceLogic;
     if (!activeChoiceLogic && currentQ.type === 'single_choice' && currentQ.choices) {
-      const selectedChoice = currentQ.choices.find(c => c.text === val);
+      const selectedChoice = currentQ.choices.find(c => (c.value || c.text) === val || c.text === val);
       if (selectedChoice?.logic) {
         activeChoiceLogic = selectedChoice.logic;
       }
@@ -489,7 +489,7 @@ export default function AuditTakeSurvey() {
       const qId = q.questionId || String(q._id);
       const val = answers[qId];
       if (q.type === 'single_choice' && q.choices) {
-        const selectedChoice = q.choices.find(c => c.text === val);
+        const selectedChoice = q.choices.find(c => (c.value || c.text) === val || c.text === val);
         if (selectedChoice?.logic) {
           activeChoiceLogic = selectedChoice.logic;
           break;
@@ -674,17 +674,20 @@ export default function AuditTakeSurvey() {
         {(q.type === 'single_choice' || q.type === 'multiple_choice') && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
             <div className="choice-grid" style={{ marginTop: 0 }}>
-              {choices.map((c, i) => (
+              {choices.map((c, i) => {
+                const cVal = c.isOther ? c.text : (c.value || c.text);
+                return (
                 <button dir="auto" 
                   key={i} 
-                  className={`choice-btn ${isSelected(c.text) ? 'active' : ''}`} 
-                  onClick={() => q.type === 'multiple_choice' ? toggleChoiceForQuestion(q, c.text) : setSingleChoiceForQuestion(q, c.text, c.logic)}
-                  style={isSelected(c.text) ? { backgroundColor: 'var(--primary)', color: 'white', borderColor: 'var(--primary)' } : {}}
+                  className={`choice-btn ${isSelected(cVal) ? 'active' : ''}`} 
+                  onClick={() => q.type === 'multiple_choice' ? toggleChoiceForQuestion(q, cVal) : setSingleChoiceForQuestion(q, cVal, c.logic)}
+                  style={isSelected(cVal) ? { backgroundColor: 'var(--primary)', color: 'white', borderColor: 'var(--primary)' } : {}}
                   type="button"
                 >
                   {c.text}
                 </button>
-              ))}
+                );
+              })}
             </div>
 
             {isSelected('Other') && (

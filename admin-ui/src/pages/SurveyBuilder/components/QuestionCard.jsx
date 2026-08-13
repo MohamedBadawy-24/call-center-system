@@ -393,17 +393,21 @@ export default function QuestionCard({
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {(question.subInputs || []).map((sub, sIdx) => (
-                  <div key={sub.id} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', background: '#fff', padding: '0.5rem', border: '1px solid var(--border-color)', borderRadius: '6px' }}>
+                {(question.subInputs || []).map((sub, sIdx) => {
+                  const currentSubId = sub.id || sub._id;
+                  const updateSubInput = (updates) => {
+                    const newSubs = (question.subInputs || []).map(s => 
+                      (s.id || s._id) === currentSubId ? { ...s, ...updates } : s
+                    );
+                    updateQ({ subInputs: newSubs });
+                  };
+                  return (
+                  <div key={currentSubId} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', background: '#fff', padding: '0.5rem', border: '1px solid var(--border-color)', borderRadius: '6px' }}>
                     <input dir="auto"
                       className="input-field"
                       style={{ flex: 2, minWidth: '150px' }}
                       value={sub.label || ''}
-                      onChange={e => {
-                        const newSubs = [...(question.subInputs || [])];
-                        newSubs[sIdx] = { ...newSubs[sIdx], label: e.target.value };
-                        updateQ({ subInputs: newSubs });
-                      }}
+                      onChange={e => updateSubInput({ label: e.target.value })}
                       placeholder="Input Label"
                       readOnly={!isAdmin}
                     />
@@ -412,10 +416,12 @@ export default function QuestionCard({
                       style={{ flex: 1, minWidth: '120px' }}
                       value={sub.inputType || 'short_text'}
                       onChange={e => {
-                        const newSubs = [...(question.subInputs || [])];
-                        newSubs[sIdx] = { ...newSubs[sIdx], inputType: e.target.value };
-                        if (e.target.value !== 'dropdown' && e.target.value !== 'choice' && e.target.value !== 'multiple_choice') newSubs[sIdx] = { ...newSubs[sIdx], options: [] };
-                        updateQ({ subInputs: newSubs });
+                        const newInputType = e.target.value;
+                        const updates = { inputType: newInputType };
+                        if (newInputType !== 'dropdown' && newInputType !== 'choice' && newInputType !== 'multiple_choice') {
+                          updates.options = [];
+                        }
+                        updateSubInput(updates);
                       }}
                       disabled={!isAdmin}
                     >
@@ -431,11 +437,7 @@ export default function QuestionCard({
                       <input dir="auto" 
                         type="checkbox" 
                         checked={!!sub.required} 
-                        onChange={e => {
-                          const newSubs = [...(question.subInputs || [])];
-                          newSubs[sIdx] = { ...newSubs[sIdx], required: e.target.checked };
-                          updateQ({ subInputs: newSubs });
-                        }}
+                        onChange={e => updateSubInput({ required: e.target.checked })}
                         disabled={!isAdmin} 
                       />
                       Req.
@@ -452,17 +454,13 @@ export default function QuestionCard({
                         <div style={{ flex: 1 }}>
                           <label className="form-label" style={{ fontSize: '0.75rem' }}>From Year</label>
                           <input type="number" className="input-field" value={sub.yearRange?.from || ''} onChange={e => {
-                            const newSubs = [...(question.subInputs || [])];
-                            newSubs[sIdx] = { ...newSubs[sIdx], yearRange: { ...newSubs[sIdx].yearRange, from: parseInt(e.target.value) } };
-                            updateQ({ subInputs: newSubs });
+                            updateSubInput({ yearRange: { ...sub.yearRange, from: parseInt(e.target.value) } });
                           }} disabled={!isAdmin} />
                         </div>
                         <div style={{ flex: 1 }}>
                           <label className="form-label" style={{ fontSize: '0.75rem' }}>To Year</label>
                           <input type="number" className="input-field" value={sub.yearRange?.to || ''} onChange={e => {
-                            const newSubs = [...(question.subInputs || [])];
-                            newSubs[sIdx] = { ...newSubs[sIdx], yearRange: { ...newSubs[sIdx].yearRange, to: parseInt(e.target.value) } };
-                            updateQ({ subInputs: newSubs });
+                            updateSubInput({ yearRange: { ...sub.yearRange, to: parseInt(e.target.value) } });
                           }} disabled={!isAdmin} />
                         </div>
                       </div>
@@ -471,9 +469,7 @@ export default function QuestionCard({
                       <div style={{ width: '100%', marginTop: '0.25rem' }}>
                         <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 600 }}>
                           <input type="checkbox" checked={!!sub.isRatio} onChange={e => {
-                            const newSubs = [...(question.subInputs || [])];
-                            newSubs[sIdx] = { ...newSubs[sIdx], isRatio: e.target.checked };
-                            updateQ({ subInputs: newSubs });
+                            updateSubInput({ isRatio: e.target.checked });
                           }} disabled={!isAdmin} />
                           Treat as Percentage / Ratio (%)
                         </label>
@@ -488,20 +484,17 @@ export default function QuestionCard({
                               className="input-field"
                               style={{ flex: 2, minWidth: '130px' }}
                               placeholder="Label (e.g. Yes, Male)"
-                              data-sub-opt-label={`${sIdx}`}
+                              data-sub-opt-label={`${currentSubId}`}
                               onKeyDown={e => {
                                 if (e.key === 'Enter') {
                                   e.preventDefault();
                                   const labelInput = e.target;
-                                  const codeInput = document.querySelector(`[data-sub-opt-code="${sIdx}"]`);
-                                  const label = labelInput.value.trim();
-                                  if (!label) return;
-                                  const existingOpts = sub.options || [];
-                                  const code = (codeInput?.value || '').trim() || label;
-                                  const newOpt = { label, value: code, id: Math.random().toString(36).substring(2, 9) };
-                                  const newSubs = [...(question.subInputs || [])];
-                                  newSubs[sIdx] = { ...newSubs[sIdx], options: [...existingOpts, newOpt] };
-                                  updateQ({ subInputs: newSubs });
+                                  const codeInput = document.querySelector(`[data-sub-opt-code="${currentSubId}"]`);
+                                  const finalLabel = labelInput.value.trim();
+                                  if (!finalLabel) return;
+                                  const finalValue = (codeInput?.value || '').trim() || finalLabel;
+                                  const newOpt = { label: finalLabel, value: finalValue, id: Math.random().toString(36).substring(2, 9) };
+                                  updateSubInput({ options: [...(sub.options || []), newOpt] });
                                   labelInput.value = '';
                                   if (codeInput) codeInput.value = '';
                                   labelInput.focus();
@@ -512,20 +505,17 @@ export default function QuestionCard({
                               className="input-field"
                               style={{ flex: 1, minWidth: '90px' }}
                               placeholder="Value / Code"
-                              data-sub-opt-code={`${sIdx}`}
+                              data-sub-opt-code={`${currentSubId}`}
                               onKeyDown={e => {
                                 if (e.key === 'Enter') {
                                   e.preventDefault();
                                   const codeInput = e.target;
-                                  const labelInput = document.querySelector(`[data-sub-opt-label="${sIdx}"]`);
-                                  const label = (labelInput?.value || '').trim();
-                                  if (!label) return;
-                                  const existingOpts = sub.options || [];
-                                  const code = codeInput.value.trim() || label;
-                                  const newOpt = { label, value: code, id: Math.random().toString(36).substring(2, 9) };
-                                  const newSubs = [...(question.subInputs || [])];
-                                  newSubs[sIdx] = { ...newSubs[sIdx], options: [...existingOpts, newOpt] };
-                                  updateQ({ subInputs: newSubs });
+                                  const labelInput = document.querySelector(`[data-sub-opt-label="${currentSubId}"]`);
+                                  const finalLabel = (labelInput?.value || '').trim();
+                                  if (!finalLabel) return;
+                                  const finalValue = codeInput.value.trim() || finalLabel;
+                                  const newOpt = { label: finalLabel, value: finalValue, id: Math.random().toString(36).substring(2, 9) };
+                                  updateSubInput({ options: [...(sub.options || []), newOpt] });
                                   if (labelInput) labelInput.value = '';
                                   codeInput.value = '';
                                   if (labelInput) labelInput.focus();
@@ -534,17 +524,14 @@ export default function QuestionCard({
                             />
                             <button dir="auto" type="button" className="btn-primary" style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
                               onClick={() => {
-                                const labelInput = document.querySelector(`[data-sub-opt-label="${sIdx}"]`);
-                                const codeInput = document.querySelector(`[data-sub-opt-code="${sIdx}"]`);
+                                const labelInput = document.querySelector(`[data-sub-opt-label="${currentSubId}"]`);
+                                const codeInput = document.querySelector(`[data-sub-opt-code="${currentSubId}"]`);
                                 if (!labelInput) return;
-                                const label = labelInput.value.trim();
-                                if (!label) return;
-                                const existingOpts = sub.options || [];
-                                const code = (codeInput?.value || '').trim() || label;
-                                const newOpt = { label, value: code, id: Math.random().toString(36).substring(2, 9) };
-                                const newSubs = [...(question.subInputs || [])];
-                                newSubs[sIdx] = { ...newSubs[sIdx], options: [...existingOpts, newOpt] };
-                                updateQ({ subInputs: newSubs });
+                                const finalLabel = labelInput.value.trim();
+                                if (!finalLabel) return;
+                                const finalValue = (codeInput?.value || '').trim() || finalLabel;
+                                const newOpt = { label: finalLabel, value: finalValue, id: Math.random().toString(36).substring(2, 9) };
+                                updateSubInput({ options: [...(sub.options || []), newOpt] });
                                 labelInput.value = '';
                                 if (codeInput) codeInput.value = '';
                                 labelInput.focus();
@@ -569,11 +556,9 @@ export default function QuestionCard({
                                     background: 'none', border: 'none', cursor: 'pointer', padding: 0,
                                     color: 'var(--danger)', fontWeight: 'bold', fontSize: '0.9rem', lineHeight: 1
                                   }} onClick={() => {
-                                    const newSubs = [...(question.subInputs || [])];
-                                    const newOpts = [...(newSubs[sIdx].options || [])];
+                                    const newOpts = [...(sub.options || [])];
                                     newOpts.splice(oIdx, 1);
-                                    newSubs[sIdx] = { ...newSubs[sIdx], options: newOpts };
-                                    updateQ({ subInputs: newSubs });
+                                    updateSubInput({ options: newOpts });
                                   }}>&times;</button>
                                 )}
                               </span>
@@ -586,7 +571,8 @@ export default function QuestionCard({
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
                 {isAdmin && (
                   <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.5rem', alignSelf: 'flex-start' }} onClick={() => {
                     const newSubs = [...(question.subInputs || [])];

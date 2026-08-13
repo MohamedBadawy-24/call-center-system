@@ -8,6 +8,7 @@ import { INTERVIEW_OUTCOME_OPTIONS, evaluateCondition } from '../utils/outboundP
 import HandoverModal from '../components/HandoverModal';
 import { UserPlus, Menu, ChevronLeft, ChevronRight, Save, PhoneOff, AlertTriangle, ChevronDown, Check, Lock } from 'lucide-react';
 import SectionedSurveyView from '../components/SectionedSurveyView';
+import { getOtherPrefix, isOtherAnswer, extractOtherText, buildOtherAnswer } from '../utils/otherValueHelper';
 import { offlineDb } from '../utils/offlineDb';
 
 class DebugErrorBoundary extends React.Component {
@@ -59,16 +60,31 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
     const dynamicScriptText = parseDynamicText(q.script, answers);
 
     const isSelected = (val) => {
-      if (val === 'Other' && q.allowMultipleOther) {
-        const arr = Array.isArray(answers[qId]) ? answers[qId] : [];
-        return arr.some(v => typeof v === 'string' && v.startsWith('other:'));
+      const otherVal = q.allowMultipleOther ? (q.multipleOtherValue || 'Other') : (q.otherValue || 'Other');
+      if (val === otherVal) {
+        const arr = Array.isArray(answers[qId]) ? answers[qId] : (answers[qId] ? [answers[qId]] : []);
+        return arr.some(v => isOtherAnswer(v, q));
       }
       if (q.type === 'multiple_choice') return (Array.isArray(answers[qId]) && answers[qId].includes(val));
       return answers[qId] === val;
     };
 
     const choices = [...(q.choices || [])];
-    if (q.allowOther) choices.push({ text: 'Other', isOther: true });
+    if (q.allowOther) {
+      if (q.allowMultipleOther) {
+        choices.push({
+          text: q.multipleOtherLabel || 'Other',
+          value: q.multipleOtherValue || 'Other',
+          isOther: true
+        });
+      } else {
+        choices.push({
+          text: q.otherLabel || 'Other',
+          value: q.otherValue || 'Other',
+          isOther: true
+        });
+      }
+    }
 
     return (
       <div 
@@ -98,7 +114,7 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
             <div className="choice-grid" style={{ marginTop: 0 }}>
               {choices.map((c, i) => {
-                const cVal = c.isOther ? c.text : (c.value || c.text);
+                const cVal = c.value || c.text;
                 return (
                 <button 
                   key={i} 
@@ -113,17 +129,17 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
               })}
             </div>
 
-            {isSelected('Other') && (
+            {isSelected(q.allowMultipleOther ? (q.multipleOtherValue || 'Other') : (q.otherValue || 'Other')) && (
               <div style={{ marginTop: '0.5rem' }}>
                 {q.allowMultipleOther ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                       {(() => {
                         const arr = Array.isArray(answers[qId]) ? answers[qId] : [];
-                        const others = arr.filter(v => typeof v === 'string' && v.startsWith('other:'));
-                        if (others.length === 0) others.push('other:');
+                        const others = arr.filter(v => isOtherAnswer(v, q));
+                        if (others.length === 0) others.push(buildOtherAnswer('', q));
                         return others.map((val, idx) => {
-                          const textVal = val.substring(6);
+                          const textVal = extractOtherText(val, q);
                           const otherId = `input-${qId}-other-${idx}`;
                           return (
                             <div key={idx} style={{ display: 'flex', gap: '0.5rem' }}>
@@ -139,9 +155,9 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                                   const newAnswers = [...arr];
                                   let otherCounter = 0;
                                   for (let i = 0; i < newAnswers.length; i++) {
-                                    if (typeof newAnswers[i] === 'string' && newAnswers[i].startsWith('other:')) {
+                                    if (isOtherAnswer(newAnswers[i], q)) {
                                       if (otherCounter === idx) {
-                                        newAnswers[i] = `other:${newText}`;
+                                        newAnswers.splice(i, 1, buildOtherAnswer(newText, q));
                                         break;
                                       }
                                       otherCounter++;
@@ -158,7 +174,7 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                                   const newAnswers = [...arr];
                                   let otherCounter = 0;
                                   for (let i = 0; i < newAnswers.length; i++) {
-                                    if (typeof newAnswers[i] === 'string' && newAnswers[i].startsWith('other:')) {
+                                    if (isOtherAnswer(newAnswers[i], q)) {
                                       if (otherCounter === idx) {
                                         newAnswers.splice(i, 1);
                                         break;
@@ -183,7 +199,7 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                       style={{ alignSelf: 'flex-start', fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}
                       onClick={() => {
                         const arr = Array.isArray(answers[qId]) ? answers[qId] : [];
-                        handleAnswerChange(qId, [...arr, "other:"]);
+                        handleAnswerChange(qId, [...arr, buildOtherAnswer('', q)]);
                       }}
                     >
                       {t('addAnother') || '+ Add another'}
@@ -540,7 +556,7 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                     <select
                       id={subInputId}
                       className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
-                      value={val}
+                      value={val != null ? String(val) : ''}
                       onChange={e => {
                         if (activeInputIdRef) activeInputIdRef.current = e.target.id;
                         handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value });
@@ -556,24 +572,30 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                       })}
                     </select>
                   ) : sub.inputType === 'number' ? (
-                    <input dir="auto"
-                      id={subInputId}
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={sub.maxLength || undefined}
-                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
-                      value={val}
-                      onChange={e => {
-                        if (activeInputIdRef) activeInputIdRef.current = e.target.id;
-                        const raw = e.target.value;
-                        let cleaned = raw.replace(/\D/g, '');
-                        if (sub.maxLength && cleaned.length > sub.maxLength) {
-                          cleaned = cleaned.slice(0, sub.maxLength);
-                        }
-                        handleAnswerChange(qId, { ...ansObj, [sub.id]: cleaned });
-                      }}
-                    />
+                    <div style={{ position: 'relative' }}>
+                      <input dir="auto"
+                        id={subInputId}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={sub.maxLength || undefined}
+                        className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                        style={sub.isRatio ? { paddingRight: '2.5rem' } : {}}
+                        value={val}
+                        onChange={e => {
+                          if (activeInputIdRef) activeInputIdRef.current = e.target.id;
+                          const raw = e.target.value;
+                          let cleaned = raw.replace(/\D/g, '');
+                          if (sub.maxLength && cleaned.length > sub.maxLength) {
+                            cleaned = cleaned.slice(0, sub.maxLength);
+                          }
+                          handleAnswerChange(qId, { ...ansObj, [sub.id]: cleaned });
+                        }}
+                      />
+                      {sub.isRatio && (
+                        <span style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#6b7280', fontWeight: 600, fontSize: '0.95rem', pointerEvents: 'none' }}>%</span>
+                      )}
+                    </div>
                   ) : sub.inputType === 'date' ? (
                     <input dir="auto"
                       id={subInputId}
@@ -617,10 +639,12 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                         );
                       })}
                       {sub.allowOther && (() => {
+                        const subOtherPrefix = String(q.otherValue || 'Other');
+                        const subOtherLabel = q.otherLabel || t('other') || 'Other';
                         const otherRadioId = `${subInputId}-opt-other`;
                         const radioName = `radio-${qId}-${sub.id}`;
-                        const isChecked = typeof val === 'string' && val.startsWith("Other: ");
-                        const otherValue = isChecked ? val.substring(7) : "";
+                        const isChecked = typeof val === 'string' && (val.startsWith(`${subOtherPrefix}: `) || val === `${subOtherPrefix}:` || val.startsWith('Other: '));
+                        const otherValue = isChecked ? (val.startsWith(`${subOtherPrefix}: `) ? val.substring(subOtherPrefix.length + 2) : val.startsWith('Other: ') ? val.substring(7) : '') : '';
                         return (
                           <div key="other-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                             <label htmlFor={otherRadioId} className={`flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer hover:bg-gray-50 ${isChecked ? 'bg-blue-50' : 'bg-white'}`}>
@@ -628,7 +652,7 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                                 type="radio"
                                 id={otherRadioId}
                                 name={radioName}
-                                value="Other"
+                                value={subOtherPrefix}
                                 checked={isChecked}
                                 onChange={e => {
                                   if (activeInputIdRef) activeInputIdRef.current = otherRadioId;
@@ -636,12 +660,12 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                                   (q.subInputs || []).forEach(siblingSub => {
                                     if (siblingSub.inputType === 'multiple_choice') nextAnsObj[siblingSub.id] = [];
                                   });
-                                  nextAnsObj[sub.id] = "Other: ";
+                                  nextAnsObj[sub.id] = `${subOtherPrefix}: `;
                                   handleAnswerChange(qId, nextAnsObj);
                                 }}
                                 style={{ accentColor: 'var(--primary)' }}
                               />
-                              <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)' }}>{t('other') || 'Other'}</span>
+                              <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)' }}>{subOtherLabel}</span>
                             </label>
                             {isChecked && (
                               <input dir="auto"
@@ -652,7 +676,7 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                                 value={otherValue}
                                 onChange={e => {
                                   if (activeInputIdRef) activeInputIdRef.current = `${subInputId}-other-text`;
-                                  handleAnswerChange(qId, { ...ansObj, [sub.id]: "Other: " + e.target.value });
+                                  handleAnswerChange(qId, { ...ansObj, [sub.id]: `${subOtherPrefix}: ` + e.target.value });
                                 }}
                               />
                             )}
@@ -677,15 +701,18 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                               checked={isChecked}
                               onChange={e => {
                                 if (activeInputIdRef) activeInputIdRef.current = checkId;
-                                const nextArr = isChecked
-                                  ? currArr.filter(item => item !== optVal)
-                                  : [...currArr, optVal];
-                                const nextAnsObj = { ...ansObj };
+                                const strVal = String(optVal);
+                                const currentQ = typeof answers[qId] === 'object' && answers[qId] !== null ? answers[qId] : {};
+                                const currentArr = Array.isArray(currentQ[sub.id]) ? currentQ[sub.id].map(v => String(v)) : [];
+                                const newArr = currentArr.includes(strVal)
+                                  ? currentArr.filter(v => v !== strVal)
+                                  : [...currentArr, strVal];
+                                const nextQ = { ...currentQ };
                                 (q.subInputs || []).forEach(siblingSub => {
-                                  if (siblingSub.inputType === 'choice') delete nextAnsObj[siblingSub.id];
+                                  if (siblingSub.inputType === 'choice') delete nextQ[siblingSub.id];
                                 });
-                                nextAnsObj[sub.id] = nextArr;
-                                handleAnswerChange(qId, nextAnsObj);
+                                nextQ[sub.id] = newArr;
+                                handleAnswerChange(qId, nextQ);
                               }}
                               style={{ accentColor: 'var(--primary)' }}
                             />
@@ -694,11 +721,13 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                         );
                       })}
                       {sub.allowOther && (() => {
+                        const subOtherPrefix = String(q.otherValue || 'Other');
+                        const subOtherLabel = q.otherLabel || t('other') || 'Other';
                         const checkId = `${subInputId}-opt-other`;
                         const currArr = Array.isArray(val) ? val.map(v => String(v)) : [];
-                        const otherEntry = currArr.find(v => v.startsWith("Other: "));
+                        const otherEntry = currArr.find(v => v.startsWith(`${subOtherPrefix}: `) || v.startsWith('Other: '));
                         const isChecked = !!otherEntry;
-                        const otherValue = isChecked ? otherEntry.substring(7) : "";
+                        const otherValue = isChecked ? (otherEntry.startsWith(`${subOtherPrefix}: `) ? otherEntry.substring(subOtherPrefix.length + 2) : otherEntry.substring(7)) : '';
                         return (
                           <div key="other-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                             <label htmlFor={checkId} className={`flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer hover:bg-gray-50 ${isChecked ? 'bg-blue-50' : 'bg-white'}`}>
@@ -709,8 +738,8 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                                 onChange={e => {
                                   if (activeInputIdRef) activeInputIdRef.current = checkId;
                                   const nextArr = isChecked
-                                    ? currArr.filter(item => !item.startsWith("Other: "))
-                                    : [...currArr, "Other: "];
+                                    ? currArr.filter(item => !item.startsWith(`${subOtherPrefix}: `) && !item.startsWith('Other: '))
+                                    : [...currArr, `${subOtherPrefix}: `];
                                   const nextAnsObj = { ...ansObj };
                                   (q.subInputs || []).forEach(siblingSub => {
                                     if (siblingSub.inputType === 'choice') delete nextAnsObj[siblingSub.id];
@@ -720,7 +749,7 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                                 }}
                                 style={{ accentColor: 'var(--primary)' }}
                               />
-                              <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)' }}>{t('other') || 'Other'}</span>
+                              <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)' }}>{subOtherLabel}</span>
                             </label>
                             {isChecked && (
                               <input dir="auto"
@@ -731,7 +760,7 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                                 value={otherValue}
                                 onChange={e => {
                                   if (activeInputIdRef) activeInputIdRef.current = `${subInputId}-other-text`;
-                                  const nextArr = currArr.map(item => item.startsWith("Other: ") ? "Other: " + e.target.value : item);
+                                  const nextArr = currArr.map(item => (item.startsWith(`${subOtherPrefix}: `) || item.startsWith('Other: ')) ? `${subOtherPrefix}: ` + e.target.value : item);
                                   handleAnswerChange(qId, { ...ansObj, [sub.id]: nextArr });
                                 }}
                               />
@@ -780,18 +809,23 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
             })}
             {q.allowOther && (() => {
               const rootAnsObj = (typeof answers[qId] === 'object' && answers[qId] !== null && !Array.isArray(answers[qId])) ? answers[qId] : {};
+              const globalOtherPrefix = String(q.otherValue || 'Other');
+              const globalOtherLabel = q.otherLabel || t('otherSpecify') || 'Other (Specify)';
+              const rawOtherText = rootAnsObj.other_text || '';
+              // Extract display text: strip prefix if present
+              const displayOtherText = rawOtherText.startsWith(`${globalOtherPrefix}: `) ? rawOtherText.substring(globalOtherPrefix.length + 2) : rawOtherText;
               return (
                 <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border-color)' }}>
                   <label className="font-semibold text-gray-800 text-lg flex gap-1 items-center mb-3">
-                    {t('otherSpecify') || 'Other (Specify)'}
+                    {globalOtherLabel}
                   </label>
                   <input dir="auto"
                     type="text"
                     className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
-                    value={rootAnsObj.other_text || ''}
+                    value={displayOtherText}
                     onChange={e => {
                       if (activeInputIdRef) activeInputIdRef.current = `input-${qId}-other`;
-                      handleAnswerChange(qId, { ...rootAnsObj, other_text: e.target.value });
+                      handleAnswerChange(qId, { ...rootAnsObj, other_text: `${globalOtherPrefix}: ${e.target.value}` });
                     }}
                     id={`input-${qId}-other`}
                     placeholder={t('typeAnswer')}
@@ -1199,7 +1233,7 @@ export default function TakeSurvey({ mockSurvey }) {
       questions.forEach(qst => {
         const qId = qst.id || qst.questionId || String(qst._id);
         if (qst.allowMultipleOther && cleanedAnswers[qId] && Array.isArray(cleanedAnswers[qId])) {
-          cleanedAnswers[qId] = cleanedAnswers[qId].filter(v => typeof v !== 'string' || !v.startsWith('other:') || v.substring(6).trim() !== '');
+          cleanedAnswers[qId] = cleanedAnswers[qId].filter(v => !isOtherAnswer(v, qst) || extractOtherText(v, qst).trim() !== '');
           if (cleanedAnswers[qId].length === 0 && qst.type === 'single_choice') {
              delete cleanedAnswers[qId];
           }
@@ -1385,12 +1419,13 @@ export default function TakeSurvey({ mockSurvey }) {
           let val = answers[k];
           if (qst && qst.allowMultipleOther) {
              if (Array.isArray(val)) {
-                val = val.filter(v => typeof v !== 'string' || !v.startsWith('other:') || v.substring(6).trim() !== '');
+                val = val.filter(v => !isOtherAnswer(v, qst) || extractOtherText(v, qst).trim() !== '');
              }
           } else {
             if (Array.isArray(val)) {
-              val = val.map(v => v === 'Other' ? `Other: ${otherValues[k] || ''}` : v);
-            } else if (val === 'Other') {
+              const otherVal = qst.allowMultipleOther ? qst.multipleOtherValue || 'Other' : qst.otherValue || 'Other';
+              val = val.map(v => v === otherVal ? `Other: ${otherValues[k] || ''}` : v);
+            } else if (val === (qst.allowMultipleOther ? qst.multipleOtherValue || 'Other' : qst.otherValue || 'Other')) {
               val = `Other: ${otherValues[k] || ''}`;
             }
           }
@@ -1467,12 +1502,13 @@ export default function TakeSurvey({ mockSurvey }) {
     const qId = q.questionId || `q_${currentIdx}`;
     const currArr = Array.isArray(answers[qId]) ? answers[qId] : [];
     
-    if (val === 'Other' && q.allowMultipleOther) {
-      const hasOther = currArr.some(v => typeof v === 'string' && v.startsWith('other:'));
+    const otherVal = q.allowMultipleOther ? (q.multipleOtherValue || 'Other') : (q.otherValue || 'Other');
+    if (val === otherVal) {
+      const hasOther = currArr.some(v => isOtherAnswer(v, q));
       if (hasOther) {
-        setAnswers({ ...answers, [qId]: currArr.filter(v => typeof v !== 'string' || !v.startsWith('other:')) });
+        setAnswers({ ...answers, [qId]: currArr.filter(v => !isOtherAnswer(v, q)) });
       } else {
-        setAnswers({ ...answers, [qId]: [...currArr, "other:"] });
+        setAnswers({ ...answers, [qId]: [...currArr, buildOtherAnswer('', q)] });
       }
     } else {
       if (currArr.includes(val)) {
@@ -1493,8 +1529,9 @@ export default function TakeSurvey({ mockSurvey }) {
     const q = questions[currentIdx];
     const qId = q.questionId || `q_${currentIdx}`;
     
-    if (val === 'Other' && q.allowMultipleOther) {
-      setAnswers({ ...answers, [qId]: ["other:"] });
+    const otherVal = q.allowMultipleOther ? (q.multipleOtherValue || 'Other') : (q.otherValue || 'Other');
+    if (val === otherVal) {
+      setAnswers({ ...answers, [qId]: [buildOtherAnswer('', q)] });
     } else {
       setAnswers({ ...answers, [qId]: val });
       
@@ -1537,7 +1574,7 @@ export default function TakeSurvey({ mockSurvey }) {
     // Min selections check for multiple_choice
     if (q.type === 'multiple_choice') {
       const arr = Array.isArray(val) ? val : [];
-      const validArr = arr.filter(v => !(typeof v === 'string' && v.startsWith('other:') && v.substring(6).trim() === ''));
+      const validArr = arr.filter(v => !(isOtherAnswer(v, q) && extractOtherText(v, q).trim() === ''));
       if (q.minSelections && validArr.length < q.minSelections) {
         return (t('selectAtLeastN') || 'Please select at least {n} options').replace('{n}', q.minSelections);
       }
@@ -1548,18 +1585,18 @@ export default function TakeSurvey({ mockSurvey }) {
 
     // Custom Other input validation
     const hasOtherSelected = q.allowMultipleOther
-      ? (Array.isArray(val) && val.some(v => typeof v === 'string' && v.startsWith('other:')))
-      : (q.type === 'multiple_choice' ? (Array.isArray(val) && val.includes('Other')) : val === 'Other');
+      ? (Array.isArray(val) && val.some(v => isOtherAnswer(v, q)))
+      : (q.type === 'multiple_choice' ? (Array.isArray(val) && val.some(v => isOtherAnswer(v, q))) : isOtherAnswer(val, q));
 
     if (hasOtherSelected) {
       if (q.allowMultipleOther) {
         const arr = Array.isArray(val) ? val : [];
-        const validOthers = arr.filter(v => typeof v === 'string' && v.startsWith('other:') && v.substring(6).trim() !== '');
+        const validOthers = arr.filter(v => isOtherAnswer(v, q) && extractOtherText(v, q).trim() !== '');
         if (validOthers.length === 0) {
           return t('otherAnswerRequired') || 'Please specify the other answer';
         }
       } else {
-        if (!(otherValues[qId] || '').trim()) {
+        if (!extractOtherText(val, q).trim()) {
           return t('otherAnswerRequired') || 'Please specify the other answer';
         }
       }
@@ -1571,7 +1608,14 @@ export default function TakeSurvey({ mockSurvey }) {
       for (const sub of (q.subInputs || [])) {
         if (sub.required) {
           const subVal = objVal[sub.id];
-          if (subVal === undefined || subVal === null || String(subVal).trim() === '') {
+          if (subVal === undefined || subVal === null) {
+            return t('questionRequired') || 'Please fill all required sub-inputs';
+          }
+          if (Array.isArray(subVal)) {
+            if (subVal.length === 0) {
+              return t('questionRequired') || 'Please fill all required sub-inputs';
+            }
+          } else if (String(subVal).trim() === '') {
             return t('questionRequired') || 'Please fill all required sub-inputs';
           }
         }
@@ -1610,7 +1654,8 @@ export default function TakeSurvey({ mockSurvey }) {
             sumVal = parseFloat(val) || 0;
           }
 
-          if (q.type === 'number_ratio' || (q.type === 'number' && q.isRatio)) {
+          const isPercentage = q.type === 'number_ratio' || q.isRatio || (q.type === 'multi_input' && q.subInputs?.some(sub => sub.isRatio));
+          if (isPercentage) {
             const derivedSum = (sumVal / 100) * expected;
             if (derivedSum !== expected) {
               return q.crossValidation.errorMessage || `Total percentage must equal 100% (Derived total: ${derivedSum}, Target: ${expected})`;
@@ -2044,7 +2089,7 @@ export default function TakeSurvey({ mockSurvey }) {
         const ans = answers[qId];
         if (ans !== undefined && ans !== null && ans !== '') {
           if (Array.isArray(ans)) {
-            const valid = ans.filter(v => typeof v !== 'string' || !v.startsWith('other:') || v.substring(6).trim() !== '');
+            const valid = ans.filter(v => !isOtherAnswer(v, q) || extractOtherText(v, q).trim() !== '');
             if (valid.length > 0) {
               answeredVisible++;
             }
@@ -2335,12 +2380,13 @@ export default function TakeSurvey({ mockSurvey }) {
     const qId = q.id || q.questionId || String(q._id);
     const currArr = Array.isArray(answers[qId]) ? answers[qId] : [];
     let updated;
-    if (val === 'Other' && q.allowMultipleOther) {
-      const hasOther = currArr.some(v => typeof v === 'string' && v.startsWith('other:'));
+    const otherVal = q.allowMultipleOther ? (q.multipleOtherValue || 'Other') : (q.otherValue || 'Other');
+    if (val === otherVal) {
+      const hasOther = currArr.some(v => isOtherAnswer(v, q));
       if (hasOther) {
-        updated = currArr.filter(v => typeof v !== 'string' || !v.startsWith('other:'));
+        updated = currArr.filter(v => !isOtherAnswer(v, q));
       } else {
-        updated = [...currArr, "other:"];
+        updated = [...currArr, buildOtherAnswer('', q)];
       }
     } else {
       if (currArr.includes(val)) {
@@ -2362,8 +2408,9 @@ export default function TakeSurvey({ mockSurvey }) {
   const setSingleChoiceForQuestion = (q, val, choiceLogic = null) => {
     const qId = q.id || q.questionId || String(q._id);
     
-    if (val === 'Other' && q.allowMultipleOther) {
-      handleAnswerChange(qId, ["other:"]);
+    const otherVal = q.allowMultipleOther ? (q.multipleOtherValue || 'Other') : (q.otherValue || 'Other');
+    if (val === otherVal) {
+      handleAnswerChange(qId, [buildOtherAnswer('', q)]);
     } else {
       handleAnswerChange(qId, val);
       

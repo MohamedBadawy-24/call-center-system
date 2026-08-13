@@ -42,6 +42,12 @@ const ResponseSchema = new mongoose.Schema({
     text: { type: String },
     referenceQuestionId: { type: String },
   },
+  agentNotes: [{
+    text: { type: String },
+    referenceQuestionId: { type: String },
+  }],
+  /** Soft-delete flag — set to false when admin disqualifies/soft-deletes a response */
+  isValid: { type: Boolean, default: true },
 });
 
 ResponseSchema.index({ agentId: 1, startedAt: -1 });

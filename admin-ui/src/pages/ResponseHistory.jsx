@@ -8,7 +8,7 @@ import FlagPopover from '../components/FlagPopover';
 
 import { io } from 'socket.io-client';
 import { SOCKET_BASE } from '../api/client';
-import { Download, X as CloseIcon, Filter, Flag, AlertTriangle, Check } from 'lucide-react';
+import { Download, X as CloseIcon, Filter, Flag, AlertTriangle, Check, Trash2, RefreshCcw } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 
@@ -35,8 +35,38 @@ export default function ResponseHistory() {
     format: 'xlsx'
   });
   const [viewFlagged, setViewFlagged] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
   const [activePopoverResponseId, setActivePopoverResponseId] = useState(null);
   const [resolveErrorMap, setResolveErrorMap] = useState({});
+
+  // Delete modal state
+  const [deleteModalResponse, setDeleteModalResponse] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const handleDeleteResponse = async (responseId, action) => {
+    try {
+      setDeleteLoading(true);
+      await api.post(`/admin/responses/${responseId}/delete`, { action });
+      if (action === 'hard_delete') {
+        setResponses(prev => prev.filter(r => r._id !== responseId));
+        toast.success('Response permanently deleted');
+      } else {
+        setResponses(prev => prev.map(r => {
+          if (r._id === responseId) {
+            return { ...r, status: 'disqualified', isValid: false };
+          }
+          return r;
+        }));
+        toast.success('Response disqualified (soft delete)');
+      }
+      setDeleteModalResponse(null);
+    } catch (err) {
+      console.error('[DELETE RESPONSE ERROR]', err);
+      toast.error(err.response?.data?.error || 'Failed to delete response');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const handleResolveFlag = async (responseId, e) => {
     e.stopPropagation();
@@ -75,7 +105,7 @@ export default function ResponseHistory() {
     });
 
     return () => socket.disconnect();
-  }, [viewFlagged]);
+  }, [viewFlagged, showDeleted]);
 
   const fetchMetadata = async () => {
     try {
@@ -93,7 +123,7 @@ export default function ResponseHistory() {
   const fetchResponses = async (showSpinner = false) => {
     try {
       if (showSpinner) setLoading(true);
-      const res = await api.get('/admin/responses');
+      const res = await api.get(`/admin/responses?showDeleted=${showDeleted}`);
       setResponses(res.data);
     } catch (err) {
       console.error("Failed to fetch responses:", err);
@@ -165,6 +195,29 @@ export default function ResponseHistory() {
       if (q) return q.text;
     }
     return questionId;
+  };
+
+  const resolveNoteRef = (survey, refId) => {
+    if (!refId || refId === 'general' || refId === 'generalEntireSurvey') {
+      return t('generalEntireSurvey') || 'General / Entire Survey';
+    }
+    if (!survey || !survey.sections) return refId;
+    const searchQuestions = (qList) => {
+      for (const q of (qList || [])) {
+        const qId = q.questionId || q._id;
+        if (String(qId) === String(refId)) return `${qId} - ${q.text || ''}`;
+        if (q.type === 'group' && Array.isArray(q.questions)) {
+          const found = searchQuestions(q.questions);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    for (const sec of survey.sections) {
+      const found = searchQuestions(sec.questions);
+      if (found) return found;
+    }
+    return refId;
   };
 
   const codeToLabelMap = useMemo(() => {
@@ -255,7 +308,14 @@ export default function ResponseHistory() {
           </div>
           <button 
             className="btn-secondary" 
-            onClick={() => setViewFlagged(!viewFlagged)} 
+            onClick={() => { setViewFlagged(false); setShowDeleted(!showDeleted); }} 
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: showDeleted ? 'var(--danger)' : '', color: showDeleted ? '#fff' : '' }}
+          >
+            <Trash2 size={18} /> {showDeleted ? (t('allResponses') || 'View All') : (t('showDeleted') || 'Deleted Responses')}
+          </button>
+          <button 
+            className="btn-secondary" 
+            onClick={() => { setShowDeleted(false); setViewFlagged(!viewFlagged); }} 
             style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: viewFlagged ? 'var(--danger)' : '', color: viewFlagged ? '#fff' : '' }}
           >
             <Flag size={18} /> {viewFlagged ? (t('allResponses') || 'View All') : (t('flaggedResponse') || 'Flagged Only')}
@@ -451,7 +511,8 @@ export default function ResponseHistory() {
                       style={{ 
                         borderBottom: '1px solid var(--border-color)', 
                         transition: 'background 0.2s',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        ...(r.isValid === false ? { background: 'rgba(239, 68, 68, 0.05)', opacity: 0.8 } : {})
                       }}
                       className="hover-row"
                       onClick={() => setExpandedId(expandedId === r._id ? null : r._id)}
@@ -541,7 +602,7 @@ export default function ResponseHistory() {
                               )}
                             </div>
                           )}
-                          {(user?.role === 'quality' || user?.role === 'admin') && !viewFlagged && (
+                          {(user?.role === 'quality' || user?.role === 'admin') && !viewFlagged && r.isValid !== false && (
                             <div style={{ position: 'relative' }}>
                               <button 
                                 className="btn-secondary" 
@@ -583,6 +644,32 @@ export default function ResponseHistory() {
                               )}
                             </div>
                           )}
+                          {user?.role === 'admin' && !viewFlagged && r.isValid !== false && (
+                            <button
+                              className="btn-secondary"
+                              style={{ padding: '0.4rem', color: 'var(--danger)' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteModalResponse(r);
+                              }}
+                              title="Delete Response"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                          {user?.role === 'admin' && !viewFlagged && r.isValid === false && (
+                            <button
+                              className="btn-secondary"
+                              style={{ padding: '0.4rem', color: 'var(--success)' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteResponse(r._id, 'restore');
+                              }}
+                              title={t('restoreResponse') || 'Restore Response'}
+                            >
+                              <RefreshCcw size={14} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -614,6 +701,25 @@ export default function ResponseHistory() {
                                       <div style={{ fontWeight: 600 }}>{r.outcomeReason}</div>
                                     </div>
                                   )}
+                                  {(() => {
+                                    let unifiedNotes = [];
+                                    if (r.agentNotes && Array.isArray(r.agentNotes) && r.agentNotes.length > 0) {
+                                      // Modern responses
+                                      unifiedNotes = r.agentNotes.filter(n => n && n.text);
+                                    } else if (r.agentNote && r.agentNote.text) {
+                                      // Legacy responses fallback
+                                      unifiedNotes = [r.agentNote];
+                                    }
+                                    if (unifiedNotes.length === 0) return null;
+                                    return unifiedNotes.map((note, idx) => (
+                                      <div key={idx} className="answer-item" style={{ borderLeft: '3px solid #eab308', paddingLeft: '1rem', gridColumn: '1 / -1', background: 'rgba(234, 179, 8, 0.06)', padding: '1rem', borderRadius: '8px' }}>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#a16207', marginBottom: '0.25rem', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                          📝 {t('agentNote') || 'Agent Note'} {unifiedNotes.length > 1 ? `#${idx + 1}` : ''} — {resolveNoteRef(r.surveyId, note.referenceQuestionId)}
+                                        </div>
+                                        <div style={{ fontWeight: 600, whiteSpace: 'pre-wrap' }}>{note.text}</div>
+                                      </div>
+                                    ));
+                                  })()}
                                 {r.answers && r.answers.length > 0 ? (
                                   r.answers.map((ans, idx) => (
                                     <div key={idx} className="answer-item" style={{ borderLeft: '3px solid var(--primary)', paddingLeft: '1rem' }}>
@@ -641,7 +747,115 @@ export default function ResponseHistory() {
       </div>
 
 
-      
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteModalResponse && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="drawer-overlay"
+            style={{
+              zIndex: 2000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1.5rem'
+            }}
+            onClick={() => !deleteLoading && setDeleteModalResponse(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="glass-card"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: '100%',
+                maxWidth: '480px',
+                padding: '2rem',
+                position: 'relative',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                border: '1px solid var(--danger)'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.15rem' }}>
+                  <Trash2 color="var(--danger)" size={20} /> {t('deleteResponse') || 'How do you want to handle this response?'}
+                </h2>
+                <button className="nav-action-btn" onClick={() => !deleteLoading && setDeleteModalResponse(null)}>
+                  <CloseIcon size={18} />
+                </button>
+              </div>
+
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
+                Serial: <strong>{deleteModalResponse.serialNumber || 'N/A'}</strong> · Agent: <strong>{deleteModalResponse.agentId?.name || 'Unknown'}</strong>
+              </div>
+
+              {/* Option A: Soft Delete */}
+              <button
+                className="btn-secondary"
+                disabled={deleteLoading}
+                onClick={() => handleDeleteResponse(deleteModalResponse._id, 'soft_delete')}
+                style={{
+                  width: '100%',
+                  padding: '1rem',
+                  marginBottom: '0.75rem',
+                  textAlign: isRtl ? 'right' : 'left',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.35rem',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                }}
+              >
+                <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                  🔒 {t('disqualifySoftDelete') || 'Disqualify (Soft Delete)'}
+                </span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 400 }}>
+                  {t('disqualifyWarning') || 'Data stays in agent stats but is marked invalid/disqualified. Excluded from exports.'}
+                </span>
+              </button>
+
+              {/* Option B: Hard Delete */}
+              <button
+                className="btn-secondary"
+                disabled={deleteLoading}
+                onClick={() => handleDeleteResponse(deleteModalResponse._id, 'hard_delete')}
+                style={{
+                  width: '100%',
+                  padding: '1rem',
+                  marginBottom: '1rem',
+                  textAlign: isRtl ? 'right' : 'left',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.35rem',
+                  border: '1px solid var(--danger)',
+                  borderRadius: '8px',
+                  background: 'rgba(var(--danger-rgb, 220, 53, 69), 0.05)',
+                }}
+              >
+                <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--danger)' }}>
+                  🗑️ {t('hardDelete') || 'Permanently Delete'}
+                </span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--danger)', fontWeight: 400 }}>
+                  ⚠️ {t('hardDeleteWarning') || 'This permanently deletes the response data forever. This action cannot be undone.'}
+                </span>
+              </button>
+
+              <button
+                className="btn-secondary"
+                onClick={() => setDeleteModalResponse(null)}
+                disabled={deleteLoading}
+                style={{ width: '100%', padding: '0.75rem' }}
+              >
+                {t('cancel') || 'Cancel'}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <style>{`
         .hover-row:hover {
           background: rgba(255,255,255,0.05);

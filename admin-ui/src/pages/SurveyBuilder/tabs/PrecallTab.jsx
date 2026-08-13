@@ -49,7 +49,11 @@ export default function PrecallTab() {
       base.options = undefined;
     }
     if (type !== 'text') base.placeholder = undefined;
-    if (type !== 'number') base.min = undefined;
+    if (type !== 'number') {
+      base.min = undefined;
+      base.minLength = undefined;
+      base.maxLength = undefined;
+    }
     updateField(idx, base);
   };
 
@@ -273,8 +277,35 @@ export default function PrecallTab() {
                 )}
                 {field.type === 'number' && (
                   <>
-                    <label dir="auto" className="form-label" style={{ marginTop: '0.5rem', display: 'block' }}>Minimum (optional)</label>
-                    <input dir="auto" className="input-field" type="number" value={field.min != null ? field.min : ''} onChange={(e) => updateField(fIdx, { min: e.target.value === '' ? undefined : Number(e.target.value) })} readOnly={!isAdmin} />
+                    <label dir="auto" className="form-label" style={{ marginTop: '0.5rem', display: 'block' }}>{t('digitLengthConstraints') || 'Digit Length Constraints (Optional)'}</label>
+                    <div style={{ display: 'flex', gap: '1rem' }}>
+                      <div style={{ flex: 1 }}>
+                        <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>{t('minDigits') || 'Min Digits'}</label>
+                        <input
+                          dir="auto"
+                          className="input-field"
+                          type="number"
+                          min="1"
+                          value={field.minLength != null ? field.minLength : ''}
+                          onChange={(e) => updateField(fIdx, { minLength: e.target.value === '' ? undefined : Number(e.target.value) })}
+                          readOnly={!isAdmin}
+                          placeholder="e.g. 10"
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>{t('maxDigits') || 'Max Digits'}</label>
+                        <input
+                          dir="auto"
+                          className="input-field"
+                          type="number"
+                          min="1"
+                          value={field.maxLength != null ? field.maxLength : ''}
+                          onChange={(e) => updateField(fIdx, { maxLength: e.target.value === '' ? undefined : Number(e.target.value) })}
+                          readOnly={!isAdmin}
+                          placeholder="e.g. 10"
+                        />
+                      </div>
+                    </div>
                   </>
                 )}
                 {field.type === 'year' && (
@@ -304,6 +335,29 @@ export default function PrecallTab() {
                       <input dir="auto" type="checkbox" checked={!!field.allowOther} onChange={(e) => updateField(fIdx, { allowOther: e.target.checked })} disabled={!isAdmin} />
                       Allow Other answer / السماح بإجابة أخرى
                     </label>
+                    {field.allowOther && (
+                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <input
+                          dir="auto"
+                          className="input-field"
+                          style={{ maxWidth: '200px' }}
+                          placeholder={t('customLabelPlaceholder') || "Custom label (e.g. 'Other')"}
+                          value={field.otherLabel || ''}
+                          onChange={(e) => updateField(fIdx, { otherLabel: e.target.value })}
+                          readOnly={!isAdmin}
+                        />
+                        <input
+                          dir="auto"
+                          className="input-field"
+                          style={{ maxWidth: '120px' }}
+                          placeholder="Value / Code"
+                          value={field.otherValue || ''}
+                          onChange={(e) => updateField(fIdx, { otherValue: e.target.value })}
+                          readOnly={!isAdmin}
+                          title="Export code for Other answer"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
                 <div style={{ marginTop: '0.75rem', padding: '1rem', border: '1px dashed var(--border-color)', borderRadius: '12px', background: 'rgba(var(--primary-rgb), 0.02)' }}>

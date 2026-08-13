@@ -24,16 +24,20 @@ const encodeValue = (val) => {
   return val;
 };
 
-function splitOtherValues(answerValue) {
+function splitOtherValues(answerValue, otherValueCode = 'Other') {
   if (answerValue == null) {
     return { baseValue: '', otherValues: [] };
   }
+  const codePrefix = `${otherValueCode}:`;
+  const codePrefixLower = codePrefix.toLowerCase();
   if (!Array.isArray(answerValue)) {
     let base = answerValue;
     if (typeof base === 'string') {
-      if (base.startsWith('Other: ')) {
+      if (base.toLowerCase().startsWith(codePrefixLower)) {
+        base = base.substring(codePrefix.length).trim();
+      } else if (base.startsWith('Other: ')) {
         base = base.substring(7);
-      } else if (base.startsWith('other:')) {
+      } else if (base.toLowerCase().startsWith('other:')) {
         base = base.substring(6);
       }
     } else {
@@ -44,8 +48,14 @@ function splitOtherValues(answerValue) {
   const baseParts = [];
   const otherValues = [];
   answerValue.forEach(v => {
-    if (typeof v === 'string' && v.toLowerCase().startsWith('other:')) {
-      otherValues.push(v.substring(6).trim());
+    if (typeof v === 'string') {
+      if (v.toLowerCase().startsWith(codePrefixLower)) {
+        otherValues.push(v.substring(codePrefix.length).trim());
+      } else if (v.toLowerCase().startsWith('other:')) {
+        otherValues.push(v.substring(6).trim());
+      } else {
+        baseParts.push(String(v));
+      }
     } else if (v != null) {
       baseParts.push(String(v));
     }
@@ -297,6 +307,14 @@ exports.submitResponse = async (userId, userRole, data, io) => {
         referenceQuestionId: data.agentNote.referenceQuestionId || 'general',
       };
     }
+    if (Array.isArray(data.agentNotes) && data.agentNotes.length > 0) {
+      responseData.agentNotes = data.agentNotes
+        .filter(n => n && typeof n === 'object' && n.text && String(n.text).trim())
+        .map(n => ({
+          text: String(n.text).slice(0, 2000),
+          referenceQuestionId: n.referenceQuestionId || 'general',
+        }));
+    }
 
     let saved;
     if (finalSerial) {
@@ -466,14 +484,14 @@ exports.getSurveyAndCursor = async (surveyId) => {
   if (!survey) throw createError('Survey not found', 404);
 
   const cursor = Response.aggregate([
-    { $match: { surveyId: new mongoose.Types.ObjectId(surveyId) } },
+    { $match: { surveyId: new mongoose.Types.ObjectId(surveyId), isValid: { $ne: false } } },
     { $addFields: { agentObjectId: { $convert: { input: '$agentId', to: 'objectId', onError: null, onNull: null } } } },
     { $lookup: { from: 'users', localField: 'agentObjectId', foreignField: '_id', as: 'agent' } },
     { $unwind: { path: '$agent', preserveNullAndEmptyArrays: true } },
     { $sort: { startedAt: -1 } },
   ]).cursor({ batchSize: 1000 });
 
-  const preScanResponses = await Response.find({ surveyId: new mongoose.Types.ObjectId(surveyId) }, 'answers').lean();
+  const preScanResponses = await Response.find({ surveyId: new mongoose.Types.ObjectId(surveyId), isValid: { $ne: false } }, 'answers').lean();
 
   return { survey, cursor, preScanResponses, splitOtherValues, buildChoiceValueMap, resolveAnswerValue, encodeValue };
 };
@@ -487,7 +505,7 @@ exports.getAdvancedExportData = async (surveyId, queryParams) => {
   if (!survey) throw createError('Survey not found', 404);
 
   const { agentId, status, startDate, endDate } = queryParams;
-  const filter = { surveyId };
+  const filter = { surveyId, isValid: { $ne: false } };
   if (agentId && mongoose.Types.ObjectId.isValid(agentId)) filter.agentId = agentId;
   if (status) filter.status = status;
   if (startDate || endDate) {

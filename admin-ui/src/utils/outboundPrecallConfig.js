@@ -307,19 +307,33 @@ function normalizeField(f, i) {
     options: Array.isArray(f.options) ? f.options.map((o) => ({ value: String(o.value ?? ''), label: String(o.label ?? '') })) : d.options,
     placeholder: typeof f.placeholder === 'string' ? f.placeholder : d.placeholder,
     min: typeof f.min === 'number' ? f.min : d.min,
+    minLength: typeof f.minLength === 'number' ? f.minLength : undefined,
+    maxLength: typeof f.maxLength === 'number' ? f.maxLength : undefined,
     visibleWhen: normalizeCondition(f.visibleWhen),
     logic: f.logic ? {
       ...normalizeCondition(f.logic),
       action: f.logic.action || 'show'
     } : undefined,
     allowOther: f.allowOther !== undefined ? !!f.allowOther : false,
+    otherLabel: typeof f.otherLabel === 'string' && f.otherLabel ? f.otherLabel : (d.otherLabel || 'Other'),
+    otherValue: f.otherValue !== undefined ? f.otherValue : (d.otherValue || 'Other'),
+    multipleOtherLabel: typeof f.multipleOtherLabel === 'string' && f.multipleOtherLabel ? f.multipleOtherLabel : (d.multipleOtherLabel || 'Other'),
+    multipleOtherValue: f.multipleOtherValue !== undefined ? f.multipleOtherValue : (d.multipleOtherValue || 'Other'),
   };
   if (type !== 'segment' && type !== 'select') {
     delete out.options;
     delete out.allowOther;
+    delete out.otherLabel;
+    delete out.otherValue;
+    delete out.multipleOtherLabel;
+    delete out.multipleOtherValue;
   }
   if (type !== 'text') delete out.placeholder;
-  if (type !== 'number') delete out.min;
+  if (type !== 'number') {
+    delete out.min;
+    delete out.minLength;
+    delete out.maxLength;
+  }
   if (!out.visibleWhen) delete out.visibleWhen;
   if (!out.logic) delete out.logic;
   return out;
@@ -469,9 +483,12 @@ export function isFieldSatisfied(field, value) {
     return digits.length === 0 || (digits.length >= 8 && digits.length <= 15);
   }
   if (t === 'number') {
-    const n = Number(value);
-    if (Number.isNaN(n)) return !field.required;
-    if (field.min != null && n < field.min) return false;
+    const str = String(value ?? '').replace(/\D/g, '');
+    if (str.length === 0) return !field.required;
+    if (field.minLength != null && str.length < field.minLength) return false;
+    if (field.maxLength != null && str.length > field.maxLength) return false;
+    // Legacy fallback: support old min property for backward compat
+    if (field.min != null && Number(value) < field.min) return false;
     return true;
   }
   if (t === 'segment' || t === 'select') {

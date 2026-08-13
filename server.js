@@ -565,10 +565,16 @@ app.post("/response", [auth, validateResponseSubmit], responseController.submitR
 // GET RESPONSES (Staff only)
 app.get("/admin/responses", staffAuth, async (req, res) => {
   try {
-    const { surveyId, agentId, limit = 50, skip = 0 } = req.query;
+    const { surveyId, agentId, limit = 50, skip = 0, showDeleted } = req.query;
     const filter = {};
     if (surveyId && mongoose.Types.ObjectId.isValid(surveyId)) filter.surveyId = surveyId;
     if (agentId && mongoose.Types.ObjectId.isValid(agentId)) filter.agentId = agentId;
+    
+    if (showDeleted === 'true') {
+      filter.isValid = false;
+    } else {
+      filter.isValid = { $ne: false };
+    }
 
     const responses = await Response.find(filter)
       .populate('surveyId', 'title sections')
@@ -642,6 +648,10 @@ app.get("/admin/responses", staffAuth, async (req, res) => {
 app.get("/admin/export-survey/:id", staffAuth, responseController.exportCsv);
 
 app.get("/admin/export-advanced", staffAuth, responseController.exportAdvanced);
+
+// ADMIN: DELETE RESPONSE (Soft/Hard)
+app.post("/admin/responses/:id/delete", adminAuth, responseController.deleteResponse);
+
 
 // QUALITY OTHER ANSWERS CODING TOOL (Feature 4)
 const otherCodingController = require('./controllers/otherCodingController');

@@ -108,8 +108,13 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
   const hasError = !!errorText;
 
   // Helper: is the current value the "Other" free-text mode?
-  const isOtherSelected = typeof value === 'string' && value.startsWith('other:');
-  const otherText = isOtherSelected ? value.slice(6) : '';
+  const otherValueCode = field.otherValue || 'Other';
+  const isOtherSelected = typeof value === 'string' && (value.startsWith('other:') || value.startsWith(`${otherValueCode}:`));
+  let otherText = '';
+  if (isOtherSelected) {
+    if (value.startsWith(`${otherValueCode}:`)) otherText = value.slice(otherValueCode.toString().length + 1);
+    else otherText = value.slice(6);
+  }
 
   switch (field.type) {
     case 'readonly_date':
@@ -170,12 +175,12 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
-            maxLength={field.maxLength || 15}
+            maxLength={field.maxLength || undefined}
             value={value ?? ''}
             onChange={(e) => {
               const cleaned = e.target.value.replace(/\D/g, '');
-              const maxL = field.maxLength || 15;
-              onChange(field.id, cleaned.slice(0, maxL));
+              const maxL = field.maxLength;
+              onChange(field.id, maxL ? cleaned.slice(0, maxL) : cleaned);
             }}
             readOnly={isReadOnly}
           />
@@ -210,10 +215,10 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
                 type="button"
                 data-testid={`precall-${field.id}-btn-other`}
                 className={`precall-seg-btn ${segOtherActive ? 'active' : ''} ${hasError ? 'has-error' : ''}`}
-                onClick={() => !isReadOnly && onChange(field.id, segOtherActive ? '' : 'other:')}
+                onClick={() => !isReadOnly && onChange(field.id, segOtherActive ? '' : `${otherValueCode}:`)}
                 disabled={isReadOnly}
               >
-                {t('other') || 'Other'}
+                {field.otherLabel || t('other') || 'Other'}
               </button>
             )}
           </div>
@@ -224,7 +229,7 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
               style={{ marginTop: '0.5rem' }}
               placeholder={t('otherPlaceholder') || 'Please specify…'}
               value={otherText}
-              onChange={(e) => !isReadOnly && onChange(field.id, `other:${e.target.value}`)}
+              onChange={(e) => !isReadOnly && onChange(field.id, `${otherValueCode}:${e.target.value}`)}
               readOnly={isReadOnly}
               autoFocus
             />
@@ -248,7 +253,7 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
             value={selValue}
             onChange={(e) => {
               if (e.target.value === '__other__') {
-                onChange(field.id, 'other:');
+                onChange(field.id, `${otherValueCode}:`);
               } else {
                 onChange(field.id, e.target.value);
               }
@@ -262,7 +267,7 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
               </option>
             ))}
             {field.allowOther && (
-              <option value="__other__">{t('other') || 'Other'}</option>
+              <option value="__other__">{field.otherLabel || t('other') || 'Other'}</option>
             )}
           </select>
           {isOtherSelected && (
@@ -272,7 +277,7 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
               style={{ marginTop: '0.5rem' }}
               placeholder={t('otherPlaceholder') || 'Please specify…'}
               value={otherText}
-              onChange={(e) => !isReadOnly && onChange(field.id, `other:${e.target.value}`)}
+              onChange={(e) => !isReadOnly && onChange(field.id, `${otherValueCode}:${e.target.value}`)}
               readOnly={isReadOnly}
               autoFocus
             />

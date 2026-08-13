@@ -5,7 +5,8 @@ import { AuthContext } from '../context/AuthContext';
 import { UIContext } from '../context/UIContext';
 import { toast } from 'react-toastify';
 import { INTERVIEW_OUTCOME_OPTIONS, evaluateCondition } from '../utils/outboundPrecallConfig';
-import { Menu, ChevronLeft, ChevronRight, Save, PhoneOff, AlertTriangle, ChevronDown, CheckCircle } from 'lucide-react';
+import { AlertTriangle, Check, X, ShieldAlert, ArrowLeft, ArrowRight, Save, Clock, Menu } from 'lucide-react';
+import { getOtherPrefix, isOtherAnswer, extractOtherText, buildOtherAnswer } from '../utils/otherValueHelper';
 
 export default function AuditTakeSurvey() {
   const { surveyId, agentId, serialNumber } = useParams();
@@ -152,12 +153,13 @@ export default function AuditTakeSurvey() {
     const qId = q.questionId || String(q._id);
     const currArr = Array.isArray(answers[qId]) ? answers[qId] : [];
     let updated;
-    if (val === 'Other' && q.allowMultipleOther) {
-      const hasOther = currArr.some(v => typeof v === 'string' && v.startsWith('other:'));
+    const otherVal = q.allowMultipleOther ? (q.multipleOtherValue || 'Other') : (q.otherValue || 'Other');
+    if (val === otherVal) {
+      const hasOther = currArr.some(v => isOtherAnswer(v, q));
       if (hasOther) {
-        updated = currArr.filter(v => typeof v !== 'string' || !v.startsWith('other:'));
+        updated = currArr.filter(v => !isOtherAnswer(v, q));
       } else {
-        updated = [...currArr, "other:"];
+        updated = [...currArr, buildOtherAnswer('', q)];
       }
     } else {
       if (currArr.includes(val)) {
@@ -173,8 +175,9 @@ export default function AuditTakeSurvey() {
   const setSingleChoiceForQuestion = (q, val, choiceLogic = null) => {
     const qId = q.questionId || String(q._id);
     
-    if (val === 'Other' && q.allowMultipleOther) {
-      handleAnswerChange(qId, ["other:"]);
+    const otherVal = q.allowMultipleOther ? (q.multipleOtherValue || 'Other') : (q.otherValue || 'Other');
+    if (val === otherVal && q.allowMultipleOther) {
+      handleAnswerChange(qId, [buildOtherAnswer('', q)]);
     } else {
       handleAnswerChange(qId, val);
       
@@ -211,7 +214,7 @@ export default function AuditTakeSurvey() {
 
     if (q.type === 'multiple_choice') {
       const arr = Array.isArray(val) ? val : [];
-      const validArr = arr.filter(v => !(typeof v === 'string' && v.startsWith('other:') && v.substring(6).trim() === ''));
+      const validArr = arr.filter(v => !(isOtherAnswer(v, q) && extractOtherText(v, q).trim() === ''));
       if (q.minSelections && validArr.length < q.minSelections) {
         return (t('selectAtLeastN') || 'Please select at least {n} options').replace('{n}', q.minSelections);
       }
@@ -221,13 +224,13 @@ export default function AuditTakeSurvey() {
     }
 
     const hasOtherSelected = q.allowMultipleOther
-      ? (Array.isArray(val) && val.some(v => typeof v === 'string' && v.startsWith('other:')))
-      : (q.type === 'multiple_choice' ? (Array.isArray(val) && val.includes('Other')) : val === 'Other');
+      ? (Array.isArray(val) && val.some(v => isOtherAnswer(v, q)))
+      : (q.type === 'multiple_choice' ? (Array.isArray(val) && val.some(v => isOtherAnswer(v, q))) : isOtherAnswer(val, q));
 
     if (hasOtherSelected) {
       if (q.allowMultipleOther) {
         const arr = Array.isArray(val) ? val : [];
-        const validOthers = arr.filter(v => typeof v === 'string' && v.startsWith('other:') && v.substring(6).trim() !== '');
+        const validOthers = arr.filter(v => isOtherAnswer(v, q) && extractOtherText(v, q).trim() !== '');
         if (validOthers.length === 0) {
           return t('otherAnswerRequired') || 'Please specify the other answer';
         }
@@ -349,14 +352,15 @@ export default function AuditTakeSurvey() {
       const shadowAnswers = Object.keys(answers).map(k => {
         const qst = questions.find(q => q.questionId === k || String(q._id) === k);
         let val = answers[k];
-        if (qst && qst.allowMultipleOther) {
-          if (Array.isArray(val)) {
-            val = val.filter(v => typeof v !== 'string' || !v.startsWith('other:') || v.substring(6).trim() !== '');
-          }
+          if (qst && qst.allowMultipleOther) {
+            if (Array.isArray(val)) {
+              val = val.filter(v => !isOtherAnswer(v, qst) || extractOtherText(v, qst).trim() !== '');
+            }
         } else {
           if (Array.isArray(val)) {
-            val = val.map(v => v === 'Other' ? `Other: ${otherValues[k] || ''}` : v);
-          } else if (val === 'Other') {
+            const otherVal = qst.allowMultipleOther ? qst.multipleOtherValue || 'Other' : qst.otherValue || 'Other';
+            val = val.map(v => v === otherVal ? `Other: ${otherValues[k] || ''}` : v);
+          } else if (val === (qst.allowMultipleOther ? qst.multipleOtherValue || 'Other' : qst.otherValue || 'Other')) {
             val = `Other: ${otherValues[k] || ''}`;
           }
         }
@@ -593,8 +597,8 @@ export default function AuditTakeSurvey() {
         const ans = answers[qId];
         if (ans !== undefined && ans !== null && ans !== '') {
           if (Array.isArray(ans)) {
-            const valid = ans.filter(v => typeof v !== 'string' || !v.startsWith('other:') || v.substring(6).trim() !== '');
-            if (valid.length > 0) {
+            const valid = ans.filter(v => !isOtherAnswer(v, q) || extractOtherText(v, q).trim() !== '');
+            if (valid.length < q.minSelections) {
               answeredVisible++;
             }
           } else {
@@ -646,16 +650,31 @@ export default function AuditTakeSurvey() {
     const dynamicScriptText = parseDynamicText(q.script);
 
     const isSelected = (val) => {
-      if (val === 'Other' && q.allowMultipleOther) {
-        const arr = Array.isArray(answers[qId]) ? answers[qId] : [];
-        return arr.some(v => typeof v === 'string' && v.startsWith('other:'));
+      const otherVal = q.allowMultipleOther ? (q.multipleOtherValue || 'Other') : (q.otherValue || 'Other');
+      if (val === otherVal) {
+        const arr = Array.isArray(answers[qId]) ? answers[qId] : (answers[qId] ? [answers[qId]] : []);
+        return arr.some(v => isOtherAnswer(v, q));
       }
       if (q.type === 'multiple_choice') return (Array.isArray(answers[qId]) && answers[qId].includes(val));
       return answers[qId] === val;
     };
 
     const choices = [...(q.choices || [])];
-    if (q.allowOther) choices.push({ text: 'Other', isOther: true });
+    if (q.allowOther) {
+      if (q.allowMultipleOther) {
+        choices.push({
+          text: q.multipleOtherLabel || 'Other',
+          value: q.multipleOtherValue || 'Other',
+          isOther: true
+        });
+      } else {
+        choices.push({
+          text: q.otherLabel || 'Other',
+          value: q.otherValue || 'Other',
+          isOther: true
+        });
+      }
+    }
 
     return (
       <div id={`question-card-${qId}`} className="glass-card fade-enter-active" style={{ padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
@@ -675,32 +694,33 @@ export default function AuditTakeSurvey() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
             <div className="choice-grid" style={{ marginTop: 0 }}>
               {choices.map((c, i) => {
-                const cVal = c.isOther ? c.text : (c.value || c.text);
+                const cVal = c.value || c.text;
                 return (
-                <button dir="auto" 
-                  key={i} 
-                  className={`choice-btn ${isSelected(cVal) ? 'active' : ''}`} 
-                  onClick={() => q.type === 'multiple_choice' ? toggleChoiceForQuestion(q, cVal) : setSingleChoiceForQuestion(q, cVal, c.logic)}
-                  style={isSelected(cVal) ? { backgroundColor: 'var(--primary)', color: 'white', borderColor: 'var(--primary)' } : {}}
-                  type="button"
-                >
-                  {c.text}
-                </button>
+                  <button dir="auto"
+                    key={i} 
+                    className={`choice-btn ${isSelected(cVal) ? 'active' : ''}`} 
+                    onClick={() => q.type === 'multiple_choice' ? toggleChoiceForQuestion(q, cVal) : setSingleChoiceForQuestion(q, cVal, c.logic)}
+                    style={isSelected(cVal) ? { backgroundColor: 'var(--primary)', color: 'white', borderColor: 'var(--primary)' } : {}}
+                    type="button"
+                  >
+                    {c.text}
+                  </button>
                 );
               })}
             </div>
 
-            {isSelected('Other') && (
+            {isSelected(q.allowMultipleOther ? (q.multipleOtherValue || 'Other') : (q.otherValue || 'Other')) && (
               <div style={{ marginTop: '0.5rem' }}>
                 {q.allowMultipleOther ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                       {(() => {
                         const arr = Array.isArray(answers[qId]) ? answers[qId] : [];
-                        const others = arr.filter(v => typeof v === 'string' && v.startsWith('other:'));
-                        if (others.length === 0) others.push('other:');
+                        const others = arr.filter(v => isOtherAnswer(v, q));
+                        if (others.length === 0) others.push(buildOtherAnswer('', q));
                         return others.map((val, idx) => {
-                          const textVal = val.substring(6);
+                          const textVal = extractOtherText(val, q);
+                          const otherId = `input-${qId}-other-${idx}`;
                           return (
                             <div key={idx} style={{ display: 'flex', gap: '0.5rem' }}>
                               <input dir="auto"
@@ -713,9 +733,9 @@ export default function AuditTakeSurvey() {
                                   const newAnswers = [...arr];
                                   let otherCounter = 0;
                                   for (let i = 0; i < newAnswers.length; i++) {
-                                    if (typeof newAnswers[i] === 'string' && newAnswers[i].startsWith('other:')) {
+                                    if (isOtherAnswer(newAnswers[i], q)) {
                                       if (otherCounter === idx) {
-                                        newAnswers[i] = `other:${newText}`;
+                                        newAnswers.splice(i, 1, buildOtherAnswer(newText, q));
                                         break;
                                       }
                                       otherCounter++;

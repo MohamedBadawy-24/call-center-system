@@ -186,6 +186,30 @@ function isOptionSelected(rawValue, opt, resolvedValue, qKey, choiceValueMap) {
   return false;
 }
 
+const flattenAgentNotes = (response) => {
+  let mergedRefs = [];
+  let mergedTexts = [];
+  
+  if (response.agentNotes && Array.isArray(response.agentNotes) && response.agentNotes.length > 0) {
+      // Modern responses: Use ONLY the array
+      response.agentNotes.forEach(note => {
+          if (note.text) {
+              mergedRefs.push(note.referenceQuestionId || 'general');
+              mergedTexts.push(`[${note.referenceQuestionId || 'general'}]: ${note.text}`);
+          }
+      });
+  } else if (response.agentNote && response.agentNote.text) {
+      // Legacy responses: Fallback to the single object
+      mergedRefs.push(response.agentNote.referenceQuestionId || 'general');
+      mergedTexts.push(`[${response.agentNote.referenceQuestionId || 'general'}]: ${response.agentNote.text}`);
+  }
+  
+  return {
+    finalNoteRef: mergedRefs.join('\n'),
+    finalNoteText: mergedTexts.join('\n')
+  };
+};
+
 exports.exportCsv = async (req, res, next) => {
   try {
     const { survey, cursor, preScanResponses, splitOtherValues, buildChoiceValueMap, resolveAnswerValue, encodeValue } = await responseService.getSurveyAndCursor(req.params.id);
@@ -199,7 +223,8 @@ exports.exportCsv = async (req, res, next) => {
     const maxOtherCount = {};
     preScanResponses.forEach(r => {
       (r.answers || []).forEach(a => {
-        const parsed = splitOtherValues(a.value);
+        const q = questions.find(qst => (qst.id || qst.questionId || String(qst._id)) === a.questionId);
+        const parsed = splitOtherValues(a.value, q?.otherValue);
         const count = parsed.otherValues.length;
         if (count > (maxOtherCount[a.questionId] || 0)) {
           maxOtherCount[a.questionId] = count;
@@ -261,7 +286,7 @@ exports.exportCsv = async (req, res, next) => {
 
         if (isMulti) {
           const resolvedValue = resolveAnswerValue(qKey, rawValue, choiceValueMap);
-          const parsed = splitOtherValues(rawValue);
+          const parsed = splitOtherValues(rawValue, q.otherValue);
           options.forEach(opt => {
             const selected = isOptionSelected(rawValue, opt, resolvedValue, qKey, choiceValueMap);
             const val = selected ? encodeValue(opt.value) : '';
@@ -276,10 +301,9 @@ exports.exportCsv = async (req, res, next) => {
           }
         } else {
           const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
-          const parsed = splitOtherValues(resolvedBase);
-          
-          let val = getFinalExportValue(parsed.baseValue, qKey, choiceValueMap, encodeValue);
-          const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : (val != null ? val : '');
+          const parsed = splitOtherValues(resolvedBase, q.otherValue);
+          const finalVal = getFinalExportValue(parsed.baseValue, qKey, choiceValueMap, encodeValue);
+          const strVal = typeof finalVal === 'string' ? finalVal.replace(/"/g, '""').replace(/\n/g, ' ') : (finalVal != null ? finalVal : '');
           row.push(`"${strVal}"`);
           
           const max = maxOtherCount[q.id] || 0;
@@ -329,7 +353,8 @@ exports.exportAdvanced = async (req, res, next) => {
       const maxOtherCount = {};
       preScanResponses.forEach(r => {
         (r.answers || []).forEach(a => {
-          const parsed = splitOtherValues(a.value);
+          const q = questions.find(qst => (qst.id || qst.questionId || String(qst._id)) === a.questionId);
+          const parsed = splitOtherValues(a.value, q?.otherValue);
           const count = parsed.otherValues.length;
           if (count > (maxOtherCount[a.questionId] || 0)) {
             maxOtherCount[a.questionId] = count;
@@ -339,7 +364,7 @@ exports.exportAdvanced = async (req, res, next) => {
 
     const activeOptionsMap = buildActiveOptionsMap(questions, preScanResponses);
 
-      const headers = ['Serial', 'Submission_Date', 'Status', 'Interview_Outcome', 'Outcome_Reason', 'Agent_Name', 'Duration_Secs', 'Number_Source'];
+      const headers = ['Serial', 'Submission_Date', 'Status', 'Interview_Outcome', 'Outcome_Reason', 'Agent_Name', 'Duration_Secs', 'Number_Source', 'NOTE_REF', 'NOTE_TEXT'];
       questions.forEach((q, idx) => {
         const isMulti = q.type === 'multiple_choice' || q._treatAsMulti;
         const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
@@ -366,6 +391,7 @@ exports.exportAdvanced = async (req, res, next) => {
       const cursor = Response.find(filter).populate('agentId', 'name email').sort({ completedAt: 1 }).cursor({ batchSize: 1000 });
       
       cursor.on('data', (r) => {
+        const { finalNoteRef, finalNoteText } = flattenAgentNotes(r);
         const row = [
           `"${(r.serialNumber || 'N/A').replace(/"/g, '""')}"`,
           `"${new Date(r.completedAt || r.startedAt || Date.now()).toISOString()}"`,
@@ -374,7 +400,9 @@ exports.exportAdvanced = async (req, res, next) => {
           `"${(r.outcomeReason || '').replace(/"/g, '""')}"`,
           `"${(r.agentId?.name || 'Unknown').replace(/"/g, '""')}"`,
           r.durationSecs || 0,
-          `"${r.numberSource || 'queue'}"`
+          `"${r.numberSource || 'queue'}"`,
+          `"${finalNoteRef.replace(/"/g, '""')}"`,
+          `"${finalNoteText.replace(/"/g, '""')}"`
         ];
         questions.forEach((q, idx) => {
           const answer = (r.answers || []).find(a => a.questionId === q.id);
@@ -393,7 +421,7 @@ exports.exportAdvanced = async (req, res, next) => {
 
           if (isMulti) {
             const resolvedValue = resolveAnswerValue(qKey, rawValue, choiceValueMap);
-            const parsed = splitOtherValues(rawValue);
+            const parsed = splitOtherValues(rawValue, q.otherValue);
             options.forEach(opt => {
               const selected = isOptionSelected(rawValue, opt, resolvedValue, qKey, choiceValueMap);
               const val = selected ? encodeValue(opt.value) : '';
@@ -408,10 +436,10 @@ exports.exportAdvanced = async (req, res, next) => {
             }
           } else {
             const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
-            const parsed = splitOtherValues(resolvedBase);
+            const parsed = splitOtherValues(resolvedBase, q.otherValue);
             
-            let val = getFinalExportValue(parsed.baseValue, qKey, choiceValueMap, encodeValue);
-            const strVal = typeof val === 'string' ? val.replace(/"/g, '""').replace(/\n/g, ' ') : (val != null ? val : '');
+            const finalVal = getFinalExportValue(parsed.baseValue, qKey, choiceValueMap, encodeValue);
+            const strVal = typeof finalVal === 'string' ? finalVal.replace(/"/g, '""').replace(/\n/g, ' ') : (finalVal != null ? finalVal : '');
             row.push(`"${strVal}"`);
             
             const max = maxOtherCount[q.id] || 0;
@@ -441,7 +469,8 @@ exports.exportAdvanced = async (req, res, next) => {
     const maxOtherCount = {};
     preScanResponses.forEach(r => {
       (r.answers || []).forEach(a => {
-        const parsed = splitOtherValues(a.value);
+        const q = questions.find(qst => (qst.id || qst.questionId || String(qst._id)) === a.questionId);
+        const parsed = splitOtherValues(a.value, q?.otherValue);
         const count = parsed.otherValues.length;
         if (count > (maxOtherCount[a.questionId] || 0)) {
           maxOtherCount[a.questionId] = count;
@@ -466,7 +495,9 @@ exports.exportAdvanced = async (req, res, next) => {
         { header: 'Outcome Reason', key: 'Outcome_Reason', width: 30 },
         { header: 'Agent Name', key: 'Agent_Name', width: 20 },
         { header: 'Duration (Secs)', key: 'Duration_Secs', width: 15 },
-        { header: 'Number Source', key: 'Number_Source', width: 15 }
+        { header: 'Number Source', key: 'Number_Source', width: 15 },
+        { header: 'Note Reference', key: 'NOTE_REF', width: 20 },
+        { header: 'Agent Note', key: 'NOTE_TEXT', width: 40 }
       ];
 
       questions.forEach((q, idx) => {
@@ -499,6 +530,7 @@ exports.exportAdvanced = async (req, res, next) => {
       worksheet.getRow(1).font = { bold: true };
 
       responses.forEach(r => {
+        const { finalNoteRef, finalNoteText } = flattenAgentNotes(r);
         const row = {
           Serial: r.serialNumber || 'N/A',
           Submission_Date: new Date(r.completedAt || r.startedAt || Date.now()).toLocaleString(),
@@ -507,7 +539,9 @@ exports.exportAdvanced = async (req, res, next) => {
           Outcome_Reason: r.outcomeReason || '',
           Agent_Name: r.agentId?.name || 'Unknown',
           Duration_Secs: r.durationSecs || 0,
-          Number_Source: r.numberSource || 'queue'
+          Number_Source: r.numberSource || 'queue',
+          NOTE_REF: finalNoteRef,
+          NOTE_TEXT: finalNoteText
         };
 
         questions.forEach((q, idx) => {
@@ -527,7 +561,7 @@ exports.exportAdvanced = async (req, res, next) => {
 
           if (isMulti) {
             const resolvedValue = resolveAnswerValue(qKey, rawValue, choiceValueMap);
-            const parsed = splitOtherValues(rawValue);
+            const parsed = splitOtherValues(rawValue, q.otherValue);
             options.forEach((opt, oIdx) => {
               const selected = isOptionSelected(rawValue, opt, resolvedValue, qKey, choiceValueMap);
               row[`Q${idx + 1}_opt_${oIdx + 1}`] = selected ? encodeValue(opt.value) : '';
@@ -538,7 +572,7 @@ exports.exportAdvanced = async (req, res, next) => {
             }
           } else {
             const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
-            const parsed = splitOtherValues(resolvedBase);
+            const parsed = splitOtherValues(resolvedBase, q.otherValue);
             row[`Q${idx + 1}`] = getFinalExportValue(parsed.baseValue, qKey, choiceValueMap, encodeValue);
 
             const max = maxOtherCount[q.id] || 0;
@@ -598,6 +632,8 @@ exports.exportAdvanced = async (req, res, next) => {
         { name: 'AGENT', label: 'Agent Name', type: VariableType.String, width: 64 },
         { name: 'DURATION', label: 'Duration (Secs)', type: VariableType.Numeric, width: 8, decimal: 0 },
         { name: 'SOURCE', label: 'Number Source', type: VariableType.String, width: 16 },
+        { name: 'NOTE_REF', label: 'Agent Note Reference', type: VariableType.String, width: 64 },
+        { name: 'NOTE_TEXT', label: 'Agent Note Content', type: VariableType.String, width: 255 },
       ];
 
       let varCounter = 1;
@@ -682,7 +718,10 @@ exports.exportAdvanced = async (req, res, next) => {
           rec[vars[varIdx++].name] = safeString(r.outcomeReason || '', 128);
           rec[vars[varIdx++].name] = safeString(r.agentId?.name || 'Unknown', 64);
           rec[vars[varIdx++].name] = Number.isFinite(Number(r.durationSecs)) ? Number(r.durationSecs) : 0;
+          const { finalNoteRef, finalNoteText } = flattenAgentNotes(r);
           rec[vars[varIdx++].name] = safeString(r.numberSource || 'queue', 16);
+          rec[vars[varIdx++].name] = safeString(finalNoteRef, 64);
+          rec[vars[varIdx++].name] = safeString(finalNoteText, 255);
 
           questions.forEach(q => {
             const answer = (r.answers || []).find(a => a.questionId === q.id);
@@ -711,19 +750,19 @@ exports.exportAdvanced = async (req, res, next) => {
                   const val = Number.isFinite(exportCode) ? exportCode : 1;
                   rec[vars[varIdx++].name] = selected ? val : null;
                 });
-                const parsed = splitOtherValues(rawValue);
+                const parsed = splitOtherValues(rawValue, q.otherValue);
                 const max = maxOtherCount[q.id] || 0;
                 for (let i = 1; i <= max; i++) {
                   rec[vars[varIdx++].name] = safeString(encodeValue(parsed.otherValues[i - 1] || ''), 255);
                 }
             } else {
               const resolvedBase = resolveAnswerValue(qKey, rawValue, choiceValueMap);
-              const parsed = splitOtherValues(resolvedBase);
+              const parsed = splitOtherValues(resolvedBase, q.otherValue);
               const encoded = getFinalExportValue(parsed.baseValue, qKey, choiceValueMap, encodeValue);
               
               const meta = getSPSSMetadata(q);
               if (meta.type === VariableType.Numeric) {
-                const rawParsed = splitOtherValues(rawValue);
+                const rawParsed = splitOtherValues(rawValue, q.otherValue);
                 const finalVal = getFinalExportValue(rawParsed.baseValue, qKey, choiceValueMap, encodeValue);
                 const num = (finalVal !== '' && finalVal != null) ? Number(finalVal) : NaN;
                 rec[vars[varIdx++].name] = Number.isFinite(num) ? num : null;
@@ -767,5 +806,50 @@ exports.exportAdvanced = async (req, res, next) => {
       return res.status(err.status).json({ error: err.message });
     }
     res.status(500).json({ error: 'Failed to generate advanced export' });
+  }
+};
+
+/**
+ * Admin-only: Delete a response (soft or hard).
+ * POST /admin/responses/:id/delete  { action: 'soft_delete' | 'hard_delete' }
+ */
+exports.deleteResponse = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body;
+
+    if (!action || !['soft_delete', 'hard_delete', 'restore'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid action. Must be "soft_delete", "hard_delete", or "restore".' });
+    }
+
+    const response = await Response.findById(id);
+    if (!response) {
+      return res.status(404).json({ error: 'Response not found' });
+    }
+
+    if (action === 'soft_delete') {
+      response.status = 'disqualified';
+      response.isValid = false;
+      await response.save();
+      logger.info(`[ADMIN] Soft-deleted response ${id} by user ${req.user.id}`);
+      return res.json({ success: true, action: 'soft_delete', responseId: id });
+    }
+    
+    if (action === 'restore') {
+      response.isValid = true;
+      // Optionally could reset status to completed/partial if we stored the previous status,
+      // but the requirement is mainly to set isValid to true.
+      await response.save();
+      logger.info(`[ADMIN] Restored response ${id} by user ${req.user.id}`);
+      return res.json({ success: true, action: 'restore', responseId: id });
+    }
+
+    // hard_delete
+    await Response.findByIdAndDelete(id);
+    logger.info(`[ADMIN] Hard-deleted response ${id} by user ${req.user.id}`);
+    return res.json({ success: true, action: 'hard_delete', responseId: id });
+  } catch (err) {
+    logger.error(`Delete Response Error: ${err.message}`, err);
+    res.status(500).json({ error: 'Failed to delete response' });
   }
 };

@@ -32,7 +32,7 @@ export default function QuestionCard({
   onToggleSelect,
 }) {
   const { surveyState, isAdmin } = useContext(SurveyBuilderContext);
-  const { language } = useContext(UIContext);
+  const { t, language } = useContext(UIContext);
   const isRtl = language === 'ar';
   const [collapsed, setCollapsed] = useState(false);
 
@@ -223,10 +223,42 @@ export default function QuestionCard({
                       Allow "Other" option (Text Input)
                     </label>
                     {question.allowOther && (
-                      <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', marginLeft: '1.5rem', color: 'var(--text-secondary)' }}>
-                        <input dir="auto" type="checkbox" checked={!!question.allowMultipleOther} onChange={e => updateQ({ allowMultipleOther: e.target.checked })} />
-                        Allow multiple Other entries
-                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: '1.5rem', flexWrap: 'wrap' }}>
+                        <input
+                          dir="auto"
+                          type="text"
+                          className="input-field"
+                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem', minWidth: '150px' }}
+                          placeholder={t('customLabelPlaceholder') || "Custom label (e.g. 'Other')"}
+                          value={question.otherLabel || ''}
+                          onChange={e => updateQ({ otherLabel: e.target.value })}
+                        />
+                        <input
+                          dir="auto"
+                          type="text"
+                          className="input-field"
+                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem', maxWidth: '100px' }}
+                          placeholder="Value / Code"
+                          value={question.otherValue || ''}
+                          onChange={e => updateQ({ otherValue: e.target.value })}
+                          title="Export code for Other answer"
+                        />
+                        <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                          <input dir="auto" type="checkbox" checked={!!question.allowMultipleOther} onChange={e => updateQ({ allowMultipleOther: e.target.checked })} />
+                          Allow multiple Other entries
+                        </label>
+                        {question.allowMultipleOther && (
+                          <input
+                            dir="auto"
+                            type="text"
+                            className="input-field"
+                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem', minWidth: '150px', marginLeft: '0.5rem' }}
+                            placeholder={t('customLabelPlaceholder') || "Custom label (e.g. 'Other')"}
+                            value={question.multipleOtherLabel || ''}
+                            onChange={e => updateQ({ multipleOtherLabel: e.target.value })}
+                          />
+                        )}
+                      </div>
                     )}
                   </div>
                   )}
@@ -329,10 +361,36 @@ export default function QuestionCard({
             <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                 <label dir="auto" className="form-label" style={{ marginBottom: 0 }}>Sub-Inputs</label>
-                <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, cursor: isAdmin ? 'pointer' : 'default' }}>
-                  <input type="checkbox" checked={!!question.allowOther} onChange={e => updateQ({ allowOther: e.target.checked })} disabled={!isAdmin} />
-                  Allow "Other" text input
-                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                  <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, cursor: isAdmin ? 'pointer' : 'default' }}>
+                    <input type="checkbox" checked={!!question.allowOther} onChange={e => updateQ({ allowOther: e.target.checked })} disabled={!isAdmin} />
+                    Allow "Other" text input
+                  </label>
+                  {question.allowOther && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <input
+                        dir="auto"
+                        type="text"
+                        className="input-field"
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem', minWidth: '150px' }}
+                        placeholder={t('customLabelPlaceholder') || "Custom label (e.g. 'Other')"}
+                        value={question.otherLabel || ''}
+                        onChange={e => updateQ({ otherLabel: e.target.value })}
+                        disabled={!isAdmin}
+                      />
+                      <input
+                        dir="auto"
+                        type="text"
+                        className="input-field"
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem', maxWidth: '100px' }}
+                        placeholder="Value / Code"
+                        value={question.otherValue || ''}
+                        onChange={e => updateQ({ otherValue: e.target.value })}
+                        disabled={!isAdmin}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {(question.subInputs || []).map((sub, sIdx) => (

@@ -309,6 +309,10 @@ function normalizeField(f, i) {
     min: typeof f.min === 'number' ? f.min : d.min,
     minLength: typeof f.minLength === 'number' ? f.minLength : undefined,
     maxLength: typeof f.maxLength === 'number' ? f.maxLength : undefined,
+    yearRange: f.yearRange ? {
+      from: f.yearRange.from != null && f.yearRange.from !== '' ? Number(f.yearRange.from) : undefined,
+      to: f.yearRange.to != null && f.yearRange.to !== '' ? Number(f.yearRange.to) : undefined
+    } : (type === 'year' ? (d.yearRange || { from: 1900, to: new Date().getFullYear() }) : undefined),
     visibleWhen: normalizeCondition(f.visibleWhen),
     logic: f.logic ? {
       ...normalizeCondition(f.logic),
@@ -333,6 +337,9 @@ function normalizeField(f, i) {
     delete out.min;
     delete out.minLength;
     delete out.maxLength;
+  }
+  if (type !== 'year') {
+    delete out.yearRange;
   }
   if (!out.visibleWhen) delete out.visibleWhen;
   if (!out.logic) delete out.logic;

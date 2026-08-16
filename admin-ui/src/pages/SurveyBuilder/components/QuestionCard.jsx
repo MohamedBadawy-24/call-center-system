@@ -60,7 +60,9 @@ export default function QuestionCard({
   const precallFields = (surveyState.outboundConfig?.fields || []).map(f => ({
     id: f.id,
     label: `[Pre-Call] ${f.label || f.id}`,
-    type: (f.type === 'segment' || f.type === 'select') ? 'single_choice' : (f.type === 'number' ? 'number' : 'text'),
+    type: (f.type === 'segment' || f.type === 'select') ? 'single_choice' 
+          : f.type === 'year' ? 'number' 
+          : (f.type === 'number' ? 'number' : 'text'),
     options: (f.options || []).map(o => ({
       value: typeof o === 'object' && o !== null ? (o.value ?? o.label) : String(o),
       label: typeof o === 'object' && o !== null ? (o.label ?? o.value) : String(o)
@@ -75,13 +77,13 @@ export default function QuestionCard({
           ? (item.questions || []).map(q => ({
               id: q.questionId,
               label: q.text || q.questionId,
-              type: q.type,
+              type: q.type === 'year' ? 'number' : q.type,
               options: (q.choices || []).map(c => ({ value: c.value || c.text, label: c.text })),
             }))
           : [{
               id: item.questionId,
               label: item.text || item.questionId,
-              type: item.type,
+              type: item.type === 'year' ? 'number' : item.type,
               options: (item.choices || []).map(c => ({ value: c.value || c.text, label: c.text })),
             }]
       )

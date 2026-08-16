@@ -354,7 +354,7 @@ function ConditionRule({ rule, onChange, onRemove, availableFields, readOnly }) 
 
   const selField   = availableFields.find(f => f.id === rule.fieldId) || availableFields[0];
   const hasOptions = (selField?.options?.length || 0) > 0;
-  const isNumField = selField?.type === 'number';
+  const isNumField = selField?.type === 'number' || selField?.type === 'year';
   const op         = rule.operator || '==';
 
   const handleFieldChange = fid => upd({ fieldId: fid, value: '', operator: '==' });

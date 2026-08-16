@@ -54,6 +54,11 @@ export default function PrecallTab() {
       base.minLength = undefined;
       base.maxLength = undefined;
     }
+    if (type === 'year') {
+      base.yearRange = { from: 1900, to: new Date().getFullYear() };
+    } else {
+      base.yearRange = undefined;
+    }
     updateField(idx, base);
   };
 
@@ -138,7 +143,9 @@ export default function PrecallTab() {
       .map((f, i) => i !== idx ? {
         id: f.id,
         label: f.label || f.id,
-        type: f.type,
+        type: (f.type === 'segment' || f.type === 'select') ? 'single_choice' 
+              : f.type === 'year' ? 'number' 
+              : f.type,
         options: f.options || [],
       } : null)
       .filter(Boolean);
@@ -312,11 +319,11 @@ export default function PrecallTab() {
                   <div style={{ display: 'flex', gap: '1rem', marginTop: '0.75rem' }}>
                     <div style={{ flex: 1 }}>
                       <label dir="auto" className="form-label" style={{ display: 'block' }}>From Year</label>
-                      <input dir="auto" className="input-field" type="number" value={field.yearRange?.from || ''} onChange={(e) => updateField(fIdx, { yearRange: { ...field.yearRange, from: parseInt(e.target.value) } })} readOnly={!isAdmin} />
+                      <input dir="auto" className="input-field" type="number" value={field.yearRange?.from ?? ''} onChange={(e) => updateField(fIdx, { yearRange: { ...field.yearRange, from: e.target.value === '' ? undefined : parseInt(e.target.value, 10) } })} readOnly={!isAdmin} />
                     </div>
                     <div style={{ flex: 1 }}>
                       <label dir="auto" className="form-label" style={{ display: 'block' }}>To Year</label>
-                      <input dir="auto" className="input-field" type="number" value={field.yearRange?.to || ''} onChange={(e) => updateField(fIdx, { yearRange: { ...field.yearRange, to: parseInt(e.target.value) } })} readOnly={!isAdmin} />
+                      <input dir="auto" className="input-field" type="number" value={field.yearRange?.to ?? ''} onChange={(e) => updateField(fIdx, { yearRange: { ...field.yearRange, to: e.target.value === '' ? undefined : parseInt(e.target.value, 10) } })} readOnly={!isAdmin} />
                     </div>
                   </div>
                 )}

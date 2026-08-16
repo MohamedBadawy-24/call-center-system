@@ -294,6 +294,37 @@ export default function AuditPreCallChecklist() {
           </div>
         );
       }
+      case 'year': {
+        return (
+          <div className="precall-field" key={field.id}>
+            <label className="precall-label">{label}</label>
+            <select
+              className={`input-field ${hasError ? 'has-error' : ''}`}
+              value={value ?? ''}
+              onChange={(e) => onChange(field.id, e.target.value)}
+              disabled={isReadOnly}
+            >
+              <option value="">{t('selectYear') || 'Select Year...'}</option>
+              {(() => {
+                const opts = [];
+                const from = field.yearRange?.from || 1900;
+                const to = field.yearRange?.to || new Date().getFullYear();
+                const start = Math.min(from, to);
+                const end = Math.max(from, to);
+                for (let y = end; y >= start; y--) {
+                  opts.push(<option key={y} value={y}>{y}</option>);
+                }
+                return opts;
+              })()}
+            </select>
+            {errorText && (
+              <span style={{ color: 'var(--danger)', fontSize: '0.8rem', marginTop: '0.25rem', display: 'block' }}>
+                {errorText}
+              </span>
+            )}
+          </div>
+        );
+      }
       default:
         return null;
     }

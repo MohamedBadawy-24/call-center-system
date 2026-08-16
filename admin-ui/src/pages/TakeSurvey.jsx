@@ -90,17 +90,36 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
       <div 
         key={qId}
         id={`question-card-${qId}`} 
-        className="glass-card fade-enter-active" 
+        className="glass-card fade-enter-active scroll-mt-32" 
         style={{ 
           padding: '1.25rem', 
           border: '1px solid var(--border-color)', 
           borderRadius: '8px',
+          scrollMarginTop: '8rem',
           ...(isLocked ? { opacity: 0.5, pointerEvents: 'none' } : {})
         }}
       >
-        <h3 style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-          {typeof q.category === 'string' ? q.category.toUpperCase() : t('question')} {flatIdx + 1}
-        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+          <span
+            className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md uppercase"
+            style={{
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              color: 'var(--text-secondary, #6b7280)',
+              backgroundColor: 'rgba(0,0,0,0.05)',
+              padding: '0.15rem 0.5rem',
+              borderRadius: '4px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              fontFamily: 'monospace'
+            }}
+          >
+            {qId}
+          </span>
+          <h3 style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.85rem' }}>
+            {typeof q.category === 'string' ? q.category.toUpperCase() : t('question')} {flatIdx + 1}
+          </h3>
+        </div>
         <h2>{dynamicQuestionText}</h2>
 
         {q.script && (
@@ -211,10 +230,23 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                     type="text"
                     className="input-field"
                     placeholder="Please specify..."
-                    value={otherValues[qId] || ''}
+                    value={otherValues[qId] !== undefined ? otherValues[qId] : (Array.isArray(answers[qId]) ? (answers[qId].find(v => isOtherAnswer(v, q)) ? extractOtherText(answers[qId].find(v => isOtherAnswer(v, q)), q) : '') : (isOtherAnswer(answers[qId], q) ? extractOtherText(answers[qId], q) : ''))}
                     onChange={(e) => {
                       if (activeInputIdRef) activeInputIdRef.current = e.target.id;
-                      setOtherValues(prev => ({ ...prev, [qId]: e.target.value }));
+                      const newText = e.target.value;
+                      setOtherValues(prev => ({ ...prev, [qId]: newText }));
+                      if (q.type === 'multiple_choice') {
+                        const arr = Array.isArray(answers[qId]) ? [...answers[qId]] : [];
+                        const otherIdx = arr.findIndex(v => isOtherAnswer(v, q));
+                        if (otherIdx !== -1) {
+                          arr[otherIdx] = buildOtherAnswer(newText, q);
+                        } else {
+                          arr.push(buildOtherAnswer(newText, q));
+                        }
+                        handleAnswerChange(qId, arr);
+                      } else {
+                        handleAnswerChange(qId, [buildOtherAnswer(newText, q)]);
+                      }
                       markInteracted(qId);
                       if (fieldErrors[qId]) {
                         setFieldErrors(prev => {
@@ -541,21 +573,36 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
         })()}
 
         {q.type === 'multi_input' && (
-          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             {(q.subInputs || []).map((sub, subIdx) => {
               const ansObj = typeof answers[qId] === 'object' && answers[qId] !== null ? answers[qId] : {};
               const val = ansObj[sub.id] ?? '';
               const subInputId = `input-${qId}-${sub.id}`;
               return (
-                <div key={sub.id || `sub-${subIdx}`} className="bg-white border border-gray-200 rounded-xl p-5 mb-4 shadow-sm transition-all focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 flex flex-col gap-y-4">
-                  <label className="font-semibold text-gray-800 text-lg flex gap-1 items-center">
-                    {sub.label}
-                    {sub.required && <span style={{ color: 'var(--danger)' }}>*</span>}
+                <div 
+                  key={sub.id || `sub-${subIdx}`} 
+                  className="multi-input-card"
+                  style={{
+                    padding: '1.25rem',
+                    border: '1px solid var(--border-color, #e5e7eb)',
+                    borderRadius: '10px',
+                    background: 'var(--surface, #ffffff)',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.75rem',
+                    transition: 'border-color 0.2s, box-shadow 0.2s'
+                  }}
+                >
+                  <label style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-primary, #1f2937)', display: 'flex', alignItems: 'center', gap: '0.35rem', margin: 0 }}>
+                    <span>{sub.label}</span>
+                    {sub.required && <span style={{ color: 'var(--danger, #ef4444)', fontWeight: 700 }}>*</span>}
                   </label>
                   {sub.inputType === 'dropdown' ? (
                     <select
                       id={subInputId}
-                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                      className="input-field"
+                      style={{ width: '100%', padding: '0.65rem 0.75rem', fontSize: '0.9rem', borderRadius: '8px' }}
                       value={val != null ? String(val) : ''}
                       onChange={e => {
                         if (activeInputIdRef) activeInputIdRef.current = e.target.id;
@@ -572,15 +619,16 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                       })}
                     </select>
                   ) : sub.inputType === 'number' ? (
-                    <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative', width: '100%' }}>
                       <input dir="auto"
                         id={subInputId}
                         type="text"
                         inputMode="numeric"
                         pattern="[0-9]*"
                         maxLength={sub.maxLength || undefined}
-                        className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
-                        style={sub.isRatio ? { paddingRight: '2.5rem' } : {}}
+                        className="input-field"
+                        style={{ width: '100%', padding: '0.65rem 0.75rem', fontSize: '0.9rem', borderRadius: '8px', ...(sub.isRatio ? { paddingRight: '2.5rem' } : {}) }}
+                        placeholder={t('typeNumber') || t('typeAnswer')}
                         value={val}
                         onChange={e => {
                           if (activeInputIdRef) activeInputIdRef.current = e.target.id;
@@ -589,7 +637,20 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                           if (sub.maxLength && cleaned.length > sub.maxLength) {
                             cleaned = cleaned.slice(0, sub.maxLength);
                           }
-                          handleAnswerChange(qId, { ...ansObj, [sub.id]: cleaned });
+                          // Strict Mutual Exclusivity: Clear any choice / multiple_choice radio siblings
+                          let currentQAnswer = { ...(answers[qId] || {}) };
+                          (q.subInputs || []).forEach(siblingSub => {
+                            if (siblingSub.id !== sub.id) {
+                              if (siblingSub.inputType === 'choice' && siblingSub.id in currentQAnswer) {
+                                delete currentQAnswer[siblingSub.id];
+                              }
+                              if (siblingSub.inputType === 'multiple_choice' && siblingSub.id in currentQAnswer) {
+                                delete currentQAnswer[siblingSub.id];
+                              }
+                            }
+                          });
+                          currentQAnswer[sub.id] = cleaned;
+                          handleAnswerChange(qId, currentQAnswer);
                         }}
                       />
                       {sub.isRatio && (
@@ -600,15 +661,18 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                     <input dir="auto"
                       id={subInputId}
                       type="date"
-                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                      className="input-field"
+                      style={{ width: '100%', padding: '0.65rem 0.75rem', fontSize: '0.9rem', borderRadius: '8px' }}
                       value={val}
                       onChange={e => {
                         if (activeInputIdRef) activeInputIdRef.current = e.target.id;
-                        handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value });
+                        let currentQAnswer = { ...(answers[qId] || {}) };
+                        currentQAnswer[sub.id] = e.target.value;
+                        handleAnswerChange(qId, currentQAnswer);
                       }}
                     />
                   ) : sub.inputType === 'choice' ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                       {(sub.options || []).map((opt, i) => {
                         const optLabel = typeof opt === 'object' && opt !== null ? (opt.label || opt.text || opt.value || '') : String(opt);
                         const optVal = typeof opt === 'object' && opt !== null ? (opt.value != null ? String(opt.value) : optLabel) : String(opt);
@@ -616,7 +680,21 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                         const radioName = `radio-${qId}-${sub.id}`;
                         const isChecked = String(val) === optVal;
                         return (
-                          <label key={i} htmlFor={radioId} className={`flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer hover:bg-gray-50 ${isChecked ? 'bg-blue-50' : 'bg-white'}`}>
+                          <label 
+                            key={i} 
+                            htmlFor={radioId} 
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.75rem',
+                              padding: '0.65rem 0.85rem',
+                              borderRadius: '8px',
+                              border: `1px solid ${isChecked ? 'var(--primary, #6366f1)' : 'var(--border-color, #e5e7eb)'}`,
+                              background: isChecked ? 'rgba(99, 102, 241, 0.06)' : 'var(--surface, #ffffff)',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
                             <input
                               type="radio"
                               id={radioId}
@@ -625,16 +703,26 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                               checked={isChecked}
                               onChange={e => {
                                 if (activeInputIdRef) activeInputIdRef.current = radioId;
-                                const nextAnsObj = { ...ansObj };
+                                let currentQAnswer = { ...(answers[qId] || {}) };
+                                // Strict Mutual Exclusivity: Clear text/number inputs and multiple_choice
                                 (q.subInputs || []).forEach(siblingSub => {
-                                  if (siblingSub.inputType === 'multiple_choice') nextAnsObj[siblingSub.id] = [];
+                                  if (siblingSub.id !== sub.id) {
+                                    if (['number', 'text', 'short_text'].includes(siblingSub.inputType) || !siblingSub.inputType) {
+                                      if (siblingSub.id in currentQAnswer) {
+                                        delete currentQAnswer[siblingSub.id];
+                                      }
+                                    }
+                                    if (siblingSub.inputType === 'multiple_choice' && siblingSub.id in currentQAnswer) {
+                                      delete currentQAnswer[siblingSub.id];
+                                    }
+                                  }
                                 });
-                                nextAnsObj[sub.id] = e.target.value;
-                                handleAnswerChange(qId, nextAnsObj);
+                                currentQAnswer[sub.id] = e.target.value;
+                                handleAnswerChange(qId, currentQAnswer);
                               }}
                               style={{ accentColor: 'var(--primary)' }}
                             />
-                            <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)' }}>{optLabel}</span>
+                            <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{optLabel}</span>
                           </label>
                         );
                       })}
@@ -647,7 +735,20 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                         const otherValue = isChecked ? (val.startsWith(`${subOtherPrefix}: `) ? val.substring(subOtherPrefix.length + 2) : val.startsWith('Other: ') ? val.substring(7) : '') : '';
                         return (
                           <div key="other-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            <label htmlFor={otherRadioId} className={`flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer hover:bg-gray-50 ${isChecked ? 'bg-blue-50' : 'bg-white'}`}>
+                            <label 
+                              htmlFor={otherRadioId} 
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.75rem',
+                                padding: '0.65rem 0.85rem',
+                                borderRadius: '8px',
+                                border: `1px solid ${isChecked ? 'var(--primary, #6366f1)' : 'var(--border-color, #e5e7eb)'}`,
+                                background: isChecked ? 'rgba(99, 102, 241, 0.06)' : 'var(--surface, #ffffff)',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
                               <input
                                 type="radio"
                                 id={otherRadioId}
@@ -656,27 +757,52 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                                 checked={isChecked}
                                 onChange={e => {
                                   if (activeInputIdRef) activeInputIdRef.current = otherRadioId;
-                                  const nextAnsObj = { ...ansObj };
+                                  let currentQAnswer = { ...(answers[qId] || {}) };
+                                  // Strict Mutual Exclusivity: Clear text/number inputs and multiple_choice
                                   (q.subInputs || []).forEach(siblingSub => {
-                                    if (siblingSub.inputType === 'multiple_choice') nextAnsObj[siblingSub.id] = [];
+                                    if (siblingSub.id !== sub.id) {
+                                      if (['number', 'text', 'short_text'].includes(siblingSub.inputType) || !siblingSub.inputType) {
+                                        if (siblingSub.id in currentQAnswer) {
+                                          delete currentQAnswer[siblingSub.id];
+                                        }
+                                      }
+                                      if (siblingSub.inputType === 'multiple_choice' && siblingSub.id in currentQAnswer) {
+                                        delete currentQAnswer[siblingSub.id];
+                                      }
+                                    }
                                   });
-                                  nextAnsObj[sub.id] = `${subOtherPrefix}: `;
-                                  handleAnswerChange(qId, nextAnsObj);
+                                  currentQAnswer[sub.id] = `${subOtherPrefix}: `;
+                                  handleAnswerChange(qId, currentQAnswer);
                                 }}
                                 style={{ accentColor: 'var(--primary)' }}
                               />
-                              <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)' }}>{subOtherLabel}</span>
+                              <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{subOtherLabel}</span>
                             </label>
                             {isChecked && (
                               <input dir="auto"
                                 type="text"
                                 id={`${subInputId}-other-text`}
-                                className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                                className="input-field"
+                                style={{ width: '100%', padding: '0.65rem 0.75rem', fontSize: '0.9rem', borderRadius: '8px' }}
                                 placeholder={t('typeAnswer')}
                                 value={otherValue}
                                 onChange={e => {
                                   if (activeInputIdRef) activeInputIdRef.current = `${subInputId}-other-text`;
-                                  handleAnswerChange(qId, { ...ansObj, [sub.id]: `${subOtherPrefix}: ` + e.target.value });
+                                  let currentQAnswer = { ...(answers[qId] || {}) };
+                                  (q.subInputs || []).forEach(siblingSub => {
+                                    if (siblingSub.id !== sub.id) {
+                                      if (['number', 'text', 'short_text'].includes(siblingSub.inputType) || !siblingSub.inputType) {
+                                        if (siblingSub.id in currentQAnswer) {
+                                          delete currentQAnswer[siblingSub.id];
+                                        }
+                                      }
+                                      if (siblingSub.inputType === 'multiple_choice' && siblingSub.id in currentQAnswer) {
+                                        delete currentQAnswer[siblingSub.id];
+                                      }
+                                    }
+                                  });
+                                  currentQAnswer[sub.id] = `${subOtherPrefix}: ` + e.target.value;
+                                  handleAnswerChange(qId, currentQAnswer);
                                 }}
                               />
                             )}
@@ -685,7 +811,7 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                       })()}
                     </div>
                   ) : sub.inputType === 'multiple_choice' ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                       {(sub.options || []).map((opt, i) => {
                         const optLabel = typeof opt === 'object' && opt !== null ? (opt.label || opt.text || opt.value || '') : String(opt);
                         const optVal = typeof opt === 'object' && opt !== null ? (opt.value != null ? String(opt.value) : optLabel) : String(opt);
@@ -693,7 +819,21 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                         const currArr = Array.isArray(val) ? val.map(v => String(v)) : [];
                         const isChecked = currArr.includes(optVal);
                         return (
-                          <label key={i} htmlFor={checkId} className={`flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer hover:bg-gray-50 ${isChecked ? 'bg-blue-50' : 'bg-white'}`}>
+                          <label 
+                            key={i} 
+                            htmlFor={checkId} 
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.75rem',
+                              padding: '0.65rem 0.85rem',
+                              borderRadius: '8px',
+                              border: `1px solid ${isChecked ? 'var(--primary, #6366f1)' : 'var(--border-color, #e5e7eb)'}`,
+                              background: isChecked ? 'rgba(99, 102, 241, 0.06)' : 'var(--surface, #ffffff)',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
                             <input
                               type="checkbox"
                               id={checkId}
@@ -702,21 +842,22 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                               onChange={e => {
                                 if (activeInputIdRef) activeInputIdRef.current = checkId;
                                 const strVal = String(optVal);
-                                const currentQ = typeof answers[qId] === 'object' && answers[qId] !== null ? answers[qId] : {};
-                                const currentArr = Array.isArray(currentQ[sub.id]) ? currentQ[sub.id].map(v => String(v)) : [];
+                                let currentQAnswer = { ...(answers[qId] || {}) };
+                                const currentArr = Array.isArray(currentQAnswer[sub.id]) ? currentQAnswer[sub.id].map(v => String(v)) : [];
                                 const newArr = currentArr.includes(strVal)
                                   ? currentArr.filter(v => v !== strVal)
                                   : [...currentArr, strVal];
-                                const nextQ = { ...currentQ };
                                 (q.subInputs || []).forEach(siblingSub => {
-                                  if (siblingSub.inputType === 'choice') delete nextQ[siblingSub.id];
+                                  if (siblingSub.inputType === 'choice' && siblingSub.id in currentQAnswer) {
+                                    delete currentQAnswer[siblingSub.id];
+                                  }
                                 });
-                                nextQ[sub.id] = newArr;
-                                handleAnswerChange(qId, nextQ);
+                                currentQAnswer[sub.id] = newArr;
+                                handleAnswerChange(qId, currentQAnswer);
                               }}
                               style={{ accentColor: 'var(--primary)' }}
                             />
-                            <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)' }}>{optLabel}</span>
+                            <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{optLabel}</span>
                           </label>
                         );
                       })}
@@ -730,7 +871,20 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                         const otherValue = isChecked ? (otherEntry.startsWith(`${subOtherPrefix}: `) ? otherEntry.substring(subOtherPrefix.length + 2) : otherEntry.substring(7)) : '';
                         return (
                           <div key="other-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            <label htmlFor={checkId} className={`flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer hover:bg-gray-50 ${isChecked ? 'bg-blue-50' : 'bg-white'}`}>
+                            <label 
+                              htmlFor={checkId} 
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.75rem',
+                                padding: '0.65rem 0.85rem',
+                                borderRadius: '8px',
+                                border: `1px solid ${isChecked ? 'var(--primary, #6366f1)' : 'var(--border-color, #e5e7eb)'}`,
+                                background: isChecked ? 'rgba(99, 102, 241, 0.06)' : 'var(--surface, #ffffff)',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
                               <input
                                 type="checkbox"
                                 id={checkId}
@@ -740,28 +894,34 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                                   const nextArr = isChecked
                                     ? currArr.filter(item => !item.startsWith(`${subOtherPrefix}: `) && !item.startsWith('Other: '))
                                     : [...currArr, `${subOtherPrefix}: `];
-                                  const nextAnsObj = { ...ansObj };
+                                  let currentQAnswer = { ...(answers[qId] || {}) };
                                   (q.subInputs || []).forEach(siblingSub => {
-                                    if (siblingSub.inputType === 'choice') delete nextAnsObj[siblingSub.id];
+                                    if (siblingSub.inputType === 'choice' && siblingSub.id in currentQAnswer) {
+                                      delete currentQAnswer[siblingSub.id];
+                                    }
                                   });
-                                  nextAnsObj[sub.id] = nextArr;
-                                  handleAnswerChange(qId, nextAnsObj);
+                                  currentQAnswer[sub.id] = nextArr;
+                                  handleAnswerChange(qId, currentQAnswer);
                                 }}
                                 style={{ accentColor: 'var(--primary)' }}
                               />
-                              <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)' }}>{subOtherLabel}</span>
+                              <span style={{ fontWeight: isChecked ? 600 : 400, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{subOtherLabel}</span>
                             </label>
                             {isChecked && (
                               <input dir="auto"
                                 type="text"
                                 id={`${subInputId}-other-text`}
-                                className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                                className="input-field"
+                                style={{ width: '100%', padding: '0.65rem 0.75rem', fontSize: '0.9rem', borderRadius: '8px' }}
                                 placeholder={t('typeAnswer')}
                                 value={otherValue}
                                 onChange={e => {
                                   if (activeInputIdRef) activeInputIdRef.current = `${subInputId}-other-text`;
-                                  const nextArr = currArr.map(item => (item.startsWith(`${subOtherPrefix}: `) || item.startsWith('Other: ')) ? `${subOtherPrefix}: ` + e.target.value : item);
-                                  handleAnswerChange(qId, { ...ansObj, [sub.id]: nextArr });
+                                  let currentQAnswer = { ...(answers[qId] || {}) };
+                                  const baseArr = Array.isArray(currentQAnswer[sub.id]) ? currentQAnswer[sub.id] : [];
+                                  const nextArr = baseArr.map(item => (item.startsWith(`${subOtherPrefix}: `) || item.startsWith('Other: ')) ? `${subOtherPrefix}: ` + e.target.value : item);
+                                  currentQAnswer[sub.id] = nextArr;
+                                  handleAnswerChange(qId, currentQAnswer);
                                 }}
                               />
                             )}
@@ -772,11 +932,14 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                   ) : sub.inputType === 'year' ? (
                     <select
                       id={subInputId}
-                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                      className="input-field"
+                      style={{ width: '100%', padding: '0.65rem 0.75rem', fontSize: '0.9rem', borderRadius: '8px' }}
                       value={val}
                       onChange={e => {
                         if (activeInputIdRef) activeInputIdRef.current = e.target.id;
-                        handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value });
+                        let currentQAnswer = { ...(answers[qId] || {}) };
+                        currentQAnswer[sub.id] = e.target.value;
+                        handleAnswerChange(qId, currentQAnswer);
                       }}
                     >
                       <option value="">{t('selectYear') || 'Select Year...'}</option>
@@ -796,11 +959,26 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                     <input dir="auto"
                       id={subInputId}
                       type="text"
-                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                      className="input-field"
+                      style={{ width: '100%', padding: '0.65rem 0.75rem', fontSize: '0.9rem', borderRadius: '8px' }}
+                      placeholder={t('typeAnswer')}
                       value={val}
                       onChange={e => {
                         if (activeInputIdRef) activeInputIdRef.current = e.target.id;
-                        handleAnswerChange(qId, { ...ansObj, [sub.id]: e.target.value });
+                        // Strict Mutual Exclusivity: Clear any choice / multiple_choice radio siblings
+                        let currentQAnswer = { ...(answers[qId] || {}) };
+                        (q.subInputs || []).forEach(siblingSub => {
+                          if (siblingSub.id !== sub.id) {
+                            if (siblingSub.inputType === 'choice' && siblingSub.id in currentQAnswer) {
+                              delete currentQAnswer[siblingSub.id];
+                            }
+                            if (siblingSub.inputType === 'multiple_choice' && siblingSub.id in currentQAnswer) {
+                              delete currentQAnswer[siblingSub.id];
+                            }
+                          }
+                        });
+                        currentQAnswer[sub.id] = e.target.value;
+                        handleAnswerChange(qId, currentQAnswer);
                       }}
                     />
                   )}
@@ -815,13 +993,14 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
               // Extract display text: strip prefix if present
               const displayOtherText = rawOtherText.startsWith(`${globalOtherPrefix}: `) ? rawOtherText.substring(globalOtherPrefix.length + 2) : rawOtherText;
               return (
-                <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border-color)' }}>
-                  <label className="font-semibold text-gray-800 text-lg flex gap-1 items-center mb-3">
+                <div style={{ marginTop: '1rem', padding: '1.25rem', border: '1px solid var(--border-color, #e5e7eb)', borderRadius: '10px', background: 'var(--surface, #ffffff)' }}>
+                  <label style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-primary)', display: 'block', marginBottom: '0.5rem' }}>
                     {globalOtherLabel}
                   </label>
                   <input dir="auto"
                     type="text"
-                    className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-gray-800"
+                    className="input-field"
+                    style={{ width: '100%', padding: '0.65rem 0.75rem', fontSize: '0.9rem', borderRadius: '8px' }}
                     value={displayOtherText}
                     onChange={e => {
                       if (activeInputIdRef) activeInputIdRef.current = `input-${qId}-other`;
@@ -875,9 +1054,7 @@ export default function TakeSurvey({ mockSurvey }) {
   const [questions, setQuestions] = useState([]);
   /** intro | questions | interview */
   const [phase, setPhase] = useState('intro');
-  const [showAgentNote, setShowAgentNote] = useState(false);
-  const [agentNoteText, setAgentNoteText] = useState('');
-  const [agentNoteRefQuestion, setAgentNoteRefQuestion] = useState('general');
+  const [agentNotes, setAgentNotes] = useState([]);
   const [answers, setAnswers] = useState({});
   const [otherValues, setOtherValues] = useState({});
   const [fieldErrors, setFieldErrors] = useState({});
@@ -1381,92 +1558,110 @@ export default function TakeSurvey({ mockSurvey }) {
   };
 
   const submitResponse = async () => {
-    if (mockSurvey) {
-      toast.success("Preview submitted successfully!");
-      return;
-    }
+    try {
+      if (mockSurvey) {
+        toast.success("Preview submitted successfully!");
+        return;
+      }
 
-    const finalOutcome = answers.interview_result;
-    if (!finalOutcome) {
-      toast.error(t('mustSelectInterviewOutcome'));
-      return;
-    }
-    const duration = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
-    const finalReason = ['partial', 'refused', 'postponed'].includes(finalOutcome) 
-      ? ((answers.outcome_reason || '').trim() || 'none') 
-      : '';
-      
-    const payload = {
-      surveyId: survey._id,
-      durationSecs: duration,
-      answers: Object.keys(answers)
-        .filter((k) => {
-          const qst = questions.find((q) => q.questionId === k || String(q._id) === k);
-          if (!qst) return true; // Not a survey question (e.g. pre-call data)
-          if (!qst.visibility) return true;
-          try {
-            const matched = evaluateCondition(qst.visibility, answers);
-            const act = qst.visibility.action || 'show';
-            if (act === 'show') return matched;
-            if (act === 'hide' || act === 'skip') return !matched;
-            return matched;
-          } catch (e) {
-            return true;
-          }
-        })
-        .map((k) => {
-          const qst = questions.find((q) => q.questionId === k || String(q._id) === k);
-          let val = answers[k];
-          if (qst && qst.allowMultipleOther) {
-             if (Array.isArray(val)) {
-                val = val.filter(v => !isOtherAnswer(v, qst) || extractOtherText(v, qst).trim() !== '');
-             }
-          } else {
-            if (Array.isArray(val)) {
-              const otherVal = qst.allowMultipleOther ? qst.multipleOtherValue || 'Other' : qst.otherValue || 'Other';
-              val = val.map(v => v === otherVal ? `Other: ${otherValues[k] || ''}` : v);
-            } else if (val === (qst.allowMultipleOther ? qst.multipleOtherValue || 'Other' : qst.otherValue || 'Other')) {
-              val = `Other: ${otherValues[k] || ''}`;
-            }
-          }
-          return { questionId: k, value: val };
-        }),
-      interviewOutcome: finalOutcome,
-      outcomeReason: finalReason,
-      precallSerialNumber: precallSerialNumber || '',
-    };
-    if (agentNoteText.trim()) {
-      payload.agentNote = {
-        text: agentNoteText.trim(),
-        referenceQuestionId: agentNoteRefQuestion || 'general',
-      };
-    }
-    const offlinePayload = {
-      ...payload,
-      serialNumber: precallSerialNumber || '',
-      isOfflineSync: true,
-      offlineStartedAt: startTime ? new Date(startTime) : new Date(),
-      offlineCompletedAt: new Date(),
-    };
-
-    if (isOnline) {
-      try {
-        await api.post('/response', payload);
-        if (user?.id) {
-          const draftKey = `precallDraft:${user.id}:${survey._id || 'default'}`;
-          sessionStorage.removeItem(draftKey);
-        }
-        await offlineDb.deleteLocalDraft(precallSerialNumber);
+      const finalOutcome = answers.interview_result;
+      if (!finalOutcome) {
+        toast.error(t('mustSelectInterviewOutcome') || 'Please select an interview outcome');
+        return;
+      }
+      const duration = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+      const finalReason = ['partial', 'refused', 'postponed'].includes(finalOutcome) 
+        ? ((answers.outcome_reason || '').trim() || 'none') 
+        : '';
         
+      const payload = {
+        surveyId: survey._id,
+        durationSecs: duration,
+        answers: Object.keys(answers || {})
+          .filter((k) => {
+            const qst = questions.find((q) => q.questionId === k || String(q._id) === k || q.id === k);
+            if (!qst) return true; // Not a survey question (e.g. pre-call data)
+            if (!qst.visibility) return true;
+            try {
+              const matched = evaluateCondition(qst.visibility, answers);
+              const act = qst.visibility.action || 'show';
+              if (act === 'show') return matched;
+              if (act === 'hide' || act === 'skip') return !matched;
+              return matched;
+            } catch (e) {
+              return true;
+            }
+          })
+          .map((k) => {
+            const qst = questions.find((q) => q.questionId === k || String(q._id) === k || q.id === k);
+            let val = answers[k];
+            if (qst && qst.allowMultipleOther) {
+               if (Array.isArray(val)) {
+                  val = val.filter(v => !isOtherAnswer(v, qst) || extractOtherText(v, qst).trim() !== '');
+               }
+            } else if (qst) {
+              if (Array.isArray(val)) {
+                const otherVal = qst.multipleOtherValue || qst.otherValue || 'Other';
+                val = val.map(v => v === otherVal ? `Other: ${otherValues[k] || ''}` : v);
+              } else if (val === (qst.multipleOtherValue || qst.otherValue || 'Other')) {
+                val = `Other: ${otherValues[k] || ''}`;
+              }
+            }
+            return { questionId: k, value: val };
+          }),
+        interviewOutcome: finalOutcome,
+        outcomeReason: finalReason,
+        precallSerialNumber: precallSerialNumber || '',
+      };
+
+      const validNotes = agentNotes
+        .filter(n => n && typeof n.text === 'string' && n.text.trim().length > 0)
+        .map(n => ({
+          text: n.text.trim(),
+          referenceQuestionId: n.referenceQuestionId || 'general',
+        }));
+
+      if (validNotes.length > 0) {
+        payload.agentNotes = validNotes;
+        payload.agentNote = validNotes[0]; // backward compatibility
+      }
+
+      const offlinePayload = {
+        ...payload,
+        serialNumber: precallSerialNumber || '',
+        isOfflineSync: true,
+        offlineStartedAt: startTime ? new Date(startTime) : new Date(),
+        offlineCompletedAt: new Date(),
+      };
+
+      if (isOnline) {
         try {
-          const me = await api.get('/auth/me');
-          setUser(me.data.user);
-          localStorage.setItem('user', JSON.stringify(me.data.user));
-        } catch (_) {}
-        toast.success(t('surveySubmittedSuccess') || 'Survey submitted successfully!');
-        navigate(`/agent/precall?surveyId=${survey._id}`, { replace: true });
-      } catch (err) {
-        console.error(err);
+          await api.post('/response', payload);
+          if (user?.id) {
+            const draftKey = `precallDraft:${user.id}:${survey._id || 'default'}`;
+            sessionStorage.removeItem(draftKey);
+          }
+          await offlineDb.deleteLocalDraft(precallSerialNumber);
+          
+          try {
+            const me = await api.get('/auth/me');
+            setUser(me.data.user);
+            localStorage.setItem('user', JSON.stringify(me.data.user));
+          } catch (_) {}
+          toast.success(t('surveySubmittedSuccess') || 'Survey submitted successfully!');
+          navigate(`/agent/precall?surveyId=${survey._id}`, { replace: true });
+        } catch (err) {
+          console.error("Online response submit failed, saving offline:", err);
+          await offlineDb.saveOfflineResponse(offlinePayload);
+          await offlineDb.deleteLocalDraft(precallSerialNumber);
+          if (user?.id) {
+            const draftKey = `precallDraft:${user.id}:${survey._id || 'default'}`;
+            sessionStorage.removeItem(draftKey);
+          }
+          toast.info(t('surveySavedOffline') || 'Survey response saved offline. It will be synced when online.');
+          navigate(`/agent/precall?surveyId=${survey._id}`, { replace: true });
+        }
+      } else {
         await offlineDb.saveOfflineResponse(offlinePayload);
         await offlineDb.deleteLocalDraft(precallSerialNumber);
         if (user?.id) {
@@ -1476,15 +1671,9 @@ export default function TakeSurvey({ mockSurvey }) {
         toast.info(t('surveySavedOffline') || 'Survey response saved offline. It will be synced when online.');
         navigate(`/agent/precall?surveyId=${survey._id}`, { replace: true });
       }
-    } else {
-      await offlineDb.saveOfflineResponse(offlinePayload);
-      await offlineDb.deleteLocalDraft(precallSerialNumber);
-      if (user?.id) {
-        const draftKey = `precallDraft:${user.id}:${survey._id || 'default'}`;
-        sessionStorage.removeItem(draftKey);
-      }
-      toast.info(t('surveySavedOffline') || 'Survey response saved offline. It will be synced when online.');
-      navigate(`/agent/precall?surveyId=${survey._id}`, { replace: true });
+    } catch (submitErr) {
+      console.error("Fatal error in submitResponse:", submitErr);
+      toast.error(t('surveySubmitFailed') || `Failed to submit survey: ${submitErr.message || 'Unknown error'}`);
     }
   };
 
@@ -2136,8 +2325,8 @@ export default function TakeSurvey({ mockSurvey }) {
 
         const timer = setTimeout(() => {
           const el = document.getElementById(`question-card-${qId}`);
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (el && typeof el.scrollIntoView === 'function') {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
         }, 300);
         return () => clearTimeout(timer);
@@ -2226,39 +2415,30 @@ export default function TakeSurvey({ mockSurvey }) {
           </div>
         )}
 
-        {/* End-of-Call Note Component */}
-        <div style={{ marginBottom: '1.25rem' }}>
-          {!showAgentNote ? (
-            <button
-              dir="auto"
-              type="button"
-              className="btn-secondary"
-              onClick={() => setShowAgentNote(true)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}
+        {/* End-of-Call Note Component (Multiple Notes Supported) */}
+        <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {agentNotes.map((note, nIdx) => (
+            <div 
+              key={nIdx}
+              style={{
+                padding: '1rem',
+                background: 'rgba(0,0,0,0.02)',
+                borderRadius: '10px',
+                border: '1px solid var(--border-color)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem'
+              }}
             >
-              📝 {t('addCallNote') || 'Add Call Note'}
-            </button>
-          ) : (
-            <div style={{
-              padding: '1rem',
-              background: 'rgba(0,0,0,0.02)',
-              borderRadius: '10px',
-              border: '1px solid var(--border-color)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.75rem'
-            }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                  📝 {t('agentCallNote') || 'Agent Call Note'}
+                  📝 {t('agentCallNote') || 'Agent Call Note'} {agentNotes.length > 1 ? `#${nIdx + 1}` : ''}
                 </span>
                 <button
                   type="button"
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '0.8rem', fontWeight: 600 }}
                   onClick={() => {
-                    setShowAgentNote(false);
-                    setAgentNoteText('');
-                    setAgentNoteRefQuestion('general');
+                    setAgentNotes(prev => prev.filter((_, i) => i !== nIdx));
                   }}
                 >
                   ✕ {t('removeNote') || 'Remove Note'}
@@ -2272,8 +2452,11 @@ export default function TakeSurvey({ mockSurvey }) {
                 <select
                   className="input-field"
                   style={{ width: '100%', maxWidth: '100%' }}
-                  value={agentNoteRefQuestion}
-                  onChange={e => setAgentNoteRefQuestion(e.target.value)}
+                  value={note.referenceQuestionId || 'general'}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setAgentNotes(prev => prev.map((n, i) => i === nIdx ? { ...n, referenceQuestionId: val } : n));
+                  }}
                 >
                   <option value="general">{t('generalEntireSurvey') || 'General / Entire Survey'}</option>
                   {questions.map((q) => {
@@ -2295,13 +2478,26 @@ export default function TakeSurvey({ mockSurvey }) {
                   className="input-field"
                   rows={3}
                   placeholder={t('typeNotePlaceholder') || 'Add any contextual note regarding this call or specific question...'}
-                  value={agentNoteText}
-                  onChange={e => setAgentNoteText(e.target.value)}
+                  value={note.text || ''}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setAgentNotes(prev => prev.map((n, i) => i === nIdx ? { ...n, text: val } : n));
+                  }}
                   style={{ width: '100%', resize: 'vertical' }}
                 />
               </div>
             </div>
-          )}
+          ))}
+
+          <button
+            dir="auto"
+            type="button"
+            className="btn-secondary"
+            onClick={() => setAgentNotes(prev => [...prev, { text: '', referenceQuestionId: 'general' }])}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', alignSelf: 'flex-start' }}
+          >
+            + {agentNotes.length === 0 ? (t('addCallNote') || 'Add Call Note') : (t('addAnotherNote') || 'Add Another Note')}
+          </button>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
           <button dir="auto" type="button" className="btn-primary" onClick={() => submitResponse()} disabled={!answers.interview_result}>
@@ -2340,14 +2536,18 @@ export default function TakeSurvey({ mockSurvey }) {
       const nextQId = nextQ.questionId || String(nextQ._id);
       const element = document.getElementById(`question-card-${nextQId}`);
       if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (typeof element.scrollIntoView === 'function') {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
         const input = element.querySelector('input, select, textarea, button');
         if (input) input.focus({ preventScroll: true });
       }
     } else {
       const nextButton = document.querySelector('.survey-bottom-bar .btn-primary');
       if (nextButton) {
-        nextButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (typeof nextButton.scrollIntoView === 'function') {
+          nextButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
         nextButton.focus({ preventScroll: true });
       }
     }
@@ -2640,11 +2840,13 @@ export default function TakeSurvey({ mockSurvey }) {
               type="button"
               className="btn-secondary" 
               onClick={() => setSidebarVisible(!sidebarVisible)}
-              title={sidebarVisible ? "Collapse Sidebar (Focus Mode)" : "Expand Sidebar"}
+              title={sidebarVisible ? (t('focusMode') || 'Focus Mode') : (t('showSidebar') || 'Show Sidebar')}
               style={{ padding: '0.5rem 0.75rem', display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}
             >
               <Menu size={20} />
-              <span dir="auto" style={{ fontSize: '0.85rem', fontWeight: 600 }}>{sidebarVisible ? 'Focus Mode' : 'Show Sidebar'}</span>
+              <span dir="auto" style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                {sidebarVisible ? (t('focusMode') || 'Focus Mode') : (t('showSidebar') || 'Show Sidebar')}
+              </span>
             </button>
           </div>
           <div className="survey-content" style={{ paddingTop: '1rem' }}>
@@ -2653,9 +2855,11 @@ export default function TakeSurvey({ mockSurvey }) {
                 {survey?.layoutMode === 'multi' ? (
                   <span dir="auto">{t('page') || 'Page'} {pageStats.X} {t('of') || 'of'} {pageStats.Y}</span>
                 ) : (
-                  <span dir="auto">Question {currentVisibleNumber} of {progressStats.Y}</span>
+                  <span dir="auto">
+                    {(t('questionXofY') || 'Question {x} of {y}').replace('{x}', currentVisibleNumber).replace('{y}', progressStats.Y)}
+                  </span>
                 )}
-                <span dir="auto">{progressStats.percentage}% completed</span>
+                <span dir="auto">{progressStats.percentage}% {t('completed') || 'completed'}</span>
               </div>
               <div className="survey-progress-bar-bg">
                 <div className="survey-progress-bar-fill" style={{ width: `${progressStats.percentage}%` }}></div>
@@ -2833,11 +3037,11 @@ export default function TakeSurvey({ mockSurvey }) {
               <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
                 {lastSaved && (
                   <span dir="auto" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                    <Save size={14} /> Saved {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <Save size={14} /> {t('savedAt') || 'Saved'} {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 )}
                 <button dir="auto" className="btn-secondary" style={{ borderColor: 'var(--danger)', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.5rem' }} onClick={() => setShowEndCallConfirm(true)}>
-                  <PhoneOff size={18} /> End Call
+                  <PhoneOff size={18} /> {t('endCall') || 'End Call'}
                 </button>
               </div>
             </div>

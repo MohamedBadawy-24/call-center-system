@@ -300,4 +300,64 @@ describe('TakeSurvey 7 Critical QA Fixes', () => {
     expect(card.className).toContain('scroll-mt-32');
     expect(card.style.scrollMarginTop).toBe('8rem');
   });
+
+  it('Multiple Choice Other: Correctly registers typed text into array and passes validation', async () => {
+    const survey = {
+      _id: 's7',
+      title: 'QA Survey 7 - Multiple Choice Other',
+      sections: [{
+        title: 'Section 1',
+        questions: [
+          {
+            id: 'Q_MC_OTHER',
+            questionId: 'Q_MC_OTHER',
+            text: 'Which hobbies do you have?',
+            type: 'multiple_choice',
+            required: true,
+            allowOther: true,
+            otherLabel: 'Other Hobby',
+            choices: [
+              { text: 'Reading', value: 'Reading' },
+              { text: 'Sports', value: 'Sports' }
+            ]
+          },
+          {
+            id: 'Q_NEXT',
+            questionId: 'Q_NEXT',
+            text: 'Next Question',
+            type: 'single_choice',
+            choices: [{ text: 'Yes', value: 'yes' }]
+          }
+        ]
+      }]
+    };
+
+    renderTakeSurvey(survey);
+    fireEvent.click(screen.getByText('startQuestionnaire'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Q_MC_OTHER')).toBeInTheDocument();
+    });
+
+    // 1. Select 'Sports'
+    fireEvent.click(screen.getByText('Sports'));
+
+    // 2. Select 'Other Hobby'
+    fireEvent.click(screen.getByText('Other Hobby'));
+
+    // 3. Locate the Other text input and type
+    const otherInput = screen.getByPlaceholderText('Please specify...');
+    fireEvent.change(otherInput, { target: { value: 'Skydiving' } });
+
+    expect(otherInput.value).toBe('Skydiving');
+
+    // 4. Click 'next' button -> validation should pass and advance to Q_NEXT
+    const nextBtn = screen.getByRole('button', { name: /^next/i });
+    fireEvent.click(nextBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Q_NEXT')).toBeInTheDocument();
+    });
+  });
 });
+

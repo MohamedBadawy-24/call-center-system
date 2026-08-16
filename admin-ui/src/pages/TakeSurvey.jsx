@@ -230,7 +230,7 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                     type="text"
                     className="input-field"
                     placeholder="Please specify..."
-                    value={otherValues[qId] !== undefined ? otherValues[qId] : (Array.isArray(answers[qId]) ? (answers[qId].find(v => isOtherAnswer(v, q)) ? extractOtherText(answers[qId].find(v => isOtherAnswer(v, q)), q) : '') : (isOtherAnswer(answers[qId], q) ? extractOtherText(answers[qId], q) : ''))}
+                    value={otherValues[qId] !== undefined ? otherValues[qId] : extractOtherText(answers[qId], q)}
                     onChange={(e) => {
                       if (activeInputIdRef) activeInputIdRef.current = e.target.id;
                       const newText = e.target.value;
@@ -245,7 +245,11 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                         }
                         handleAnswerChange(qId, arr);
                       } else {
-                        handleAnswerChange(qId, [buildOtherAnswer(newText, q)]);
+                        if (q.allowMultipleOther) {
+                          handleAnswerChange(qId, [buildOtherAnswer(newText, q)]);
+                        } else {
+                          handleAnswerChange(qId, buildOtherAnswer(newText, q));
+                        }
                       }
                       markInteracted(qId);
                       if (fieldErrors[qId]) {
@@ -2586,7 +2590,7 @@ export default function TakeSurvey({ mockSurvey }) {
       if (hasOther) {
         updated = currArr.filter(v => !isOtherAnswer(v, q));
       } else {
-        updated = [...currArr, buildOtherAnswer('', q)];
+        updated = [...currArr, buildOtherAnswer(otherValues[qId] || '', q)];
       }
     } else {
       if (currArr.includes(val)) {
@@ -2610,7 +2614,11 @@ export default function TakeSurvey({ mockSurvey }) {
     
     const otherVal = q.allowMultipleOther ? (q.multipleOtherValue || 'Other') : (q.otherValue || 'Other');
     if (val === otherVal) {
-      handleAnswerChange(qId, [buildOtherAnswer('', q)]);
+      if (q.allowMultipleOther) {
+        handleAnswerChange(qId, [buildOtherAnswer(otherValues[qId] || '', q)]);
+      } else {
+        handleAnswerChange(qId, buildOtherAnswer(otherValues[qId] || '', q));
+      }
     } else {
       handleAnswerChange(qId, val);
       

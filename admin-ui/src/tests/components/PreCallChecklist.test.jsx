@@ -261,4 +261,107 @@ describe('PreCallChecklist Page Component Tests', () => {
     expect(nameInput).toHaveValue('Agent John');
     expect(codeInput).toHaveValue('RC-007');
   });
+
+  it('SANITIZATION: Coerces values in payload to strings on submit', async () => {
+    mockGet.mockImplementation((url) => {
+      if (url.startsWith('/agent/outbound-precall')) {
+        return Promise.resolve({ data: mockPrecallConfig });
+      }
+      if (url.startsWith('/agent/precall-session-count')) {
+        return Promise.resolve({ data: { count: 3 } });
+      }
+      if (url.startsWith('/agent/next-number')) {
+        return Promise.resolve({ data: { number: '01012345678', serialNumber: 'SN-999' } });
+      }
+      return Promise.resolve({ data: {} });
+    });
+
+    mockPost.mockResolvedValue({ data: { ok: true } });
+
+    render(
+      <MemoryRouter>
+        <UIContext.Provider value={uiValue}>
+          <AuthContext.Provider value={authValue}>
+            <PreCallChecklist />
+          </AuthContext.Provider>
+        </UIContext.Provider>
+      </MemoryRouter>
+    );
+
+    await screen.findByText('Agent Checklist');
+
+    fireEvent.change(screen.getByTestId('precall-age_years-input'), { target: { value: '30' } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('precall-get-number-btn'));
+    });
+    fireEvent.change(screen.getByTestId('precall-call_result-select'), { target: { value: 'contacted' } });
+    fireEvent.change(screen.getByTestId('precall-interview_result-select'), { target: { value: 'completed' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('precall-next-btn'));
+    });
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledWith('/agent/precall-complete', expect.objectContaining({
+        payload: expect.objectContaining({
+          age_years: '30',
+          call_result: 'contacted',
+          interview_result: 'completed'
+        })
+      }));
+    });
+  });
+
+  it('ERROR HANDLING: Server 400 rejection displays backend error and stops navigation', async () => {
+    mockGet.mockImplementation((url) => {
+      if (url.startsWith('/agent/outbound-precall')) {
+        return Promise.resolve({ data: mockPrecallConfig });
+      }
+      if (url.startsWith('/agent/precall-session-count')) {
+        return Promise.resolve({ data: { count: 3 } });
+      }
+      if (url.startsWith('/agent/next-number')) {
+        return Promise.resolve({ data: { number: '01012345678', serialNumber: 'SN-999' } });
+      }
+      return Promise.resolve({ data: {} });
+    });
+
+    const errorResponse = {
+      response: {
+        status: 400,
+        data: { message: 'Invalid respondent age' }
+      }
+    };
+    mockPost.mockRejectedValue(errorResponse);
+
+    render(
+      <MemoryRouter>
+        <UIContext.Provider value={uiValue}>
+          <AuthContext.Provider value={authValue}>
+            <PreCallChecklist />
+          </AuthContext.Provider>
+        </UIContext.Provider>
+      </MemoryRouter>
+    );
+
+    await screen.findByText('Agent Checklist');
+
+    fireEvent.change(screen.getByTestId('precall-age_years-input'), { target: { value: '25' } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('precall-get-number-btn'));
+    });
+    fireEvent.change(screen.getByTestId('precall-call_result-select'), { target: { value: 'contacted' } });
+    fireEvent.change(screen.getByTestId('precall-interview_result-select'), { target: { value: 'completed' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('precall-next-btn'));
+    });
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalled();
+    });
+
+    // Should NOT navigate when server rejects the request
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
 });

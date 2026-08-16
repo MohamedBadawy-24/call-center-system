@@ -411,6 +411,7 @@ export const translations = {
     minDigits: "Min Digits",
     maxDigits: "Max Digits",
     customLabelPlaceholder: "Custom label (e.g. Other)",
+    savedOffline: "Saved offline (Sync pending)",
   },
   ar: {
     baseera: "بصيرة",
@@ -823,5 +824,6 @@ export const translations = {
     minDigits: "الحد الأدنى للأرقام",
     maxDigits: "الحد الأقصى للأرقام",
     customLabelPlaceholder: "تسمية مخصصة (مثال: أخرى)",
+    savedOffline: "تم الحفظ محلياً (بانتظار المزامنة)",
   },
 };

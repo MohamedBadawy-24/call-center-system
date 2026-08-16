@@ -673,10 +673,23 @@ export default function PreCallChecklist() {
     const finalSerial = payload.serial_number || `OFFLINE-precall-${user?.id || 'agent'}-${Date.now()}`;
     payload.serial_number = finalSerial;
 
+    // Universal payload sanitization: coerce all values to Strings (or JSON stringify objects) to prevent schema mismatches
+    const sanitizedPayload = {};
+    Object.keys(payload).forEach((key) => {
+      const val = payload[key];
+      if (val === null || val === undefined) {
+        sanitizedPayload[key] = '';
+      } else if (typeof val === 'object') {
+        sanitizedPayload[key] = JSON.stringify(val);
+      } else {
+        sanitizedPayload[key] = String(val);
+      }
+    });
+
     const checklistData = {
       surveyId,
       serialNumber: finalSerial,
-      payload,
+      payload: sanitizedPayload,
       interviewStartedAt: frozen.toISOString(),
       interviewDate: formatLocalDate(frozen),
       interviewStartDisplay: formatLocalTime(frozen),
@@ -686,9 +699,18 @@ export default function PreCallChecklist() {
       try {
         await api.post('/agent/precall-complete', checklistData);
       } catch (err) {
-        console.error("Online precall submission failed, saving offline:", err);
-        await offlineDb.saveOfflinePrecall(checklistData);
-        toast.warning(t('savedOffline') || 'Pre-call checklist saved locally due to connection error.');
+        if (err.response) {
+          // Server received request but rejected it (HTTP 4xx/5xx). Expose actual backend error!
+          console.error("Online precall submission rejected by server:", err.response.data);
+          const msg = err.response.data?.message || err.response.data?.error || err.response.data?.errors?.[0]?.msg || 'Server Error';
+          toast.error(msg);
+          throw err;
+        } else {
+          // Genuine network error
+          console.error("Online precall submission failed due to network error, saving offline:", err);
+          await offlineDb.saveOfflinePrecall(checklistData);
+          toast.warning(t('savedOffline') || 'Pre-call checklist saved locally due to connection error.');
+        }
       }
     } else {
       await offlineDb.saveOfflinePrecall(checklistData);
@@ -736,7 +758,9 @@ export default function PreCallChecklist() {
       }
     } catch (e) {
       console.error(e);
-      toast.error(e.response?.data?.error || e.message || 'Failed to save');
+      if (!e.response) {
+        toast.error(e.message || 'Failed to save');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -771,7 +795,9 @@ export default function PreCallChecklist() {
       await refreshFormsCount();
     } catch (e) {
       console.error(e);
-      toast.error(e.response?.data?.error || e.message || 'Failed to save');
+      if (!e.response) {
+        toast.error(e.message || 'Failed to save');
+      }
     } finally {
       setSubmitting(false);
     }

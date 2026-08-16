@@ -1655,7 +1655,12 @@ export default function TakeSurvey({ mockSurvey }) {
           toast.success(t('surveySubmittedSuccess') || 'Survey submitted successfully!');
           navigate(`/agent/precall?surveyId=${survey._id}`, { replace: true });
         } catch (err) {
-          console.error("Online response submit failed, saving offline:", err);
+          console.error("Online response submit failed:", err);
+          if (err.response) {
+            const errMsg = err.response.data?.message || err.response.data?.error || err.response.data?.errors?.[0]?.msg || 'Failed to save survey. Check required fields.';
+            toast.error(errMsg);
+            return;
+          }
           await offlineDb.saveOfflineResponse(offlinePayload);
           await offlineDb.deleteLocalDraft(precallSerialNumber);
           if (user?.id) {

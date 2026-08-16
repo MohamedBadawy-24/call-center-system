@@ -413,6 +413,28 @@ export function evaluateCondition(condition, answers) {
 
   if (condition.type === 'rule') {
     const rawActual = answers[condition.fieldId];
+
+    if (Array.isArray(rawActual)) {
+      const targetStr = String(condition.value ?? '').trim().toLowerCase();
+      const actualList = rawActual.map(v => String(v).toLowerCase());
+
+      switch (condition.operator) {
+        case '==':
+        case 'contains':
+          return actualList.includes(targetStr);
+        case '!=':
+        case 'not_contains':
+          return !actualList.includes(targetStr);
+        case 'is_empty':
+          return rawActual.length === 0;
+        case 'is_not_empty':
+          return rawActual.length > 0;
+        // fallback for any other operator on array
+        default:
+          return actualList.includes(targetStr);
+      }
+    }
+
     const actualStr = String(rawActual ?? '').trim();
     const targetStr = String(Array.isArray(condition.value) ? '' : (condition.value ?? '')).trim();
 

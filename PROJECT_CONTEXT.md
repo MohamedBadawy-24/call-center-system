@@ -6,33 +6,37 @@ This document serves as the single source of truth for the Call Center System pr
 
 ## 1. Project Overview
 
-*   **Project Name:** Call Center System
+*   **Project Name:** Call Center System (Baseera)
 *   **Purpose:** A comprehensive platform designed to manage call center operations, conduct dynamic surveys/interviews, and enforce quality control.
 *   **Target Users:**
     *   **Agents:** Conduct surveys and fill out pre-call checklists.
     *   **Quality Control (QC):** Audit agent calls, perform live shadow reviews, and flag responses.
     *   **Admins:** Create campaigns, manage users, and view analytics.
 *   **Main Features:**
-    *   Dynamic Survey Builder with complex branching logic and composite questions (`multi_input`).
+    *   Dynamic Survey Builder with complex branching logic, composite questions (`multi_input`), and drag-and-drop (`@dnd-kit`).
     *   Agent Pre-Call Checklist for tracking logistics (e.g., governorate targeting, phone queues).
-    *   Queue management and "No Phone Required" (Auto-Serial) workflows.
+    *   Queue management, postponed target tracking, and "No Phone Required" (Auto-Serial) workflows.
+    *   Agent workforce management (Timecard tracking via Status Logs, Profile Requests, SOP updates).
     *   Offline draft saving and synchronization.
-    *   Live auditing and Shadow Review capabilities.
-*   **Current Development Stage:** Active Production with ongoing feature enhancements (e.g., recent addition of composite questions and `no_phone_required` modes).
+    *   Live auditing, Shadow Review capabilities, and advanced analytics with `recharts`.
+    *   Robust export capabilities (SPSS `.sav`, Excel).
+*   **Current Development Stage:** Active Production with ongoing feature enhancements (e.g., recent addition of composite questions, `no_phone_required` modes, and E2E testing).
 
 ---
 
 ## 2. Technology Stack
 
-### Frontend
-*   **Framework:** React (Single Page Application)
+### Frontend (`/admin-ui`)
+*   **Framework:** React 19 (Single Page Application)
+*   **Build Tool:** Vite
 *   **Language:** JavaScript (ES6+)
 *   **UI Library:** Custom CSS (`glass-card` aesthetics, modern UI), Lucide React (Icons).
 *   **Animations:** Framer Motion
 *   **State Management:** React Hooks (`useState`, `useContext`), Custom Hooks (`useAuth`, `useSurveyBuilderState`).
-*   **Routing:** React Router (assumed standard).
+*   **Routing:** React Router DOM.
 *   **API Communication:** Axios (wrapped in a custom `api` client), Socket.io-client for real-time updates.
 *   **Storage:** LocalStorage (auth tokens), IndexedDB (`offlineDb.js`) for offline draft/response syncing.
+*   **Testing:** Vitest for unit tests, Playwright for E2E tests.
 
 ### Backend
 *   **Framework:** Express.js (Node.js)
@@ -64,7 +68,7 @@ This document serves as the single source of truth for the Call Center System pr
 
 ```mermaid
 graph TD
-    A[React Frontend] <-->|REST API / Axios| B[Express Backend]
+    A[React Frontend Vite] <-->|REST API / Axios| B[Express Backend]
     A <-->|Socket.io| B
     A -->|IndexedDB| C[Local Offline Storage]
     B <-->|Mongoose / Transactions| D[(MongoDB)]
@@ -74,7 +78,7 @@ graph TD
 
 ## 4. Project Structure
 
-*   **`/admin-ui/`**: The React frontend application workspace.
+*   **`/admin-ui/`**: The React frontend application workspace (built with Vite).
     *   `/src/components/`: Reusable UI components (`ConditionBuilder`, `FlagPopover`).
     *   `/src/pages/`: Main route views (`TakeSurvey`, `ResponseHistory`, `PreCallChecklist`).
     *   `/src/context/`: Global state providers (`AuthContext`, `UIContext`).
@@ -85,8 +89,10 @@ graph TD
 *   **`/routes/`**: Express route definitions (API endpoints).
 *   **`/services/`**: Core business logic, keeping controllers clean (`agentService`, `precallService`).
 *   **`/middleware/`**: Express middlewares (`auth.js`, `validation.js`, `errorHandler.js`).
-*   **`/tests/`**: Jest integration and unit tests.
+*   **`/tests/`**: Jest integration and unit tests for the backend.
 *   **`/utils/`**: Backend utilities (`logger.js`, `runTransaction.js`).
+*   **`/scripts/`**: Maintenance scripts (e.g., database seeders and migrations).
+*   **`/e2e/`**: Playwright End-to-End tests.
 
 ---
 
@@ -94,9 +100,12 @@ graph TD
 
 *   **Environment Variables:** Configured via `.env` (refer to `.env.example`).
 *   **Running Locally:**
-    *   Backend: `node server.js` (or `npm start`/`npm run dev`).
-    *   Frontend: Navigate to `/admin-ui` and run the dev server (e.g., `npm run dev`).
-*   **Testing:** Comprehensive Jest test suite available. Run with `npm test` at the root.
+    *   Backend: `npm run dev` (uses `nodemon`).
+    *   Frontend: Navigate to `/admin-ui` and run `npm run dev` (starts Vite dev server).
+*   **Testing:** 
+    *   Backend: Comprehensive Jest test suite (`npm test`).
+    *   Frontend: Vitest (`npm run test` in `/admin-ui`).
+    *   E2E: Playwright tests available.
 *   **Linting:** ESLint configured via `eslint.config.mjs`.
 *   **Transactions:** When testing or developing, ensure a MongoDB Replica Set is running, as Mongoose transactions require it (handled automatically in Jest via MongoMemoryReplSet).
 
@@ -105,12 +114,16 @@ graph TD
 ## 6. Key Data Models
 
 *   **`User`**: System users (Agents, Admins, Quality). Tracks `currentStatus` (active, break, off-duty).
+*   **`StatusLog`**: Timecard system tracking agent status switches (Active, Break) for accurate duration metrics.
 *   **`Survey`**: Campaign configurations. Contains dynamic `questions`, branching `logic`, and `outboundPrecall` config.
 *   **`PhoneNumber`**: The queue system. Maps phone numbers to campaigns and tracks their `status` (pending, called).
+*   **`PostponedSerial`**: Tracks call targets marked as "Postponed" by the agent.
 *   **`PrecallCompletion`**: Logs pre-survey logistics, caller disposition, and eligibility checks.
 *   **`Draft`**: Auto-saving collection for in-progress surveys. Has a 7-day TTL index.
 *   **`Response`**: Final submitted survey answers. Contains an array of `{ questionId, value }`.
 *   **`Review`**: Quality assurance records. Tracks flags, shadow reviews, and audits linked to specific Responses.
+*   **`OtherCoding`**: Diagnostic schema handling coding for "Other" responses.
+*   **`ProfileRequest` & `SopUpdate`**: Workforce management utilities for agents.
 
 ---
 
@@ -143,6 +156,8 @@ graph TD
 *   **Implemented:**
     *   "No Phone Required" mode: Auto-generates serials for field agents, bypassing phone queues.
     *   Composite Questions (`multi_input`): Allows grouping multiple inputs under one question ID.
+    *   Agent workforce models (`StatusLog`, `SopUpdate`).
+    *   SPSS and Excel export functionality (`sav-writer`, `exceljs`).
 *   **Recent Fixes:**
     *   Removed hardcoded under-18 age gates. Eligibility is now purely based on dynamic call outcomes and survey logic.
     *   Fixed React Error #31 crashes across `ResponseHistory`, `TakeSurvey`, and `ShadowReview` by safely stringifying object values from `multi_input` answers.

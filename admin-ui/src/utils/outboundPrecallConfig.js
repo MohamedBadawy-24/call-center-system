@@ -420,10 +420,13 @@ export function evaluateCondition(condition, answers) {
 
       switch (condition.operator) {
         case '==':
+        case 'equals':
         case 'contains':
           return actualList.includes(targetStr);
         case '!=':
+        case 'not equals':
         case 'not_contains':
+        case 'does not contain':
           return !actualList.includes(targetStr);
         case 'is_empty':
           return rawActual.length === 0;
@@ -439,10 +442,13 @@ export function evaluateCondition(condition, answers) {
     const targetStr = String(Array.isArray(condition.value) ? '' : (condition.value ?? '')).trim();
 
     switch (condition.operator) {
-      case '==':          return actualStr === targetStr;
-      case '!=':          return actualStr !== targetStr;
+      case '==':
+      case 'equals':      return actualStr === targetStr;
+      case '!=':
+      case 'not equals':  return actualStr !== targetStr;
       case 'contains':    return actualStr.toLowerCase().includes(targetStr.toLowerCase());
-      case 'not_contains': return !actualStr.toLowerCase().includes(targetStr.toLowerCase());
+      case 'not_contains':
+      case 'does not contain': return !actualStr.toLowerCase().includes(targetStr.toLowerCase());
       case 'gt':          return Number(actualStr) > Number(targetStr);
       case 'lt':          return Number(actualStr) < Number(targetStr);
       case 'gte':         return Number(actualStr) >= Number(targetStr);

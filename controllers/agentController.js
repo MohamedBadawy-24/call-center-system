@@ -14,6 +14,14 @@ exports.getPrecallSessionCount = async (req, res, next) => {
 
 exports.completePrecall = async (req, res, next) => {
   try {
+    // AGGRESSIVE FALLBACK: Intercept and override empty strings for unique indexes
+    if (!req.body.serial_number || req.body.serial_number.trim() === '') {
+      req.body.serial_number = `AUTO-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    }
+    if (req.body.phone !== undefined && (!req.body.phone || req.body.phone.trim() === '')) {
+      req.body.phone = `NOPHO-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    }
+
     const io = req.app.get('io');
     const serialNumber = await agentService.completePrecall(req.user.id, req.user.role, req.body, io);
     res.json({ ok: true, serialNumber });

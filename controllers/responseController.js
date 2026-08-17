@@ -9,6 +9,17 @@ const logger = require('../utils/logger');
 
 exports.submitResponse = async (req, res, next) => {
   try {
+    // AGGRESSIVE FALLBACK: Intercept and override empty strings for unique indexes
+    if (!req.body.precallSerialNumber || req.body.precallSerialNumber.trim() === '') {
+      req.body.precallSerialNumber = `AUTO-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    }
+    if (req.body.serialNumber !== undefined && (!req.body.serialNumber || req.body.serialNumber.trim() === '')) {
+      req.body.serialNumber = req.body.precallSerialNumber;
+    }
+    if (req.body.phone !== undefined && (!req.body.phone || req.body.phone.trim() === '')) {
+      req.body.phone = `NOPHO-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    }
+
     const io = req.app.get('io');
     const response = await responseService.submitResponse(req.user.id, req.user.role, req.body, io);
     res.json(response);

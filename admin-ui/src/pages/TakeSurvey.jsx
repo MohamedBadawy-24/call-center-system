@@ -1640,35 +1640,29 @@ export default function TakeSurvey({ mockSurvey }) {
 
       if (isOnline) {
         try {
-          await api.post('/response', payload);
-          if (user?.id) {
-            const draftKey = `precallDraft:${user.id}:${survey._id || 'default'}`;
-            sessionStorage.removeItem(draftKey);
-          }
-          await offlineDb.deleteLocalDraft(precallSerialNumber);
+          const response = await api.post('/response', payload);
           
-          try {
-            const me = await api.get('/auth/me');
-            setUser(me.data.user);
-            localStorage.setItem('user', JSON.stringify(me.data.user));
-          } catch (_) {}
-          toast.success(t('surveySubmittedSuccess') || 'Survey submitted successfully!');
-          navigate(`/agent/precall?surveyId=${survey._id}`, { replace: true });
+          if (response.status === 200 || response.status === 201) {
+            if (user?.id) {
+              const draftKey = `precallDraft:${user.id}:${survey._id || 'default'}`;
+              sessionStorage.removeItem(draftKey);
+            }
+            await offlineDb.deleteLocalDraft(precallSerialNumber);
+            
+            try {
+              const me = await api.get('/auth/me');
+              setUser(me.data.user);
+              localStorage.setItem('user', JSON.stringify(me.data.user));
+            } catch (_) {}
+            
+            toast.success(t('surveySubmittedSuccess') || 'Survey submitted successfully!');
+            navigate(`/agent/precall?surveyId=${survey._id}`, { replace: true });
+          }
         } catch (err) {
           console.error("Online response submit failed:", err);
-          if (err.response) {
-            const errMsg = err.response.data?.message || err.response.data?.error || err.response.data?.errors?.[0]?.msg || 'Failed to save survey. Check required fields.';
-            toast.error(errMsg);
-            return;
-          }
-          await offlineDb.saveOfflineResponse(offlinePayload);
-          await offlineDb.deleteLocalDraft(precallSerialNumber);
-          if (user?.id) {
-            const draftKey = `precallDraft:${user.id}:${survey._id || 'default'}`;
-            sessionStorage.removeItem(draftKey);
-          }
-          toast.info(t('surveySavedOffline') || 'Survey response saved offline. It will be synced when online.');
-          navigate(`/agent/precall?surveyId=${survey._id}`, { replace: true });
+          const errMsg = err.response?.data?.message || err.response?.data?.error || err.response?.data?.errors?.[0]?.msg || 'Failed to save survey. Check required fields.';
+          toast.error(`Submission Blocked: ${errMsg}`);
+          return; 
         }
       } else {
         await offlineDb.saveOfflineResponse(offlinePayload);

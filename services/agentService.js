@@ -63,7 +63,7 @@ exports.completePrecall = async (userId, userRole, data, io) => {
     }
 
     const rawSerial = payload.serial_number || '';
-    const serialNumber = rawSerial.trim() !== '' ? rawSerial.trim() : null;
+    const serialNumber = rawSerial.trim() !== '' ? rawSerial.trim() : undefined;
 
     const precallData = {
       userId: user._id,

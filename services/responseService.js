@@ -216,7 +216,7 @@ exports.submitResponse = async (userId, userRole, data, io) => {
   const precallSerialFromBody =
     data.precallSerialNumber != null && String(data.precallSerialNumber).trim() !== ''
       ? String(data.precallSerialNumber).trim()
-      : null;
+      : undefined;
 
   const response = await runTransaction(async (session) => {
     const isOfflineSync = !!data.isOfflineSync;
@@ -246,7 +246,7 @@ exports.submitResponse = async (userId, userRole, data, io) => {
       ? precallSerialFromBody
       : (elig.precallSerialNumber && String(elig.precallSerialNumber).trim() !== ''
           ? String(elig.precallSerialNumber).trim()
-          : null);
+          : undefined);
 
     const numberSource = data.numberSource || (serialNumber && serialNumber.startsWith('OFFLINE-MANUAL') ? 'manual' : 'queue');
 
@@ -360,17 +360,19 @@ exports.submitResponse = async (userId, userRole, data, io) => {
     if (!phoneDoc && finalSerial) {
       const phoneAnswer = data.answers?.find(a => a.questionId === 'phone')?.value || data.phone;
       if (phoneAnswer) {
-        [phoneDoc] = await PhoneNumber.create([{
+        const phonePayload = {
           surveyId: data.surveyId,
           number: String(phoneAnswer).trim(),
           agentId: user._id,
           status: phoneFinalStatus,
-          serialNumber: finalSerial,
           numberSource: numberSource,
           assignedAt: data.startedAt ? new Date(data.startedAt) : now,
           calledAt: now,
           outcomeReason: `Contacted | ${interviewOutcome}`
-        }], { session });
+        };
+        if (finalSerial) phonePayload.serialNumber = finalSerial;
+        
+        [phoneDoc] = await PhoneNumber.create([phonePayload], { session });
       }
     }
 

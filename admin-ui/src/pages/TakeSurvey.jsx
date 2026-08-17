@@ -1649,6 +1649,10 @@ export default function TakeSurvey({ mockSurvey }) {
             }
             await offlineDb.deleteLocalDraft(precallSerialNumber);
             
+            // Destroy active session state immediately
+            setAnswers({});
+            setPrecallSerialNumber('');
+            
             try {
               const me = await api.get('/auth/me');
               setUser(me.data.user);
@@ -1656,7 +1660,7 @@ export default function TakeSurvey({ mockSurvey }) {
             } catch (_) {}
             
             toast.success(t('surveySubmittedSuccess') || 'Survey submitted successfully!');
-            navigate(`/agent/precall?surveyId=${survey._id}`, { replace: true });
+            navigate('/', { replace: true });
           }
         } catch (err) {
           console.error("Online response submit failed:", err);
@@ -1671,8 +1675,13 @@ export default function TakeSurvey({ mockSurvey }) {
           const draftKey = `precallDraft:${user.id}:${survey._id || 'default'}`;
           sessionStorage.removeItem(draftKey);
         }
+        
+        // Destroy active session state immediately
+        setAnswers({});
+        setPrecallSerialNumber('');
+        
         toast.info(t('surveySavedOffline') || 'Survey response saved offline. It will be synced when online.');
-        navigate(`/agent/precall?surveyId=${survey._id}`, { replace: true });
+        navigate('/', { replace: true });
       }
     } catch (submitErr) {
       console.error("Fatal error in submitResponse:", submitErr);

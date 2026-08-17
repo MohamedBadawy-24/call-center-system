@@ -11,7 +11,7 @@ import React, { useEffect, useState, useContext } from 'react';
 import { api } from '../api/client';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Users, Trash2, UserPlus, ArrowLeft } from 'lucide-react';
+import { Users, Trash2, UserPlus, ArrowLeft, Unplug } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 import { UIContext } from '../context/UIContext';
@@ -117,26 +117,35 @@ export default function UserManagement() {
   const adminCount = users.filter(u => u.role === 'admin').length;
 
   const handleDelete = async (u) => {
-    if (!u?._id) return;
     if (u._id === user?.id) {
-      toast.warning(t('cannotDeleteSelf'));
+      toast.error(t('cannotDeleteSelf') || "Cannot delete yourself");
       return;
     }
-    if (u.role === 'admin' && adminCount <= 1) {
-      toast.warning(t('cannotDeleteLastAdmin'));
-      return;
-    }
+    if (!window.confirm((t('confirmDeleteUser') || "Are you sure you want to delete this user?") + ` (${u.name})`)) return;
 
-    if (!window.confirm(t('confirmDeleteUser'))) return;
-
-    setDeletingId(u._id);
     try {
+      setDeletingId(u._id);
       await api.delete(`/admin/users/${u._id}`);
+      toast.success(t('userDeletedSuccess') || "User deleted");
       setUsers(prev => prev.filter(x => x._id !== u._id));
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to delete user');
+      console.error(err);
+      toast.error(err.response?.data?.error || t('userDeleteFailed') || "Failed to delete user");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleForceClear = async (u) => {
+    if (!window.confirm(`Force clear the active session for ${u.name}?`)) return;
+    try {
+      await api.post(`/admin/agents/${u._id}/force-clear`);
+      toast.success("Agent session forcefully cleared.");
+      // Optimistically update status to off-duty in UI
+      setUsers(prev => prev.map(x => x._id === u._id ? { ...x, currentStatus: 'off-duty' } : x));
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to clear session.");
     }
   };
 
@@ -187,7 +196,7 @@ export default function UserManagement() {
                     }} />
                   </td>
                   <td style={{ fontWeight: 800, fontSize: '0.85rem' }}>{u.currentStatus || '—'}</td>
-                  <td>
+                  <td style={{ display: 'flex', gap: '0.5rem' }}>
                     <button
                       type="button"
                       className="btn-secondary"
@@ -207,6 +216,15 @@ export default function UserManagement() {
                       ) : (
                         <><Trash2 size={16} /> {t('delete')}</>
                       )}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ padding: '0.5rem 0.75rem', borderColor: 'hsla(30, 85%, 60%, 0.35)', color: 'var(--warning)' }}
+                      onClick={() => handleForceClear(u)}
+                      title="Force Clear Session"
+                    >
+                      <Unplug size={16} /> Clear Session
                     </button>
                   </td>
                 </tr>

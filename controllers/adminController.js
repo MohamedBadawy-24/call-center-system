@@ -60,3 +60,23 @@ exports.updateResearcherCode = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.forceClearAgentSession = async (req, res, next) => {
+  try {
+    const User = require('../models/User');
+    const { id } = req.params;
+    await User.findByIdAndUpdate(id, {
+      $set: {
+        precallCompletedForActiveSession: false,
+        currentStatus: 'off-duty'
+      }
+    });
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('stats-update');
+    }
+    res.json({ message: "Agent session forcefully cleared." });
+  } catch (err) {
+    next(err);
+  }
+};

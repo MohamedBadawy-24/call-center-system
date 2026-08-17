@@ -16,6 +16,7 @@ const strictAuthLimiter = rateLimit({
 router.get('/has-users', authController.hasUsers);
 router.post('/register', validateRegister, authController.register);
 router.post('/login', [strictAuthLimiter, validateLogin], authController.login);
+router.post('/logout', auth, authController.logout);
 router.get('/me', auth, authController.getMe);
 router.post('/forgot-password', strictAuthLimiter, authController.forgotPassword);
 router.post('/reset-password', [strictAuthLimiter, validatePasswordReset], authController.resetPassword);

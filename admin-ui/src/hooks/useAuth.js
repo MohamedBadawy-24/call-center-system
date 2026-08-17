@@ -20,6 +20,16 @@ export function useAuth(t) {
   const clearClientSession = useCallback(() => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    sessionStorage.clear();
+    
+    // Nuclear Wipe: explicitly destroy any lingering dirty state drafts
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('precallDraft')) {
+        localStorage.removeItem(key);
+      }
+    }
+    
     setApiAuthToken(null);
     setUser(null);
   }, []);
@@ -32,10 +42,16 @@ export function useAuth(t) {
     }
   }, [clearClientSession, location.pathname, navigate]);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
     if ((user?.role === 'agent' || user?.role === 'quality') && user?.currentStatus && user.currentStatus !== 'off-duty') {
       const ok = window.confirm(t('confirmForceSignOut'));
       if (!ok) return;
+    }
+
+    try {
+      await api.post('/auth/logout');
+    } catch (e) {
+      console.warn("Logout API call failed, proceeding with local wipe");
     }
 
     clearClientSession();

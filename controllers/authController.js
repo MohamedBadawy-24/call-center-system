@@ -51,6 +51,22 @@ exports.login = async (req, res, next) => {
   }
 };
 
+exports.logout = async (req, res, next) => {
+  try {
+    const User = require('../models/User');
+    // Nuclear Logout: aggressively wipe active session trackers
+    await User.findByIdAndUpdate(req.user.id, {
+      $set: { 
+        precallCompletedForActiveSession: false,
+        currentStatus: 'off-duty'
+      }
+    });
+    res.json({ message: 'Logged out successfully' });
+  } catch (err) {
+    next(err);
+  }
+};
+
 exports.getMe = async (req, res, next) => {
   try {
     const result = await authService.getMe(req.user.id);

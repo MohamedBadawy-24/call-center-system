@@ -173,6 +173,19 @@ async function getSurveyEligibilityState(user, surveyId, serialParam = null, ses
   let respQ = Response.findOne({ serialNumber: serial }).lean();
   if (session) respQ = respQ.session(session);
   const existingResponse = await respQ;
+
+  if (!isStaff && existingResponse) {
+    return {
+      canStartSurvey: false,
+      reason: 'already_submitted',
+      precallSerialNumber: '',
+      payload: {},
+      existingAnswers: {},
+      interviewOutcome: existingResponse.interviewOutcome,
+      outcomeReason: existingResponse.outcomeReason,
+    };
+  }
+
   const existingAnswers = existingResponse
     ? existingResponse.answers.reduce((acc, a) => ({ ...acc, [a.questionId]: a.value }), {})
     : {};

@@ -119,7 +119,7 @@ exports.completePrecall = async (userId, userRole, data, io) => {
       doc.payload.serial_number = newSerial;
       doc.markModified('payload');
       await doc.save({ session });
-    } else if (currentNumberDoc && !payload.serial_number) {
+    } else if (currentNumberDoc && (!payload.serial_number || String(payload.serial_number).trim() === '')) {
       const existingSerial = currentNumberDoc.serialNumber;
       const serial = existingSerial || await getNextSerialNumber('survey_numbers');
       if (!existingSerial) {
@@ -134,7 +134,7 @@ exports.completePrecall = async (userId, userRole, data, io) => {
     }
     
     // Fallback: If no phone was provided and no serial was assigned yet, generate one anyway
-    if (!payload.serial_number) {
+    if (!payload.serial_number || String(payload.serial_number).trim() === '') {
       const fallbackSerial = await getNextSerialNumber('survey_numbers');
       payload.serial_number = fallbackSerial;
       doc.serialNumber = fallbackSerial;

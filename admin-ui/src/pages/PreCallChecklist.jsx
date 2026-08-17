@@ -540,6 +540,9 @@ export default function PreCallChecklist() {
         if (nextNum && nextNum.number && (!merged.phone || merged.phone !== nextNum.number)) {
           merged.phone = nextNum.number;
         }
+        if (!merged.serial_number || String(merged.serial_number).trim() === '') {
+          merged.serial_number = `AUTO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        }
 
         setAnswers(merged);
         try {
@@ -670,7 +673,7 @@ export default function PreCallChecklist() {
       if (f.type === 'readonly_time') payload[f.id] = formatLocalTime(frozen);
     });
 
-    const finalSerial = payload.serial_number || `OFFLINE-precall-${user?.id || 'agent'}-${Date.now()}`;
+    const finalSerial = (payload.serial_number || '').trim() || `AUTO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     payload.serial_number = finalSerial;
 
     // Universal payload sanitization: coerce all values to Strings (or JSON stringify objects) to prevent schema mismatches
@@ -784,7 +787,11 @@ export default function PreCallChecklist() {
       setNumberLoading(true);
       try {
         setCurrentNumber(null);
-        setAnswers(prev => ({ ...prev, phone: '', serial_number: '' }));
+        setAnswers(prev => ({ 
+          ...prev, 
+          phone: '', 
+          serial_number: `AUTO-${Date.now()}-${Math.floor(Math.random() * 1000)}` 
+        }));
         setIsEditMode(false);
       } catch (e) {
         console.error('Failed to reset number:', e);

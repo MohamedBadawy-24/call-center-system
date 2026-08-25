@@ -25,7 +25,7 @@
     "test:rbac": "jest --runInBand --forceExit tests/rbac.test.js",
     "test:ws": "jest --runInBand --forceExit tests/websocket.test.js",
     "test:ui": "cd admin-ui && npm run test",
-    "e2e": "playwright test",
+    "e2e": "playwright test --project=chromium --workers=1",
     "db:migrate": "node scripts/migrate-indexes.js",
     "db:seed": "node scripts/seed-admin.js"
   },

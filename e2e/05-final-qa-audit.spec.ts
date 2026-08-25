@@ -179,9 +179,6 @@ test.describe('E2E QA Audit: Final Platform Verification', () => {
     await page.getByTestId('precall-next-btn').click();
     await page.waitForURL('**/take-survey/*', { timeout: 10000 });
 
-    // Click Start Questionnaire
-    await page.getByRole('button', { name: /Start Questionnaire/i }).click();
-
     // Verify Focus Mode (toggle left sidebar)
     const sidebarToggle = page.getByRole('button', { name: /☰|Toggle Sidebar/i }).first(); // Update selector if needed
     if (await sidebarToggle.isVisible()) {

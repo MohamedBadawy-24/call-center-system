@@ -164,6 +164,7 @@ export default function QuestionCard({
                 <option value="multiple_choice">Multiple Choice</option>
                 <option value="ranking">Ranking / Ordering</option>
                 <option value="number">Number</option>
+                <option value="number_ratio">Number (Ratio / Percentage)</option>
                 <option value="year">Year (Dropdown)</option>
                 <option value="info">Info / Notice (No Input)</option>
                 <option value="multi_input">Multiple Inputs (Composite)</option>

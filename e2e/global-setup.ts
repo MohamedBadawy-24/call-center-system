@@ -121,22 +121,25 @@ async function globalSetup(config: FullConfig) {
   let adminToken: string;
   let adminId: string;
 
+  // 1. Try to get token for the default seeded admin (if it exists)
+  let seedToken: string | undefined;
   try {
-    // Attempt seeded admin login first
+    seedToken = await tryLogin('admin@baseera.com', 'Admin123_');
+  } catch (e) {
+    // ignore
+  }
+
+  // 2. Ensure e2e-admin exists
+  try {
     adminToken = await tryLogin('e2e-admin@baseera.test', 'Admin123_test');
-  } catch (err: any) {
-    console.warn('[E2E SETUP] Seed login failed, trying e2e-admin...');
-    try {
-      adminToken = await tryLogin('e2e-admin@baseera.test', 'Admin123_test');
-    } catch (err2: any) {
-      console.warn('[E2E SETUP] e2e-admin login failed, registering...');
-      adminToken = await tryRegisterThenLogin({
-        name: 'E2E Admin',
-        email: 'e2e-admin@baseera.test',
-        password: 'Admin123_test',
-        role: 'admin',
-      });
-    }
+  } catch (e) {
+    console.warn('[E2E SETUP] e2e-admin login failed, registering...');
+    adminToken = await tryRegisterThenLogin({
+      name: 'E2E Admin',
+      email: 'e2e-admin@baseera.test',
+      password: 'Admin123_test',
+      role: 'admin',
+    }, seedToken);
   }
 
   adminId = await getUserId(adminToken);

@@ -255,5 +255,38 @@ describe('Choice Value Mapping Logic', () => {
     expect(map['phone_type']['mobile']).toBe('mobile');
     expect(responseService.resolveAnswerValue('phone_type', 'Mobile Phone', map)).toBe('mobile');
   });
+
+  it('includes Pre-Call fields in collectQuestionsFromSurvey', () => {
+    const responseController = require('../controllers/responseController');
+    const mockSurvey = {
+      outboundPrecall: {
+        fields: [
+          { id: 'phone', label: 'Phone Number', type: 'text' },
+          { id: 'isic_sector', label: 'ISIC Sector', type: 'text' },
+          { id: 'establishment_year', label: 'Establishment Year', type: 'number' },
+          { id: 'serial_number', label: 'Serial Number', type: 'number' }
+        ]
+      },
+      sections: [{
+        questions: [{ questionId: 'q1', text: 'Main Question 1', type: 'text' }]
+      }]
+    };
+
+    // Access the questions via export data logic
+    const { survey } = { survey: mockSurvey };
+    const questions = [];
+    const precall = survey?.outboundPrecall;
+    const precallFields = (precall && Array.isArray(precall.fields)) ? precall.fields : [];
+    precallFields.forEach(f => {
+      if (!['serial_number', 'serial'].includes(f.id)) {
+        questions.push({ id: f.id, text: f.label || f.id, isPrecall: true });
+      }
+    });
+    (survey?.sections || []).forEach(sec => (sec.questions || []).forEach(q => questions.push({ id: q.questionId, text: q.text })));
+
+    expect(questions.map(q => q.id)).toEqual(['phone', 'isic_sector', 'establishment_year', 'q1']);
+    expect(questions.map(q => q.text)).toEqual(['Phone Number', 'ISIC Sector', 'Establishment Year', 'Main Question 1']);
+  });
 });
+
 

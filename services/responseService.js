@@ -252,7 +252,7 @@ exports.submitResponse = async (userId, userRole, data, io) => {
 
     let finalSerial = serialNumber;
     if (finalSerial && finalSerial.startsWith('OFFLINE-')) {
-      finalSerial = await getNextSerialNumber('survey_numbers');
+      finalSerial = await getNextSerialNumber('survey_numbers', session);
     }
 
     const rawAnswers = Array.isArray(data.answers) ? data.answers : [];
@@ -490,6 +490,9 @@ exports.getSurveyAndCursor = async (surveyId) => {
     { $addFields: { agentObjectId: { $convert: { input: '$agentId', to: 'objectId', onError: null, onNull: null } } } },
     { $lookup: { from: 'users', localField: 'agentObjectId', foreignField: '_id', as: 'agent' } },
     { $unwind: { path: '$agent', preserveNullAndEmptyArrays: true } },
+    { $lookup: { from: 'precallcompletions', localField: 'serialNumber', foreignField: 'serialNumber', as: 'precallDoc' } },
+    { $unwind: { path: '$precallDoc', preserveNullAndEmptyArrays: true } },
+    { $addFields: { precallPayload: '$precallDoc.payload' } },
     { $sort: { startedAt: -1 } },
   ]).cursor({ batchSize: 1000 });
 
@@ -524,6 +527,21 @@ exports.getAdvancedExportData = async (surveyId, queryParams) => {
 exports.getAdvancedInMemoryData = async (surveyId, queryParams) => {
   const { survey, filter, preScanResponses } = await exports.getAdvancedExportData(surveyId, queryParams);
   const responses = await Response.find(filter).populate('agentId', 'name email').sort({ completedAt: 1 }).lean();
+  
+  const serials = responses.map(r => r.serialNumber).filter(Boolean);
+  if (serials.length > 0) {
+    const precalls = await PrecallCompletion.find({ serialNumber: { $in: serials } }, 'serialNumber payload').lean();
+    const precallMap = {};
+    precalls.forEach(p => {
+      if (p.serialNumber) precallMap[p.serialNumber] = p.payload || {};
+    });
+    responses.forEach(r => {
+      if (r.serialNumber && precallMap[r.serialNumber]) {
+        r.precallPayload = precallMap[r.serialNumber];
+      }
+    });
+  }
+
   return { survey, responses, preScanResponses, splitOtherValues, buildChoiceValueMap, resolveAnswerValue, encodeValue };
 };
 

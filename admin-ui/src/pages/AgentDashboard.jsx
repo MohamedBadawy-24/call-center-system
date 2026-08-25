@@ -9,6 +9,7 @@ import { toast } from 'react-toastify';
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { offlineDb } from '../utils/offlineDb';
 
 export default function AgentDashboard() {
   const { t } = useContext(UIContext);
@@ -28,17 +29,18 @@ export default function AgentDashboard() {
 
   useEffect(() => {
     if (
-      user.role === 'agent' &&
-      user.currentStatus === 'active' &&
-      user.precallCompletedForActiveSession !== true &&
-      !loading && surveys.length > 0
+      user?.role === 'agent' &&
+      user?.currentStatus === 'active' &&
+      user?.precallCompletedForActiveSession !== true &&
+      !loading &&
+      (surveys || []).length > 0
     ) {
       const latestSid = surveys[0]?._id;
       const url = latestSid ? `/agent/precall?surveyId=${latestSid}` : '/agent/precall';
       navigate(url, { replace: true });
       return;
     }
-  }, [navigate, user.currentStatus, user.id, user.role, user.precallCompletedForActiveSession, surveys]);
+  }, [navigate, user?.currentStatus, user?.id, user?._id, user?.role, user?.precallCompletedForActiveSession, surveys, loading]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -50,37 +52,89 @@ export default function AgentDashboard() {
           api.get('/settings/dailyGoal')
         ]);
         
-        if (surveysRes.status === 'fulfilled') {
+        if (surveysRes.status === 'fulfilled' && Array.isArray(surveysRes.value?.data)) {
           setSurveys(surveysRes.value.data);
+          // CACHE FOR OFFLINE USE
+          try {
+            localStorage.setItem('cachedCampaigns', JSON.stringify(surveysRes.value.data));
+            for (const s of surveysRes.value.data) {
+              if (s?._id) {
+                offlineDb.saveSurveyDef(s).catch(() => {});
+              }
+            }
+          } catch (_) {}
         } else {
-          console.error("Failed to load surveys:", surveysRes.reason);
+          const err = surveysRes.status === 'rejected' ? surveysRes.reason : null;
+          // PREVENT FATAL CRASH: err.response is undefined if offline
+          if (!navigator.onLine || !err?.response) {
+            console.warn("Offline mode: Loading cached campaigns");
+            try {
+              const cached = localStorage.getItem('cachedCampaigns');
+              if (cached) {
+                const parsed = JSON.parse(cached);
+                setSurveys(Array.isArray(parsed) ? parsed : []);
+              } else {
+                setSurveys([]); // Never set to null!
+              }
+            } catch (_) {
+              setSurveys([]);
+            }
+          } else {
+            console.error("Failed to load surveys:", err);
+            setSurveys([]); // Guarantee an array to prevent .map crashes
+          }
         }
         
-        if (statsRes.status === 'fulfilled' && statsRes.value.data && statsRes.value.data.length > 0) {
-          const myStats = statsRes.value.data.find(a => String(a._id) === String(user.id));
+        if (statsRes.status === 'fulfilled' && Array.isArray(statsRes.value?.data) && statsRes.value.data.length > 0) {
+          const myStats = statsRes.value.data.find(a => String(a?._id) === String(user?.id || user?._id));
           if (myStats) setStats(myStats);
         }
 
-        if (goalRes.status === 'fulfilled') {
+        if (goalRes.status === 'fulfilled' && goalRes.value?.data) {
           setDailyGoal(goalRes.value.data.dailyGoal || 50);
         }
       } catch (err) {
         console.error("Agent Dashboard global fetch error:", err);
+        if (!navigator.onLine || !err?.response) {
+          console.warn("Offline mode: Loading cached campaigns fallback");
+          try {
+            const cached = localStorage.getItem('cachedCampaigns');
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              setSurveys(Array.isArray(parsed) ? parsed : []);
+            } else {
+              setSurveys([]);
+            }
+          } catch (_) {
+            setSurveys([]);
+          }
+        } else {
+          setSurveys([]);
+        }
       } finally {
         setLoading(false);
       }
     };
     
     fetchData();
-  }, [user.id]);
+  }, [user?.id, user?._id]);
 
   // Handle Automatic Screen Sharing for Quality Auditing
   useEffect(() => {
-    if (user.role !== 'agent') return;
+    if (user?.role !== 'agent') return;
 
-    if (user.currentStatus === 'active') {
+    if (user?.currentStatus === 'active') {
       const startStreaming = async () => {
         try {
+          if (!navigator.onLine) {
+            console.log("Offline mode: Skipping auto-monitoring screen sharing");
+            return;
+          }
+          if (!navigator?.mediaDevices?.getDisplayMedia) {
+            console.warn("getDisplayMedia not supported in this environment");
+            return;
+          }
+
           // Initialize Socket
           const token = localStorage.getItem('token');
           socketRef.current = io(SOCKET_BASE, {
@@ -95,7 +149,7 @@ export default function AgentDashboard() {
           socketRef.current.on('connect_error', (err) => {
             console.error('Socket connect_error (agent streaming):', err?.message || err);
           });
-          socketRef.current.emit('join-monitoring', { id: user.id, role: 'agent' });
+          socketRef.current.emit('join-monitoring', { id: user?.id || user?._id, role: 'agent' });
 
           // Capture Screen
           const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -122,10 +176,10 @@ export default function AgentDashboard() {
 
               pc.onicecandidate = (event) => {
                 if (event.candidate) {
-                  socketRef.current.emit('webrtc-ice-candidate', {
+                  socketRef.current?.emit('webrtc-ice-candidate', {
                     target: auditorId,
                     candidate: event.candidate,
-                    agentId: user.id
+                    agentId: user?.id || user?._id
                   });
                 }
               };
@@ -133,10 +187,10 @@ export default function AgentDashboard() {
               const offer = await pc.createOffer();
               await pc.setLocalDescription(offer);
 
-              socketRef.current.emit('webrtc-offer', {
+              socketRef.current?.emit('webrtc-offer', {
                 target: auditorId,
-                agentId: user.id,
-                agentName: user.name,
+                agentId: user?.id || user?._id,
+                agentName: user?.name,
                 offer
               });
             } catch (e) {
@@ -183,7 +237,7 @@ export default function AgentDashboard() {
     }
 
     return () => stopStreaming();
-  }, [user.currentStatus, user.id, user.role, user.name]);
+  }, [user?.currentStatus, user?.id, user?._id, user?.role, user?.name]);
 
   const stopStreaming = () => {
     if (streamRef.current && typeof streamRef.current.getTracks === 'function') {
@@ -199,13 +253,17 @@ export default function AgentDashboard() {
   };
 
   const handleStartSurvey = (e, surveyId) => {
-    const isStaff = user.role === 'admin' || user.role === 'quality';
-    if (!isStaff && user.currentStatus !== 'active') {
+    const isStaff = user?.role === 'admin' || user?.role === 'quality';
+    if (!isStaff && user?.currentStatus !== 'active') {
       e.preventDefault();
       toast.warning(t('mustBeActive'));
       return;
     }
-    navigate(`/take-survey/${surveyId}`);
+    if (user?.role === 'agent') {
+      navigate(`/agent/precall?surveyId=${surveyId}`);
+    } else {
+      navigate(`/take-survey/${surveyId}`);
+    }
   };
 
   if (loading) return <LoadingSpinner fullPage />;
@@ -267,7 +325,7 @@ export default function AgentDashboard() {
           </h1>
         </motion.div>
 
-        {user.role === 'agent' && user.currentStatus === 'active' && (
+        {user?.role === 'agent' && user?.currentStatus === 'active' && (
           <motion.div variants={itemVariants}>
             <button type="button" className="btn-secondary" onClick={() => navigate('/agent/precall')} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
               <ArrowLeft size={18} />
@@ -276,7 +334,7 @@ export default function AgentDashboard() {
           </motion.div>
         )}
         
-        {stats && (
+        {stats && typeof stats.completed === 'number' && (
           <motion.div 
             variants={itemVariants}
             className="glass-card" 
@@ -287,12 +345,12 @@ export default function AgentDashboard() {
                 <Star size={18} fill="var(--warning)" color="var(--warning)" />
                 <span style={{ fontWeight: 800, fontSize: '0.9rem' }}>{t('campaignGoal') || 'Daily Goal'}</span>
               </div>
-              <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--success)' }}>{stats.completed} / {dailyGoal}</span>
+              <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--success)' }}>{stats.completed} / {dailyGoal || 50}</span>
             </div>
             <div className="fulfillment-container" style={{ height: '8px' }}>
-              <div className="fulfillment-bar" style={{ width: `${Math.min((stats.completed / dailyGoal) * 100, 100)}%`, background: 'var(--success)' }}></div>
+              <div className="fulfillment-bar" style={{ width: `${Math.min(((stats.completed || 0) / (dailyGoal || 50)) * 100, 100)}%`, background: 'var(--success)' }}></div>
             </div>
-            {stats.completed >= dailyGoal && (
+            {(stats.completed || 0) >= (dailyGoal || 50) && (
               <div style={{ fontSize: '0.75rem', color: 'var(--warning)', marginTop: '0.5rem', fontWeight: 700, textAlign: 'center' }}>
                 🌟 {t('completed') || 'Goal Reached!'} 🌟
               </div>
@@ -302,16 +360,17 @@ export default function AgentDashboard() {
       </div>
 
       <motion.div variants={itemVariants} className="choice-grid">
-        {surveys.map(s => {
-          const isStaff = user.role === 'admin' || user.role === 'quality';
-          const isActive = user.currentStatus === 'active' || isStaff;
+        {(surveys || []).map(s => {
+          if (!s) return null;
+          const isStaff = user?.role === 'admin' || user?.role === 'quality';
+          const isActive = user?.currentStatus === 'active' || isStaff;
           return (
             <motion.div 
               variants={itemVariants}
               whileHover={isActive ? { scale: 1.02, y: -5 } : {}}
               whileTap={isActive ? { scale: 0.98 } : {}}
-              key={s._id} 
-              onClick={(e) => handleStartSurvey(e, s._id)} 
+              key={s._id || s.id || Math.random()} 
+              onClick={(e) => handleStartSurvey(e, s._id || s.id)} 
               className="choice-btn" 
               style={{ 
                 cursor: isActive ? 'pointer' : 'not-allowed',
@@ -319,9 +378,9 @@ export default function AgentDashboard() {
                 filter: isActive ? 'none' : 'grayscale(0.5)'
               }}
             >
-              <h3 style={{ marginBottom: '0.5rem' }}>{s.title}</h3>
+              <h3 style={{ marginBottom: '0.5rem' }}>{s.title || t('untitledSurvey') || 'Untitled Campaign'}</h3>
               <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", fontWeight: 600 }}>
-                {new Date(s.createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                {s.createdAt ? new Date(s.createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : ''}
               </p>
               
               {!isActive && !isStaff && (
@@ -332,7 +391,7 @@ export default function AgentDashboard() {
             </motion.div>
           );
         })}
-        {surveys.length === 0 && !loading && (
+        {(surveys || []).length === 0 && !loading && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', padding: '2rem', color: 'var(--text-secondary)' }}>
             <ClipboardList size={40} style={{ opacity: 0.2 }} />
             <span style={{ fontWeight: 600 }}>{t('emptyStateNoCampaigns') || 'No campaigns available.'}</span>
@@ -342,3 +401,4 @@ export default function AgentDashboard() {
     </motion.div>
   );
 }
+

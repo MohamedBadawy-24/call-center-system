@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { api, setApiAuthToken, SOCKET_BASE } from '../api/client';
 import { io } from 'socket.io-client';
+import { toast } from 'react-toastify';
 
 /**
  * useAuth — Encapsulates all authentication business logic:
@@ -91,7 +92,7 @@ export function useAuth(t) {
         localStorage.setItem('user', JSON.stringify(nextUser));
 
         // Connect socket for status sync
-        if (!socketRef.current) {
+        if (!socketRef.current && navigator.onLine) {
           const token = localStorage.getItem('token');
           socketRef.current = io(SOCKET_BASE, {
             auth: { token },
@@ -110,8 +111,23 @@ export function useAuth(t) {
             });
           });
         }
-      } catch {
-        invalidateSession();
+      } catch (err) {
+        if (err?.response?.status === 401) {
+          invalidateSession();
+        } else {
+          // Offline / network failure: fallback to cached user to prevent logout
+          const savedUserStr = localStorage.getItem('user');
+          if (savedUserStr) {
+            try {
+              const savedUser = JSON.parse(savedUserStr);
+              setUser(savedUser);
+            } catch (_) {
+              invalidateSession();
+            }
+          } else {
+            invalidateSession();
+          }
+        }
       } finally {
         setLoading(false);
       }
@@ -140,19 +156,38 @@ export function useAuth(t) {
   };
 
   const updateStatus = async (status, breakReason = null) => {
-    const res = await api.post('/auth/status', { status, breakReason });
-    const updatedUser = {
-      ...user,
-      currentStatus: res.data.status,
-      currentBreakReason: status === 'break' ? breakReason : null,
-      statusStartedAt: res.data.statusStartedAt,
-      ...(res.data.precallCompletedForActiveSession !== undefined
-        ? { precallCompletedForActiveSession: res.data.precallCompletedForActiveSession }
-        : {}),
-    };
-    setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-    return res;
+    try {
+      const res = await api.post('/auth/status', { status, breakReason });
+      const updatedUser = {
+        ...user,
+        currentStatus: res.data.status,
+        currentBreakReason: status === 'break' ? breakReason : null,
+        statusStartedAt: res.data.statusStartedAt,
+        ...(res.data.precallCompletedForActiveSession !== undefined
+          ? { precallCompletedForActiveSession: res.data.precallCompletedForActiveSession }
+          : {}),
+      };
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      return res;
+    } catch (err) {
+      if (!navigator.onLine || !err.response) {
+        // Offline Bypass: Update state locally without blocking the agent
+        const nowIso = new Date().toISOString();
+        const updatedUser = {
+          ...user,
+          currentStatus: status,
+          currentBreakReason: status === 'break' ? breakReason : null,
+          statusStartedAt: user?.statusStartedAt || nowIso,
+          precallCompletedForActiveSession: user?.precallCompletedForActiveSession ?? true,
+        };
+        setUser(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        toast.info(t ? t('offlineStatusUpdated') || 'Offline: Status updated locally' : 'Offline: Status updated locally');
+        return { data: { status, statusStartedAt: updatedUser.statusStartedAt } };
+      }
+      throw err;
+    }
   };
 
   return { user, setUser, loading, login, logout, updateStatus };

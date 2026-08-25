@@ -57,6 +57,30 @@ exports.getResponsesBySurveyId = async (req, res, next) => {
 
 const collectQuestionsFromSurvey = (survey) => {
   const questions = [];
+
+  const precall = survey?.outboundPrecall;
+  const precallFields = (precall && Array.isArray(precall.fields) && precall.fields.length > 0)
+    ? precall.fields
+    : [];
+
+  (precallFields || []).forEach(f => {
+    if (!f || !f.id) return;
+    if (['serial_number', 'serial'].includes(f.id)) return;
+
+    const rawOpts = f.options || f.segments || f.choices || [];
+    const normOpts = Array.isArray(rawOpts) ? rawOpts.map(normalizeOption) : [];
+
+    questions.push({
+      id: f.id,
+      text: f.label || f.text || f.id,
+      type: f.type || 'text',
+      options: normOpts,
+      choices: normOpts,
+      allowOther: !!f.allowOther,
+      isPrecall: true
+    });
+  });
+
   const processList = (qList) => {
     (qList || []).forEach(q => {
       if (q.type === 'group' && Array.isArray(q.questions)) {
@@ -290,6 +314,13 @@ exports.exportCsv = async (req, res, next) => {
             rawValue = answer.value;
           }
         }
+        if (rawValue == null && q.isPrecall) {
+          if (r.precallPayload && r.precallPayload[q.id] != null) {
+            rawValue = r.precallPayload[q.id];
+          } else if (r[q.id] != null) {
+            rawValue = r[q.id];
+          }
+        }
         const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
         const isMulti = q.type === 'multiple_choice' || q._treatAsMulti;
         const __qKey = q.subId ? q.id + '_' + q.subId : q.id;
@@ -423,6 +454,13 @@ exports.exportAdvanced = async (req, res, next) => {
               rawValue = answer.value[q.subId];
             } else if (!q.subId) {
               rawValue = answer.value;
+            }
+          }
+          if (rawValue == null && q.isPrecall) {
+            if (r.precallPayload && r.precallPayload[q.id] != null) {
+              rawValue = r.precallPayload[q.id];
+            } else if (r[q.id] != null) {
+              rawValue = r[q.id];
             }
           }
           const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
@@ -563,6 +601,13 @@ exports.exportAdvanced = async (req, res, next) => {
               rawValue = answer.value[q.subId];
             } else if (!q.subId) {
               rawValue = answer.value;
+            }
+          }
+          if (rawValue == null && q.isPrecall) {
+            if (r.precallPayload && r.precallPayload[q.id] != null) {
+              rawValue = r.precallPayload[q.id];
+            } else if (r[q.id] != null) {
+              rawValue = r[q.id];
             }
           }
           const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;
@@ -742,6 +787,13 @@ exports.exportAdvanced = async (req, res, next) => {
                 rawValue = answer.value[q.subId];
               } else if (!q.subId) {
                 rawValue = answer.value;
+              }
+            }
+            if (rawValue == null && q.isPrecall) {
+              if (r.precallPayload && r.precallPayload[q.id] != null) {
+                rawValue = r.precallPayload[q.id];
+              } else if (r[q.id] != null) {
+                rawValue = r[q.id];
               }
             }
             const qKey = q.subId ? `${q.id}_${q.subId}` : q.id;

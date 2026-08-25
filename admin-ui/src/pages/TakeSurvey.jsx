@@ -6,7 +6,7 @@ import { UIContext } from '../context/UIContext';
 import { toast } from 'react-toastify';
 import { INTERVIEW_OUTCOME_OPTIONS, evaluateCondition } from '../utils/outboundPrecallConfig';
 import HandoverModal from '../components/HandoverModal';
-import { UserPlus, Menu, ChevronLeft, ChevronRight, Save, PhoneOff, AlertTriangle, ChevronDown, Check, Lock } from 'lucide-react';
+import { UserPlus, Menu, ChevronLeft, ChevronRight, Save, PhoneOff, AlertTriangle, ChevronDown, Check, Lock, ArrowLeft } from 'lucide-react';
 import SectionedSurveyView from '../components/SectionedSurveyView';
 import { getOtherPrefix, isOtherAnswer, extractOtherText, buildOtherAnswer } from '../utils/otherValueHelper';
 import { offlineDb } from '../utils/offlineDb';
@@ -1075,6 +1075,8 @@ export default function TakeSurvey({ mockSurvey }) {
   const [defaultOpenSectionIdx, setDefaultOpenSectionIdx] = useState(0);
   const [openSections, setOpenSections] = useState({});
   const [maxReachedIdx, setMaxReachedIdx] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const activeInputIdRef = useRef(null);
 
   useLayoutEffect(() => {
@@ -1278,20 +1280,27 @@ export default function TakeSurvey({ mockSurvey }) {
           try {
             const res = await api.get(`/survey/${id}`);
             surveyData = res.data;
-            await offlineDb.saveSurveyDef(surveyData);
+            if (surveyData && (surveyData.sections?.length || surveyData.questions?.length)) {
+              await offlineDb.saveSurveyDef(surveyData);
+            }
           } catch (err) {
             console.error("Network survey fetch failed, checking offline cache...", err);
           }
         }
 
-        if (!surveyData) {
-          surveyData = await offlineDb.getSurveyDef(id);
-          if (surveyData) {
+        if (!surveyData || (!surveyData.sections?.length && !surveyData.questions?.length)) {
+          let cached = await offlineDb.getSurveyDef(id);
+          if (!cached || (!cached.sections?.length && !cached.questions?.length)) {
+            const allCached = await offlineDb.getAllSurveys();
+            cached = allCached.find(s => String(s._id) === String(id) || String(s.id) === String(id));
+          }
+          if (cached && (cached.sections?.length || cached.questions?.length)) {
+            surveyData = cached;
             toast.info(t('loadedSurveyFromCache') || 'Loaded survey structure from local offline cache.');
           }
         }
 
-        if (surveyData) {
+        if (surveyData && (surveyData.sections?.length || surveyData.questions?.length)) {
           setSurvey(surveyData);
           let allQ = [];
           if (surveyData.sections) {
@@ -1332,33 +1341,40 @@ export default function TakeSurvey({ mockSurvey }) {
       const serialParam = urlParams.get('serial');
 
       if (isOnline) {
-        const res = await api.get(`/agent/survey-eligibility?surveyId=${id}${serialParam ? `&serial=${serialParam}` : ''}`);
-        const data = res.data;
-        setEligibility({
-          checked: true,
-          canStart: data.canStartSurvey,
-          reason: data.reason || '',
-        });
-        setPrecallSerialNumber(data.precallSerialNumber || '');
-        return data;
-      } else {
-        if (serialParam) {
-          const offlinePrecalls = await offlineDb.getOfflinePrecalls();
-          const offlinePrecall = offlinePrecalls.find(p => p.serialNumber === serialParam);
-          if (offlinePrecall || serialParam.startsWith('OFFLINE-') || serialParam) {
-            const data = { canStartSurvey: true, precallSerialNumber: serialParam, payload: offlinePrecall?.payload || {} };
-            setEligibility({
-              checked: true,
-              canStart: true,
-              reason: '',
-            });
-            setPrecallSerialNumber(serialParam);
-            return data;
+        try {
+          const res = await api.get(`/agent/survey-eligibility?surveyId=${id}${serialParam ? `&serial=${serialParam}` : ''}`);
+          const data = res.data;
+          setEligibility({
+            checked: true,
+            canStart: data.canStartSurvey,
+            reason: data.reason || '',
+          });
+          setPrecallSerialNumber(data.precallSerialNumber || '');
+          return data;
+        } catch (netErr) {
+          if (netErr.response) {
+            throw netErr;
           }
+          console.warn("Eligibility network check failed, falling back to offline verification");
         }
-        setEligibility({ checked: true, canStart: false, reason: 'offline_no_serial' });
-        return { canStartSurvey: false, reason: 'offline_no_serial' };
       }
+
+      if (serialParam) {
+        const offlinePrecalls = await offlineDb.getOfflinePrecalls();
+        const offlinePrecall = offlinePrecalls.find(p => p.serialNumber === serialParam);
+        if (offlinePrecall || serialParam.startsWith('OFFLINE-') || serialParam) {
+          const data = { canStartSurvey: true, precallSerialNumber: serialParam, payload: offlinePrecall?.payload || {} };
+          setEligibility({
+            checked: true,
+            canStart: true,
+            reason: '',
+          });
+          setPrecallSerialNumber(serialParam);
+          return data;
+        }
+      }
+      setEligibility({ checked: true, canStart: false, reason: 'offline_no_serial' });
+      return { canStartSurvey: false, reason: 'offline_no_serial' };
     } catch (e) {
       console.error(e);
       setEligibility({ checked: true, canStart: false, reason: 'error' });
@@ -1369,30 +1385,46 @@ export default function TakeSurvey({ mockSurvey }) {
   };
 
   useEffect(() => {
-    if (user?.role === 'agent' && user?.currentStatus === 'active') {
-      refreshEligibility().then(async (data) => {
-        if (data?.canStartSurvey && data?.precallSerialNumber) {
-          try {
-            let draftData = null;
-            if (isOnline) {
-              try {
-                const draftRes = await api.get(`/agent/draft/${data.precallSerialNumber}`);
-                draftData = draftRes.data;
-              } catch (e) {
-                console.error("Network draft fetch failed, trying localIndexedDB...");
-              }
-            }
-            if (!draftData) {
-              draftData = await offlineDb.getLocalDraft(data.precallSerialNumber);
-            }
-            if (draftData && draftData.answers && Object.keys(draftData.answers).length > 0) {
-              handleStartCall(data, draftData);
-            }
-          } catch(e) {}
-        }
-      });
+    if (mockSurvey) {
+      setEligibility({ checked: true, canStart: true, reason: '' });
+      setPrecallSerialNumber('PREVIEW_123');
+      setEligLoading(false);
+      return;
     }
-  }, [user?.role, user?.currentStatus, user?.precallCompletedForActiveSession, isOnline]);
+    if (!id) return;
+
+    let cancelled = false;
+    refreshEligibility().then(async (data) => {
+      if (cancelled) return;
+      if (data?.canStartSurvey && data?.precallSerialNumber) {
+        try {
+          let draftData = null;
+          if (isOnline) {
+            try {
+              const draftRes = await api.get(`/agent/draft/${data.precallSerialNumber}`);
+              draftData = draftRes.data;
+            } catch (e) {
+              console.error("Network draft fetch failed, trying localIndexedDB...");
+            }
+          }
+          if (!draftData) {
+            draftData = await offlineDb.getLocalDraft(data.precallSerialNumber);
+          }
+          if (draftData && draftData.answers && Object.keys(draftData.answers).length > 0) {
+            handleStartCall(data, draftData);
+          } else {
+            handleStartCall(data, null);
+          }
+        } catch (e) {
+          handleStartCall(data, null);
+        }
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isOnline]);
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {
@@ -1448,7 +1480,39 @@ export default function TakeSurvey({ mockSurvey }) {
   }, [answers, currentIdx, currentSectionIdx, phase, user?.id, id, precallSerialNumber, isOnline, survey?.layoutMode]);
 
   const handleStartCall = async (preloadedData = null, preloadedDraft = null) => {
-    if (questions.length === 0) {
+    let currentQuestions = questions;
+    if (currentQuestions.length === 0 && id) {
+      let cached = await offlineDb.getSurveyDef(id);
+      if (!cached || (!cached.sections?.length && !cached.questions?.length)) {
+        const allCached = await offlineDb.getAllSurveys();
+        cached = allCached.find(s => String(s._id) === String(id) || String(s.id) === String(id));
+      }
+      if (cached) {
+        let allQ = [];
+        if (cached.sections) {
+          cached.sections.forEach((sec) => {
+            (sec.questions || []).forEach(item => {
+              if (item.type === 'group') {
+                (item.questions || []).forEach(innerQ => {
+                  allQ.push({ ...innerQ, _groupId: item.groupId, _groupLabel: item.label, _groupCrossValidation: item.crossValidation });
+                });
+              } else {
+                allQ.push(item);
+              }
+            });
+          });
+        } else if (cached.questions) {
+          allQ = cached.questions;
+        }
+        if (allQ.length > 0) {
+          setSurvey(cached);
+          setQuestions(allQ);
+          currentQuestions = allQ;
+        }
+      }
+    }
+
+    if (currentQuestions.length === 0) {
       toast.error('This survey has no questions!');
       return;
     }
@@ -1507,17 +1571,31 @@ export default function TakeSurvey({ mockSurvey }) {
       setInteractedQuestions(preloaded);
     }
 
-    const firstIdx = findNextVisibleIdx(0, mergedAnswers);
+    const firstIdx = findNextVisibleIdx(0, mergedAnswers, currentQuestions);
     if (firstIdx === -1) {
-      goToInterviewStep();
+      if (currentQuestions.length > 0) {
+        setPhase('questions');
+        setCurrentIdx(0);
+        if (survey?.sections) {
+          const qId = currentQuestions[0]?.questionId || String(currentQuestions[0]?._id);
+          const secIdx = survey.sections.findIndex(sec =>
+            (sec.questions || []).some(q => (q.id || q.questionId || String(q._id)) === qId)
+          );
+          if (secIdx !== -1) {
+            setCurrentSectionIdx(secIdx);
+          }
+        }
+      } else {
+        goToInterviewStep();
+      }
     } else {
       setPhase('questions');
-      if (typeof draftIdx === 'number' && draftIdx < (questions?.length || 0)) {
+      if (typeof draftIdx === 'number' && draftIdx < (currentQuestions?.length || 0)) {
         setCurrentIdx(draftIdx);
         if (typeof draftSecIdx === 'number') {
           setCurrentSectionIdx(draftSecIdx);
         } else if (survey?.sections) {
-          const qId = questions[draftIdx]?.questionId || String(questions[draftIdx]?._id);
+          const qId = currentQuestions[draftIdx]?.questionId || String(currentQuestions[draftIdx]?._id);
           const secIdx = survey.sections.findIndex(sec =>
             (sec.questions || []).some(q => (q.id || q.questionId || String(q._id)) === qId)
           );
@@ -1528,7 +1606,7 @@ export default function TakeSurvey({ mockSurvey }) {
       } else {
         setCurrentIdx(firstIdx);
         if (survey?.sections) {
-          const qId = questions[firstIdx]?.questionId || String(questions[firstIdx]?._id);
+          const qId = currentQuestions[firstIdx]?.questionId || String(currentQuestions[firstIdx]?._id);
           const secIdx = survey.sections.findIndex(sec =>
             (sec.questions || []).some(q => (q.id || q.questionId || String(q._id)) === qId)
           );
@@ -1540,10 +1618,63 @@ export default function TakeSurvey({ mockSurvey }) {
     }
   };
 
-  const findNextVisibleIdx = (startIndex, currentAnswers) => {
-    if (!Array.isArray(questions)) return -1;
-    for (let i = startIndex; i < questions.length; i++) {
-      const qst = questions[i];
+  const handleBackToChecklist = async () => {
+    const activeSerial = precallSerialNumber || new URLSearchParams(window.location.search).get('serial');
+    if (activeSerial) {
+      const cleanedAnswers = { ...answers };
+      questions.forEach(qst => {
+        const qId = qst.id || qst.questionId || String(qst._id);
+        if (qst.allowMultipleOther && cleanedAnswers[qId] && Array.isArray(cleanedAnswers[qId])) {
+          cleanedAnswers[qId] = cleanedAnswers[qId].filter(v => !isOtherAnswer(v, qst) || extractOtherText(v, qst).trim() !== '');
+          if (cleanedAnswers[qId].length === 0 && qst.type === 'single_choice') {
+            delete cleanedAnswers[qId];
+          }
+        }
+      });
+      const draftData = {
+        surveyId: id,
+        serialNumber: activeSerial,
+        answers: cleanedAnswers,
+        otherValues,
+        currentIdx,
+        currentSectionIdx: survey?.layoutMode === 'multi' ? currentSectionIdx : undefined,
+      };
+
+      // 1. Force save current survey answers to IndexedDB & localStorage
+      try {
+        await offlineDb.saveLocalDraft(draftData);
+      } catch (_) {}
+
+      try {
+        const draftKey = `survey_draft_${id}_${activeSerial}`;
+        localStorage.setItem(draftKey, JSON.stringify({
+          answers: cleanedAnswers,
+          otherValues,
+          currentIdx,
+          currentSectionIdx,
+          lastSaved: new Date().toISOString()
+        }));
+      } catch (_) {}
+
+      // 2. Post draft to backend if online
+      if (isOnline) {
+        try {
+          await api.post('/agent/draft', draftData);
+        } catch (_) {}
+      }
+
+      // 3. Navigate back to Pre-Call Checklist route with serial
+      navigate(`/agent/precall?surveyId=${id}&serial=${activeSerial}`);
+    } else {
+      navigate(id ? `/agent/precall?surveyId=${id}` : '/agent/precall');
+    }
+  };
+
+  const findNextVisibleIdx = (startIndex, currentAnswers, questionsList = questions) => {
+    const qList = Array.isArray(questionsList) && questionsList.length > 0 ? questionsList : questions;
+    if (!Array.isArray(qList) || qList.length === 0) return -1;
+    for (let i = startIndex; i < qList.length; i++) {
+      const qst = qList[i];
       if (!qst) continue;
       if (!qst.visibility) return i;
       try {
@@ -1562,6 +1693,9 @@ export default function TakeSurvey({ mockSurvey }) {
   };
 
   const submitResponse = async () => {
+    if (isSubmittingRef.current) return;
+    setIsSubmitting(true);
+    isSubmittingRef.current = true;
     try {
       if (mockSurvey) {
         toast.success("Preview submitted successfully!");
@@ -1664,6 +1798,9 @@ export default function TakeSurvey({ mockSurvey }) {
           const errMsg = err.response?.data?.message || err.response?.data?.error || err.response?.data?.errors?.[0]?.msg || 'Failed to save survey. Check required fields.';
           toast.error(`Submission Blocked: ${errMsg}`);
           return; 
+        } finally {
+          setIsSubmitting(false);
+          isSubmittingRef.current = false;
         }
       } else {
         await offlineDb.saveOfflineResponse(offlinePayload);
@@ -1674,10 +1811,14 @@ export default function TakeSurvey({ mockSurvey }) {
         }
         toast.info(t('surveySavedOffline') || 'Survey response saved offline. It will be synced when online.');
         navigate(`/agent/precall?surveyId=${survey._id}`, { replace: true });
+        setIsSubmitting(false);
+        isSubmittingRef.current = false;
       }
     } catch (submitErr) {
       console.error("Fatal error in submitResponse:", submitErr);
       toast.error(t('surveySubmitFailed') || `Failed to submit survey: ${submitErr.message || 'Unknown error'}`);
+      setIsSubmitting(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -2504,7 +2645,7 @@ export default function TakeSurvey({ mockSurvey }) {
           </button>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-          <button dir="auto" type="button" className="btn-primary" onClick={() => submitResponse()} disabled={!answers.interview_result}>
+          <button dir="auto" type="button" className="btn-primary" onClick={() => submitResponse()} disabled={!answers.interview_result || isSubmitting}>
             {t('submitSurvey')}
           </button>
           <button dir="auto" type="button" className="btn-secondary" onClick={() => navigate('/agent/precall')}>
@@ -2842,8 +2983,8 @@ export default function TakeSurvey({ mockSurvey }) {
 
         {/* Main Content */}
         <div className="survey-main">
-          {/* Universal Toggle Button */}
-          <div style={{ padding: '1rem 2rem 0', display: 'flex', alignItems: 'center' }}>
+          {/* Universal Toggle Button & Back to Checklist */}
+          <div style={{ padding: '1rem 2rem 0', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
             <button dir="auto" 
               type="button"
               className="btn-secondary" 
@@ -2856,6 +2997,20 @@ export default function TakeSurvey({ mockSurvey }) {
                 {sidebarVisible ? (t('focusMode') || 'Focus Mode') : (t('showSidebar') || 'Show Sidebar')}
               </span>
             </button>
+            {user?.role === 'agent' && (
+              <button dir="auto"
+                type="button"
+                className="btn-secondary"
+                onClick={handleBackToChecklist}
+                title={t('backToChecklist') || 'Back to Checklist'}
+                style={{ padding: '0.5rem 0.75rem', display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}
+              >
+                <ArrowLeft size={16} className={isRtl ? 'rotate-180' : ''} />
+                <span dir="auto" style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                  {t('backToChecklist') || 'Back to Checklist'}
+                </span>
+              </button>
+            )}
           </div>
           <div className="survey-content" style={{ paddingTop: '1rem' }}>
             <div className="survey-progress-container">

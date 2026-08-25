@@ -258,7 +258,7 @@ describe('AdminDashboard Page Tests', () => {
       expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     });
 
-    const searchInput = screen.getByPlaceholderText('Search...');
+    const searchInput = screen.getByPlaceholderText('Search campaigns or agents...');
     fireEvent.change(searchInput, { target: { value: 'Health' } });
 
     // Health Survey 2026 should still be visible
@@ -305,9 +305,9 @@ describe('AdminDashboard Page Tests', () => {
       expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     });
 
-    expect(screen.getByText('Create Survey')).toBeInTheDocument();
+    expect(screen.getByText('+ Create New Survey')).toBeInTheDocument();
     expect(screen.getByText('Team Members')).toBeInTheDocument();
-    expect(screen.getByText('Add Team Member')).toBeInTheDocument();
+    expect(screen.getByText('+ Add Team Member')).toBeInTheDocument();
   });
 
   it('hides admin-only buttons for quality role', async () => {
@@ -317,9 +317,9 @@ describe('AdminDashboard Page Tests', () => {
       expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     });
 
-    expect(screen.queryByText('Create Survey')).not.toBeInTheDocument();
+    expect(screen.queryByText('+ Create New Survey')).not.toBeInTheDocument();
     expect(screen.queryByText('Team Members')).not.toBeInTheDocument();
-    expect(screen.queryByText('Add Team Member')).not.toBeInTheDocument();
+    expect(screen.queryByText('+ Add Team Member')).not.toBeInTheDocument();
   });
 
   // ── Daily Goal Input ────────────────────────────────────────────────────────

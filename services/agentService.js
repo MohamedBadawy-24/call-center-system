@@ -62,8 +62,20 @@ exports.completePrecall = async (userId, userRole, data, io) => {
       sid = new mongoose.Types.ObjectId(surveyId);
     }
 
-    const rawSerial = payload.serial_number || '';
-    const serialNumber = rawSerial.trim() !== '' ? rawSerial.trim() : undefined;
+    let rawSerial = payload.serial_number || '';
+    let serialNumber = rawSerial.trim() !== '' ? rawSerial.trim() : undefined;
+
+    // Check if the provided serial number has already been finalized in Response or belongs to another user
+    if (serialNumber) {
+      const [existingResp, existingPrecall] = await Promise.all([
+        Response.findOne({ serialNumber }).session(session),
+        PrecallCompletion.findOne({ serialNumber }).session(session),
+      ]);
+      if (existingResp || (existingPrecall && String(existingPrecall.userId) !== String(user._id))) {
+        serialNumber = await getNextSerialNumber('survey_numbers', session);
+        payload.serial_number = serialNumber;
+      }
+    }
 
     const precallData = {
       userId: user._id,
@@ -99,7 +111,16 @@ exports.completePrecall = async (userId, userRole, data, io) => {
     }).sort({ assignedAt: -1 }).session(session);
 
     if (phoneInPayload && (!currentNumberDoc || currentNumberDoc.number !== phoneInPayload)) {
-      const newSerial = payload.serial_number || await getNextSerialNumber('survey_numbers');
+      let newSerial = payload.serial_number;
+      if (newSerial) {
+        const existingWithSerial = await PhoneNumber.findOne({ serialNumber: newSerial }).session(session);
+        if (existingWithSerial && (!currentNumberDoc || String(existingWithSerial._id) !== String(currentNumberDoc._id))) {
+          newSerial = await getNextSerialNumber('survey_numbers', session);
+        }
+      } else {
+        newSerial = await getNextSerialNumber('survey_numbers', session);
+      }
+
       if (currentNumberDoc) {
         currentNumberDoc.number = phoneInPayload;
         currentNumberDoc.serialNumber = newSerial;
@@ -121,7 +142,7 @@ exports.completePrecall = async (userId, userRole, data, io) => {
       await doc.save({ session });
     } else if (currentNumberDoc && (!payload.serial_number || String(payload.serial_number).trim() === '')) {
       const existingSerial = currentNumberDoc.serialNumber;
-      const serial = existingSerial || await getNextSerialNumber('survey_numbers');
+      const serial = existingSerial || await getNextSerialNumber('survey_numbers', session);
       if (!existingSerial) {
         currentNumberDoc.serialNumber = serial;
         await currentNumberDoc.save({ session });
@@ -135,7 +156,7 @@ exports.completePrecall = async (userId, userRole, data, io) => {
     
     // Fallback: If no phone was provided and no serial was assigned yet, generate one anyway
     if (!payload.serial_number || String(payload.serial_number).trim() === '') {
-      const fallbackSerial = await getNextSerialNumber('survey_numbers');
+      const fallbackSerial = await getNextSerialNumber('survey_numbers', session);
       payload.serial_number = fallbackSerial;
       doc.serialNumber = fallbackSerial;
       doc.payload.serial_number = fallbackSerial;

@@ -23,10 +23,21 @@ router.get('/outbound-precall', auth, async (req, res) => {
     } else {
       const filter = { isActive: { $ne: false } };
       if (req.user.role === 'agent') {
-        filter.$or = [
-          { targetAudience: { $in: ['agent', 'both'] } },
-          { targetAudience: { $exists: false } },
-          { targetAudience: null }
+        filter.$and = [
+          {
+            $or: [
+              { targetAudience: { $in: ['agent', 'both'] } },
+              { targetAudience: { $exists: false } },
+              { targetAudience: null }
+            ]
+          },
+          {
+            $or: [
+              { assignedAgents: { $exists: false } },
+              { assignedAgents: { $size: 0 } },
+              { assignedAgents: req.user._id || req.user.id }
+            ]
+          }
         ];
       } else if (req.user.role === 'quality') {
         filter.$or = [

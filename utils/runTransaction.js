@@ -10,9 +10,10 @@ const mongoose = require('mongoose');
  *     The original error is nested under err.originalError (code 20) or
  *     err.errorResponse.originalError.
  */
-const TXNS_NOT_SUPPORTED_CODES = new Set([20, 263]);
+const TXNS_NOT_SUPPORTED_CODES = new Set([20, 117, 263]);
 const TXNS_NOT_SUPPORTED_MSGS  = [
   'Transaction numbers are only allowed on a replica set member or mongos',
+  'Only servers in a sharded cluster can start a new transaction',
   'does not support retryable writes',
   'This MongoDB deployment does not support retryable writes',
 ];

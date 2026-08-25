@@ -1,17 +1,20 @@
-const CACHE_NAME = 'baseera-pwa-cache-v1';
+const CACHE_NAME = 'baseera-pwa-cache-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/src/main.jsx',
-  '/src/App.jsx',
-  '/src/styles/index.css',
 ];
 
 // Install Service Worker and Pre-cache Core Assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
+    caches.open(CACHE_NAME).then(async (cache) => {
+      for (const asset of STATIC_ASSETS) {
+        try {
+          await cache.add(asset);
+        } catch (e) {
+          console.warn('SW pre-cache warning for asset:', asset, e);
+        }
+      }
     }).then(() => {
       return self.skipWaiting();
     })
@@ -46,19 +49,19 @@ self.addEventListener('fetch', (event) => {
 
   // Handle API GET requests (Network-First with Cache fallback)
   if (requestUrl.pathname.startsWith('/api/')) {
-    // Skip some endpoints like auth state checking or polling which shouldn't serve stale cache forever
     const isCacheableApi = 
       requestUrl.pathname.includes('/survey') ||
       requestUrl.pathname.includes('/surveys') ||
       requestUrl.pathname.includes('/agent/outbound-precall') ||
-      requestUrl.pathname.includes('/settings/dailyGoal');
+      requestUrl.pathname.includes('/settings/dailyGoal') ||
+      requestUrl.pathname.includes('/health');
 
     if (isCacheableApi) {
       event.respondWith(
         fetch(event.request)
           .then((response) => {
-            // Put clone into cache
-            if (response.status === 200) {
+            // Put clone into cache if successful
+            if (response && response.status === 200) {
               const responseClone = response.clone();
               caches.open(CACHE_NAME).then((cache) => {
                 cache.put(event.request, responseClone);
@@ -81,7 +84,7 @@ self.addEventListener('fetch', (event) => {
       .then((response) => {
         // Cache static assets dynamically
         const isStaticAsset = 
-          response.status === 200 && 
+          response && response.status === 200 && 
           (requestUrl.pathname.endsWith('.js') || 
            requestUrl.pathname.endsWith('.css') || 
            requestUrl.pathname.endsWith('.png') || 
@@ -99,17 +102,17 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => {
+      .catch(async () => {
         // Serve from cache or fallback to index.html for Single Page Application client routing
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          // If a front-end route request fails, return cached index.html
-          if (event.request.headers.get('accept').includes('text/html')) {
-            return caches.match('/index.html') || caches.match('/');
-          }
-        });
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        // If a front-end route request fails, return cached index.html
+        if (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html')) {
+          return (await caches.match('/index.html')) || (await caches.match('/'));
+        }
       })
   );
 });
+

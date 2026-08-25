@@ -3,11 +3,14 @@ const DB_VERSION = 1;
 
 function openDb() {
   return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+      return reject(new Error('IndexedDB is not available in this environment'));
+    }
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onerror = (event) => {
-      console.error('IndexedDB open error:', event.target.error);
-      reject(event.target.error);
+      console.error('IndexedDB open error:', event.target?.error || event);
+      reject(event.target?.error || new Error('Failed to open IndexedDB'));
     };
 
     request.onsuccess = (event) => {

@@ -16,12 +16,17 @@ export function useOnlineStatus(language) {
   const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
-    const handleOnline = () => {
-      // Double check internet access with a quick request
-      api.get('/settings/dailyGoal')
+    const checkPing = () => {
+      api.get('/health')
         .then(() => setIsOnline(true))
-        .catch(() => setIsOnline(false));
+        .catch((err) => {
+          if (!err.response) {
+            setIsOnline(false);
+          }
+        });
     };
+
+    const handleOnline = () => checkPing();
     const handleOffline = () => setIsOnline(false);
 
     window.addEventListener('online', handleOnline);
@@ -30,9 +35,7 @@ export function useOnlineStatus(language) {
     // Keep verifying connectivity every 30 seconds
     const interval = setInterval(() => {
       if (navigator.onLine) {
-        api.get('/settings/dailyGoal')
-          .then(() => setIsOnline(true))
-          .catch(() => setIsOnline(false));
+        checkPing();
       } else {
         setIsOnline(false);
       }
@@ -96,7 +99,9 @@ export function useOnlineStatus(language) {
             console.error('Failed to sync response:', resp.serialNumber, err);
           }
         }
-        toast.success(translations[language]['syncCompleted'] || 'Offline responses successfully synchronized!');
+        const lang = language || 'en';
+        const msg = (translations[lang] && translations[lang]['syncCompleted']) || translations['en']?.['syncCompleted'] || 'Offline responses successfully synchronized!';
+        toast.success(msg);
       }
     } catch (err) {
       console.error('Offline sync failed:', err);

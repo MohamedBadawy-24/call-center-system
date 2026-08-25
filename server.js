@@ -364,10 +364,21 @@ app.get("/surveys", auth, async (req, res) => {
     let filter = {};
     if (req.user.role === 'agent') {
       filter.isActive = { $ne: false };
-      filter.$or = [
-        { targetAudience: { $in: ['agent', 'both'] } },
-        { targetAudience: { $exists: false } },
-        { targetAudience: null }
+      filter.$and = [
+        {
+          $or: [
+            { targetAudience: { $in: ['agent', 'both'] } },
+            { targetAudience: { $exists: false } },
+            { targetAudience: null }
+          ]
+        },
+        {
+          $or: [
+            { assignedAgents: { $exists: false } },
+            { assignedAgents: { $size: 0 } },
+            { assignedAgents: req.user._id || req.user.id }
+          ]
+        }
       ];
     } else if (req.user.role === 'quality') {
       filter.isActive = { $ne: false };
@@ -377,7 +388,7 @@ app.get("/surveys", auth, async (req, res) => {
         { targetAudience: null }
       ];
     }
-    const surveys = await Survey.find(filter, "title description isActive createdAt");
+    const surveys = await Survey.find(filter).sort({ createdAt: -1 });
     res.json(surveys);
   } catch (err) {
     res.status(500).json({ error: "Server Error" });

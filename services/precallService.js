@@ -17,9 +17,10 @@ const Response = require('../models/Response');
  * Maps interview_result value → outcome category + disqualified flag.
  */
 function categorizeInterviewOutcome(ir) {
-  const v = String(ir || '');
+  const v = String(ir || '').trim();
   if (['completed', 'partial'].includes(v)) return { category: 'qualified', disqualified: false };
   if (v === 'postponed') return { category: 'postponed', disqualified: false };
+  if (v === '') return { category: 'qualified', disqualified: false };
   return { category: 'disqualified', disqualified: true };
 }
 
@@ -132,14 +133,15 @@ async function getSurveyEligibilityState(user, surveyId, serialParam = null, ses
   }
 
   // Rule 2: A PrecallCompletion document exists for this serialNumber
-  let lastPrecall;
+  let lastPrecall = null;
   if (serialParamTrimmed) {
     const pcQuery = { serialNumber: serialParamTrimmed };
     if (!isStaff) pcQuery.userId = user._id;
     let pcQ = PrecallCompletion.findOne(pcQuery).lean();
     if (session) pcQ = pcQ.session(session);
     lastPrecall = await pcQ;
-  } else {
+  }
+  if (!lastPrecall) {
     lastPrecall = await getLatestPrecallForSession(user._id, user.statusStartedAt, surveyId, session);
   }
 
@@ -148,7 +150,7 @@ async function getSurveyEligibilityState(user, surveyId, serialParam = null, ses
   }
 
   // Rule 5: The PrecallCompletion belongs to the agent's current active session
-  if (!isStaff && lastPrecall.statusStartedAt) {
+  if (!isStaff && !serialParamTrimmed && lastPrecall.statusStartedAt && user.statusStartedAt) {
     const precallSessionTime = new Date(lastPrecall.statusStartedAt).getTime();
     const currentSessionTime = new Date(user.statusStartedAt).getTime();
     if (precallSessionTime !== currentSessionTime) {

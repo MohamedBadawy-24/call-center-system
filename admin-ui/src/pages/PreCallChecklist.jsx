@@ -458,22 +458,36 @@ export default function PreCallChecklist() {
           try {
             const res = await api.get(`/agent/outbound-precall${sidUrl ? `?surveyId=${sidUrl}` : ''}`, { signal });
             precallData = res.data;
-            await offlineDb.savePrecallConfig({
-              surveyId: sidUrl || 'global',
-              outboundPrecall: precallData.outboundPrecall,
-              targetGovernorate: precallData.targetGovernorate,
-              numberAssignmentMode: precallData.numberAssignmentMode || 'queue_only',
-            });
+            try {
+              await offlineDb.savePrecallConfig({
+                surveyId: sidUrl || 'global',
+                outboundPrecall: precallData.outboundPrecall,
+                targetGovernorate: precallData.targetGovernorate,
+                numberAssignmentMode: precallData.numberAssignmentMode || 'queue_only',
+              });
+              const activeSid = precallData.surveyId || sidUrl;
+              if (activeSid) {
+                const sDefRes = await api.get(`/survey/${activeSid}`, { signal });
+                if (sDefRes.data && (sDefRes.data.sections || sDefRes.data.questions)) {
+                  await offlineDb.saveSurveyDef(sDefRes.data);
+                }
+              }
+            } catch (idbErr) {
+              console.warn('Failed to save precall / survey config to IndexedDB:', idbErr);
+            }
           } catch (err) {
             console.error("Network outbound precall fetch failed, trying offline fallback...", err);
           }
         }
 
         if (!precallData) {
-          const cachedConfig = await offlineDb.getPrecallConfig(sidUrl);
+          let cachedConfig = await offlineDb.getPrecallConfig(sidUrl);
+          if (!cachedConfig && sidUrl) {
+            cachedConfig = await offlineDb.getPrecallConfig('global');
+          }
           if (cachedConfig) {
             precallData = {
-              surveyId: cachedConfig.surveyId === 'global' ? null : cachedConfig.surveyId,
+              surveyId: cachedConfig.surveyId === 'global' ? (sidUrl || null) : cachedConfig.surveyId,
               outboundPrecall: cachedConfig.outboundPrecall,
               targetGovernorate: cachedConfig.targetGovernorate,
               numberAssignmentMode: cachedConfig.numberAssignmentMode || 'queue_only',
@@ -552,7 +566,8 @@ export default function PreCallChecklist() {
           if (!cancelled) setFormsCount(0);
         }
       } catch (e) {
-        console.error(e);
+        console.error("FATAL ERROR IN PRECALL FETCH:", e);
+        toast.error("Precall fetch error: " + (e.message || String(e)));
         if (!cancelled) {
           const norm = normalizeOutboundPrecall(null);
           setConfig(norm);
@@ -963,14 +978,43 @@ export default function PreCallChecklist() {
   const handleNoPhoneStart = async () => {
     setStartingNoPhone(true);
     try {
-      const res = await api.post('/agent/start-no-phone-session', { surveyId });
-      if (res.data && res.data.serialNumber) {
-        const serial = res.data.serialNumber;
-        const dummyPhone = `AUTO-${serial}`;
-        setCurrentNumber({ number: dummyPhone, serialNumber: serial });
-        setAnswers(prev => ({ ...prev, phone: dummyPhone, serial_number: serial }));
-        toast.success(t('serialAssigned') || `Serial ${serial} assigned successfully`);
+      if (isOnline) {
+        try {
+          const res = await api.post('/agent/start-no-phone-session', { surveyId });
+          if (res.data && res.data.serialNumber) {
+            const serial = res.data.serialNumber;
+            const dummyPhone = `AUTO-${serial}`;
+            setCurrentNumber({ number: dummyPhone, serialNumber: serial });
+            setAnswers(prev => ({ ...prev, phone: dummyPhone, serial_number: serial }));
+            toast.success(t('serialAssigned') || `Serial ${serial} assigned successfully`);
+            return;
+          }
+        } catch (apiErr) {
+          if (apiErr.response) {
+            throw apiErr;
+          }
+          // Network error: fall through to offline generation
+        }
       }
+
+      // Offline Fallback
+      const offlineSerial = `OFFLINE-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const dummyPhone = `AUTO-${offlineSerial}`;
+      const offlineSession = {
+        number: dummyPhone,
+        serialNumber: offlineSerial,
+        surveyId,
+        isOfflineDraft: true,
+        status: 'in-progress'
+      };
+
+      try {
+        localStorage.setItem('activeSession', JSON.stringify(offlineSession));
+      } catch (_) {}
+
+      setCurrentNumber(offlineSession);
+      setAnswers(prev => ({ ...prev, phone: dummyPhone, serial_number: offlineSerial }));
+      toast.info(t('offlineSerialAssigned') || 'Offline Mode: Temporary serial generated.');
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.error || 'Failed to assign serial');

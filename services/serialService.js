@@ -6,11 +6,13 @@ const Counter = require('../models/Counter');
  * @param {string} id - counter bucket (default: 'survey_numbers')
  * @returns {string} zero-padded 7-digit serial, e.g. "0001234"
  */
-async function getNextSerialNumber(id = 'survey_numbers') {
+async function getNextSerialNumber(id = 'survey_numbers', session = null) {
+  const options = { returnDocument: 'after', upsert: true };
+  if (session) options.session = session;
   const counter = await Counter.findOneAndUpdate(
     { id },
     { $inc: { seq: 1 } },
-    { returnDocument: 'after', upsert: true }
+    options
   );
   return String(counter.seq).padStart(7, '0');
 }

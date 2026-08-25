@@ -498,8 +498,11 @@ export function isFieldVisible(field, answers) {
 
 function isEmptyValue(type, val) {
   if (val === undefined || val === null) return true;
-  if (type === 'number') return val === '' || Number.isNaN(Number(val));
-  return String(val).trim() === '';
+  const str = String(val).trim();
+  if (str === '') return true;
+  if (str.startsWith('OFFLINE-') || str.startsWith('AUTO-')) return false;
+  if (type === 'number') return Number.isNaN(Number(val));
+  return false;
 }
 
 /** Whether this field passes validation (only when visible). */
@@ -512,13 +515,27 @@ export function isFieldSatisfied(field, value) {
   if (field.required && isEmptyValue(t, value)) return false;
   if (field.id === 'phone') {
     const str = String(value ?? '').trim();
-    if (str.startsWith('AUTO-')) return true;
+    if (str.startsWith('AUTO-') || str.startsWith('OFFLINE-')) return true;
     const digits = str.replace(/\D/g, '');
     if (field.required) return digits.length >= 8 && digits.length <= 15;
     return digits.length === 0 || (digits.length >= 8 && digits.length <= 15);
   }
+  if (field.id === 'serial_number' || field.id === 'serial') {
+    const str = String(value ?? '').trim();
+    if (str.startsWith('OFFLINE-') || str.startsWith('AUTO-')) return true;
+    if (field.required && str.length === 0) return false;
+    if (str.length === 0) return true;
+    const num = Number(str);
+    if (!Number.isNaN(num)) {
+      if (field.min != null && num < field.min) return false;
+      return true;
+    }
+    return str.length > 0;
+  }
   if (t === 'number') {
-    const str = String(value ?? '').replace(/\D/g, '');
+    const rawStr = String(value ?? '').trim();
+    if (rawStr.startsWith('OFFLINE-') || rawStr.startsWith('AUTO-')) return true;
+    const str = rawStr.replace(/\D/g, '');
     if (str.length === 0) return !field.required;
     if (field.minLength != null && str.length < field.minLength) return false;
     if (field.maxLength != null && str.length > field.maxLength) return false;
@@ -531,6 +548,7 @@ export function isFieldSatisfied(field, value) {
   }
   return String(value ?? '').trim().length > 0;
 }
+
 
 export function validateOutboundAnswers(fields, answers) {
   for (const field of fields) {

@@ -5,6 +5,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { UIContext } from '../../context/UIContext';
 import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
+import { translations } from '../../utils/translations';
 
 // Mock api client
 const mockGet = vi.fn();
@@ -72,40 +73,8 @@ describe('AdminDashboard Page Tests', () => {
   };
 
   const uiValue = {
-    t: (key) => {
-      const translations = {
-        adminDashboard: 'Admin Dashboard',
-        qualityAgent: 'Quality Dashboard',
-        workforceActive: 'Workforce Active',
-        globalSuccess: 'Global Success',
-        avgHandleTime: 'Avg Handle Time',
-        liveCampaigns: 'Live Campaigns',
-        activeStaffMsg: 'of',
-        completedSurveys: 'completed',
-        harvestingData: 'harvesting data',
-        campaigns: 'Campaigns',
-        totalHandled: 'Total Handled',
-        completed: 'Completed',
-        fulfillmentProgress: 'Fulfillment Progress',
-        searchPlaceholder: 'Search...',
-        teamPerformance: 'Team Performance',
-        agentName: 'Agent Name',
-        status: 'Status',
-        disqualified: 'Disqualified',
-        aht: 'AHT',
-        edit: 'Edit',
-        audit: 'Audit',
-        exportData: 'Export',
-        createSurvey: 'Create Survey',
-        changeRequests: 'Change Requests',
-        teamMembers: 'Team Members',
-        addTeamMember: 'Add Team Member',
-        campaignGoal: 'Campaign Goal',
-        confirmDeleteSurvey: 'Are you sure?',
-        qualityTeam: 'Quality Team',
-      };
-      return translations[key] || key;
-    }
+    language: 'en',
+    t: (key) => translations.en?.[key] || key,
   };
 
   const mockSurveys = [
@@ -258,7 +227,7 @@ describe('AdminDashboard Page Tests', () => {
       expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     });
 
-    const searchInput = screen.getByPlaceholderText('Search campaigns or agents...');
+    const searchInput = screen.getByPlaceholderText(translations.en.searchPlaceholder);
     fireEvent.change(searchInput, { target: { value: 'Health' } });
 
     // Health Survey 2026 should still be visible
@@ -305,9 +274,9 @@ describe('AdminDashboard Page Tests', () => {
       expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     });
 
-    expect(screen.getByText('+ Create New Survey')).toBeInTheDocument();
-    expect(screen.getByText('Team Members')).toBeInTheDocument();
-    expect(screen.getByText('+ Add Team Member')).toBeInTheDocument();
+    expect(screen.getByText(translations.en.createSurvey)).toBeInTheDocument();
+    expect(screen.getByText(translations.en.teamMembers)).toBeInTheDocument();
+    expect(screen.getByText(translations.en.addTeamMember)).toBeInTheDocument();
   });
 
   it('hides admin-only buttons for quality role', async () => {
@@ -317,9 +286,9 @@ describe('AdminDashboard Page Tests', () => {
       expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     });
 
-    expect(screen.queryByText('+ Create New Survey')).not.toBeInTheDocument();
-    expect(screen.queryByText('Team Members')).not.toBeInTheDocument();
-    expect(screen.queryByText('+ Add Team Member')).not.toBeInTheDocument();
+    expect(screen.queryByText(translations.en.createSurvey)).not.toBeInTheDocument();
+    expect(screen.queryByText(translations.en.teamMembers)).not.toBeInTheDocument();
+    expect(screen.queryByText(translations.en.addTeamMember)).not.toBeInTheDocument();
   });
 
   // ── Daily Goal Input ────────────────────────────────────────────────────────

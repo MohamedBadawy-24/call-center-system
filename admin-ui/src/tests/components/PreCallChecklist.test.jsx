@@ -344,11 +344,12 @@ describe('PreCallChecklist Page Component Tests', () => {
       </MemoryRouter>
     );
 
-    await screen.findByText('Agent Checklist');
-
-    fireEvent.change(screen.getByTestId('precall-age_years-input'), { target: { value: '25' } });
+    const ageInput = await screen.findByTestId('precall-age_years-input');
+    fireEvent.change(ageInput, { target: { value: '25' } });
+    
+    const getNumBtn = await screen.findByTestId('precall-get-number-btn');
     await act(async () => {
-      fireEvent.click(screen.getByTestId('precall-get-number-btn'));
+      fireEvent.click(getNumBtn);
     });
     fireEvent.change(screen.getByTestId('precall-call_result-select'), { target: { value: 'contacted' } });
     fireEvent.change(screen.getByTestId('precall-interview_result-select'), { target: { value: 'completed' } });

@@ -104,10 +104,6 @@ test.describe('E2E Production Simulation: Agent Workflow Lifecycle', () => {
     await page.getByTestId('precall-next-btn').click();
     await page.waitForURL(`**/take-survey/${surveyId}*`, { timeout: 15000 });
 
-    // 5. Fill out the survey
-    // Click "Start Questionnaire" on the intro screen
-    await page.getByRole('button', { name: /Start Questionnaire/i }).click();
-
     // Wait for the questions to load on the screen
     await expect(page.locator('#question-card-q1').first()).toBeVisible({ timeout: 10000 });
 

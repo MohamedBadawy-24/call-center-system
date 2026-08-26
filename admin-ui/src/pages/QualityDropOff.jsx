@@ -135,8 +135,8 @@ export default function QualityDropOff() {
         )}
       </div>
 
-      <div className="glass-card" style={{ padding: '1.5rem', overflowX: 'auto' }}>
-        <table dir="auto" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
+      <div className="glass-card table-responsive w-full overflow-x-auto" style={{ padding: '1.5rem', width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <table dir="auto" style={{ width: '100%', minWidth: '600px', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
           <thead>
             <tr>
               <th style={{ textAlign: isRtl ? 'right' : 'left' }}>#</th>

@@ -60,23 +60,25 @@ export default function Analytics() {
           <h3>{t('noDataLast7Days')}</h3>
         </motion.div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '2rem' }}>
+        <div className="analytics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: '2rem' }}>
           
           <motion.div variants={itemVariants} className="glass-card" style={{ padding: '1.5rem' }}>
             <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Activity size={20} color="var(--success)" /> Completions Trend
             </h3>
-            <div style={{ height: '300px' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="date" stroke="var(--text-secondary)" />
-                  <YAxis stroke="var(--text-secondary)" />
-                  <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ background: 'var(--card-bg)', border: 'var(--glass-border)', borderRadius: '8px' }} />
-                  <Legend />
-                  <Bar dataKey="completed" name="Completed Surveys" fill="var(--success)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="w-full overflow-x-auto chart-scroll-wrapper" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <div className="min-w-[500px] h-64 md:min-w-0 md:h-80 chart-inner" style={{ minWidth: '500px', height: '300px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                    <XAxis dataKey="date" stroke="var(--text-secondary)" />
+                    <YAxis stroke="var(--text-secondary)" />
+                    <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ background: 'var(--card-bg)', border: 'var(--glass-border)', borderRadius: '8px' }} />
+                    <Legend />
+                    <Bar dataKey="completed" name="Completed Surveys" fill="var(--success)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </motion.div>
 
@@ -84,17 +86,19 @@ export default function Analytics() {
             <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Clock size={20} color="var(--primary)" /> Average Handle Time (Seconds)
             </h3>
-            <div style={{ height: '300px' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="date" stroke="var(--text-secondary)" />
-                  <YAxis stroke="var(--text-secondary)" />
-                  <Tooltip contentStyle={{ background: 'var(--card-bg)', border: 'var(--glass-border)', borderRadius: '8px' }} />
-                  <Legend />
-                  <Line type="monotone" dataKey="aht" name="AHT (sec)" stroke="var(--primary)" strokeWidth={3} dot={{ r: 4, fill: 'var(--primary)' }} activeDot={{ r: 6 }} />
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="w-full overflow-x-auto chart-scroll-wrapper" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <div className="min-w-[500px] h-64 md:min-w-0 md:h-80 chart-inner" style={{ minWidth: '500px', height: '300px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                    <XAxis dataKey="date" stroke="var(--text-secondary)" />
+                    <YAxis stroke="var(--text-secondary)" />
+                    <Tooltip contentStyle={{ background: 'var(--card-bg)', border: 'var(--glass-border)', borderRadius: '8px' }} />
+                    <Legend />
+                    <Line type="monotone" dataKey="aht" name="AHT (sec)" stroke="var(--primary)" strokeWidth={3} dot={{ r: 4, fill: 'var(--primary)' }} activeDot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </motion.div>
           

@@ -159,18 +159,18 @@ export default function UserManagement() {
           <h1 style={{ margin: 0 }}>{t('teamMembers')}</h1>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <Link to="/admin" className="btn-secondary">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-3 w-full md:w-auto" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <Link to="/admin" className="btn-secondary w-full md:w-auto" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
             <ArrowLeft size={16} /> {t('backToDashboard')}
           </Link>
-          <Link to="/admin/register" className="btn-primary">
+          <Link to="/admin/register" className="btn-primary w-full md:w-auto" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
             <UserPlus size={16} /> {t('addTeamMember')}
           </Link>
         </div>
       </div>
 
-      <div className="glass-card" style={{ padding: '1rem', overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
+      <div className="glass-card table-responsive w-full overflow-x-auto" style={{ padding: '1rem', width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
           <thead>
             <tr>
               <th>{t('displayName')}</th>

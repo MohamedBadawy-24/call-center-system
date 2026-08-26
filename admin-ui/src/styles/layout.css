@@ -309,6 +309,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 1rem;
 }
 
 .modal-content {
@@ -319,6 +320,55 @@
   border-radius: var(--radius-lg);
   padding: var(--space-4xl);
   box-shadow: var(--card-shadow);
-  width: 100%;
+  width: 95%;
   max-width: 450px;
+  max-height: 90vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 640px) {
+  .modal-content {
+    width: 100%;
+    max-width: 500px;
+  }
+}
+
+@media (min-width: 768px) {
+  .modal-content {
+    max-width: 600px;
+  }
+}
+
+/* Responsive Table & Chart Utilities */
+.table-responsive,
+.overflow-x-auto {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.w-full {
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .md\:w-auto {
+    width: auto !important;
+  }
+  .md\:flex-row {
+    flex-direction: row !important;
+  }
+  .md\:items-center {
+    align-items: center !important;
+  }
+  .md\:items-end {
+    align-items: flex-end !important;
+  }
+  .md\:gap-4 {
+    gap: 1rem !important;
+  }
+  .md\:min-w-0 {
+    min-width: 0 !important;
+  }
 }

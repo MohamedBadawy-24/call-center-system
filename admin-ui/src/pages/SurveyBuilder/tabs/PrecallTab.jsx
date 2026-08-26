@@ -181,7 +181,7 @@ export default function PrecallTab() {
 
           {templatePickerOpen && (
             <div className="modal-overlay" onClick={() => setTemplatePickerOpen(false)}>
-              <div className="modal-content glass-card" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content glass-card w-[95%] sm:w-full max-w-lg md:max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                 <h3 dir="auto" style={{ marginTop: 0 }}>{t('chooseOlderTemplate') || 'Choose an older template'}</h3>
                 <p dir="auto" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
                   {t('chooseOlderTemplateDesc') || 'Pick a starting layout. You can still edit every field afterward.'}

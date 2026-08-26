@@ -52,8 +52,8 @@ export default function ProfileRequests() {
 
       <section style={{ marginTop: '2rem' }}>
         <h2>{t('pendingRequests')}</h2>
-        <div className="glass-card" style={{ padding: '0', overflowX: 'auto', marginTop: '1rem' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div className="glass-card table-responsive w-full overflow-x-auto" style={{ padding: '0', width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginTop: '1rem' }}>
+          <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ background: 'rgba(0,0,0,0.02)', borderBottom: '1px solid var(--border-color)' }}>
                 <th style={{ padding: '1rem' }}>{t('requestedBy')}</th>
@@ -106,8 +106,8 @@ export default function ProfileRequests() {
 
       <section style={{ marginTop: '3rem' }}>
         <h2>{t('requestHistory')}</h2>
-        <div className="glass-card" style={{ padding: '0', overflowX: 'auto', marginTop: '1rem' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div className="glass-card table-responsive w-full overflow-x-auto" style={{ padding: '0', width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginTop: '1rem' }}>
+          <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ background: 'rgba(0,0,0,0.02)', borderBottom: '1px solid var(--border-color)' }}>
                 <th style={{ padding: '1rem' }}>{t('requestedBy')}</th>

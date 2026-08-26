@@ -245,8 +245,8 @@ export default function AdminDashboard() {
         </div>
         
         {isAdmin && (
-          <motion.div variants={itemVariants} style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-secondary)', padding: '0.25rem 0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+          <motion.div variants={itemVariants} className="admin-header-actions flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-3 w-full md:w-auto" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: 'var(--bg-secondary)', padding: '0.25rem 0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
               <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Daily Goal:</span>
               <input 
                 type="number" 
@@ -256,10 +256,10 @@ export default function AdminDashboard() {
                 style={{ width: '60px', padding: '0.25rem', border: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)', borderRadius: '4px', textAlign: 'center' }}
               />
             </div>
-            <Link to="/admin/requests" className="btn-secondary"><History size={16} />{t('changeRequests')}</Link>
-            <Link to="/admin/users" className="btn-secondary"><Users size={16} />{t('teamMembers')}</Link>
-            <Link to="/admin/register" className="btn-secondary"><UserPlus size={16} />{t('addTeamMember')}</Link>
-            <Link to="/admin/builder" className="btn-primary"><Plus size={18} />{t('createSurvey')}</Link>
+            <Link to="/admin/requests" className="btn-secondary w-full md:w-auto" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><History size={16} />{t('changeRequests')}</Link>
+            <Link to="/admin/users" className="btn-secondary w-full md:w-auto" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Users size={16} />{t('teamMembers')}</Link>
+            <Link to="/admin/register" className="btn-secondary w-full md:w-auto" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><UserPlus size={16} />{t('addTeamMember')}</Link>
+            <Link to="/admin/builder" className="btn-primary w-full md:w-auto" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={18} />{t('createSurvey')}</Link>
           </motion.div>
         )}
       </div>
@@ -407,8 +407,8 @@ export default function AdminDashboard() {
         {t('teamPerformance')}
       </motion.h2>
 
-      <motion.div variants={itemVariants} className="glass-card" style={{ padding: '1rem', overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
+      <motion.div variants={itemVariants} className="glass-card table-responsive w-full overflow-x-auto" style={{ padding: '1rem', width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
           <thead>
             <tr>
               <th>{t('agentName')}</th>
@@ -524,7 +524,7 @@ export default function AdminDashboard() {
         {suspendModal.open && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="drawer-overlay" onClick={() => setSuspendModal({ open: false, agentId: null, reason: "" })} />
-            <motion.div initial={{ scale: 0.9, opacity: 0, x: '-50%', y: '-50%' }} animate={{ scale: 1, opacity: 1, x: '-50%', y: '-50%' }} exit={{ scale: 0.9, opacity: 0, x: '-50%', y: '-50%' }} className="glass-card" style={{ position: 'fixed', top: '50%', left: '50%', zIndex: 1000, width: '400px', maxWidth: '90vw' }}>
+            <motion.div initial={{ scale: 0.9, opacity: 0, x: '-50%', y: '-50%' }} animate={{ scale: 1, opacity: 1, x: '-50%', y: '-50%' }} exit={{ scale: 0.9, opacity: 0, x: '-50%', y: '-50%' }} className="glass-card modal-content" style={{ position: 'fixed', top: '50%', left: '50%', zIndex: 1000, width: '95%', maxWidth: '400px', maxHeight: '90vh', overflowY: 'auto' }}>
               <h3>{t('suspendAgent') || 'Suspend Agent'}</h3>
               <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>{t('suspendReasonPrompt') || 'Please provide a reason for suspension.'}</p>
               <textarea 

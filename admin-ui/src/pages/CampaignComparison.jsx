@@ -120,10 +120,10 @@ export default function CampaignComparison() {
         {!surveysLoaded ? (
           <button className="btn-primary" onClick={loadSurveys}>{t('loadLinkedCampaigns') || 'Load Linked Campaigns'}</button>
         ) : (
-          <form onSubmit={handleCompare} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <div style={{ flex: '1 1 300px' }}>
+          <form onSubmit={handleCompare} className="campaign-comparison-form flex flex-col md:flex-row items-stretch md:items-end gap-3 md:gap-4" style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <div className="w-full md:flex-1" style={{ flex: '1 1 300px', minWidth: '220px' }}>
               <label className="form-label">{t('selectAgentCampaign') || 'Select Agent Campaign'}</label>
-              <select className="input-field" value={selectedSurveyId} onChange={(e) => setSelectedSurveyId(e.target.value)} required>
+              <select className="input-field w-full" value={selectedSurveyId} onChange={(e) => setSelectedSurveyId(e.target.value)} required>
                 <option value="">-- {t('selectCampaign') || 'Select Campaign'} --</option>
                 {surveys.map(s => (
                   <option key={s._id} value={s._id}>{s.title} ({t('matchBy') || 'Match by'}: {s.comparisonMatchField})</option>
@@ -131,14 +131,14 @@ export default function CampaignComparison() {
               </select>
             </div>
             
-            <div style={{ flex: '1 1 250px' }}>
+            <div className="w-full md:flex-1" style={{ flex: '1 1 250px', minWidth: '220px' }}>
               <label className="form-label">{t('searchIdentifier') || 'Search Identifier'}</label>
               <div className="search-container" style={{ margin: 0 }}>
                 <Search className="search-icon" size={20} />
                 <input 
                   type="text" 
                   placeholder={t('serialOrPhone') || "Serial # or Phone..."} 
-                  className="search-input"
+                  className="search-input w-full"
                   value={searchValue}
                   onChange={(e) => setSearchValue(e.target.value)}
                   required
@@ -146,8 +146,8 @@ export default function CampaignComparison() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'flex-end', height: '68px' }}>
-              <button type="submit" className="btn-primary" disabled={loading} style={{ height: '42px', padding: '0 2rem' }}>
+            <div className="w-full md:w-auto" style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button type="submit" className="btn-primary w-full md:w-auto" disabled={loading} style={{ height: '42px', padding: '0 2rem' }}>
                 {loading ? (t('searching') || 'Searching...') : (t('compare') || 'Compare')}
               </button>
             </div>
@@ -164,7 +164,7 @@ export default function CampaignComparison() {
 
       {result && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
             <div className="glass-card" style={{ background: 'hsla(var(--p-h), var(--p-s), var(--p-l), 0.08)', borderColor: 'var(--primary)' }}>
               <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--primary)', marginBottom: '0.4rem' }}>
                 {t('agentCampaign') || 'Agent Campaign'}
@@ -194,8 +194,8 @@ export default function CampaignComparison() {
 
           {result.responseA && result.responseB && allQuestions.length > 0 && (
             <div className="glass-card" style={{ overflow: 'hidden', padding: 0 }}>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div className="table-responsive w-full overflow-x-auto" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: 'var(--primary-low)' }}>
                       <th style={{ padding: '0.85rem 1.25rem', textAlign: isRtl ? 'right' : 'left', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', width: '35%', borderBottom: '1px solid var(--border-color)' }}>

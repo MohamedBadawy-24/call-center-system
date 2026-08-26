@@ -690,8 +690,8 @@ export default function SettingsTab() {
         )}
         
         {surveyId && numbers && numbers.length > 0 && (
-          <div style={{ marginTop: '1.5rem', overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+          <div className="table-responsive w-full overflow-x-auto" style={{ marginTop: '1.5rem', width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', minWidth: '500px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
               <thead>
                 <tr style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
                   <th style={{ padding: '0.75rem' }}>Number</th>

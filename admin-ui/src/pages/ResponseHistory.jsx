@@ -294,12 +294,12 @@ export default function ResponseHistory() {
           {t('responseHistory')}
         </h1>
         
-        <div style={{ display: 'flex', gap: '1rem', flex: 1, maxWidth: '600px' }}>
-          <div style={{ position: 'relative', flex: 1 }}>
+        <div className="response-history-actions flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-4 w-full md:w-auto" style={{ display: 'flex', gap: '1rem', flex: 1, maxWidth: '600px', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
             <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
             <input 
               type="text" 
-              className="input-field" 
+              className="input-field w-full" 
               placeholder={t('searchPlaceholder')} 
               style={{ paddingLeft: '40px' }}
               value={searchTerm}
@@ -307,20 +307,20 @@ export default function ResponseHistory() {
             />
           </div>
           <button 
-            className="btn-secondary" 
+            className="btn-secondary w-full md:w-auto" 
             onClick={() => { setViewFlagged(false); setShowDeleted(!showDeleted); }} 
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: showDeleted ? 'var(--danger)' : '', color: showDeleted ? '#fff' : '' }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: showDeleted ? 'var(--danger)' : '', color: showDeleted ? '#fff' : '' }}
           >
             <Trash2 size={18} /> {showDeleted ? (t('allResponses') || 'View All') : (t('showDeleted') || 'Deleted Responses')}
           </button>
           <button 
-            className="btn-secondary" 
+            className="btn-secondary w-full md:w-auto" 
             onClick={() => { setShowDeleted(false); setViewFlagged(!viewFlagged); }} 
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: viewFlagged ? 'var(--danger)' : '', color: viewFlagged ? '#fff' : '' }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: viewFlagged ? 'var(--danger)' : '', color: viewFlagged ? '#fff' : '' }}
           >
             <Flag size={18} /> {viewFlagged ? (t('allResponses') || 'View All') : (t('flaggedResponse') || 'Flagged Only')}
           </button>
-          <button className="btn-primary" onClick={() => setShowExportModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <button className="btn-primary w-full md:w-auto" onClick={() => setShowExportModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
             <Download size={18} /> {t('advancedExport')}
           </button>
         </div>
@@ -492,8 +492,8 @@ export default function ResponseHistory() {
             <p style={{ margin: 0, fontWeight: 600 }}>{t('emptyStateNoResponses') || 'No responses found matching your search.'}</p>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className="table-responsive w-full overflow-x-auto" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse' }}>
               <thead style={{ background: 'rgba(255,255,255,0.05)', borderBottom: '1px solid var(--border-color)' }}>
                 <tr>
                    <th style={{ padding: '1.25rem', textAlign: 'left' }}>{t('serial') || 'Serial'}</th>

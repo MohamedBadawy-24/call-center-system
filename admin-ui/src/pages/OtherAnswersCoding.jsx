@@ -217,7 +217,7 @@ export default function OtherAnswersCoding() {
       {selectedQuestionId && !loading && (
         <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
           <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2 md:gap-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
               <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <HelpCircle size={18} color="var(--primary)" />
                 Answers Coding List
@@ -242,7 +242,8 @@ export default function OtherAnswersCoding() {
               </div>
             </div>
 
-            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
+            <div className="table-responsive w-full overflow-x-auto" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', minWidth: '500px', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
               <thead>
                 <tr>
                   <th>{t('answerColumn')}</th>
@@ -287,6 +288,7 @@ export default function OtherAnswersCoding() {
                 ))}
               </tbody>
             </table>
+            </div>
 
             {codings.length === 0 && (
               <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem 0' }}>

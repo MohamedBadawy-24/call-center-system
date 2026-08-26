@@ -51,16 +51,16 @@ export default function QualityAgentStats() {
 
   return (
     <motion.div dir="auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ paddingBottom: '4rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 md:gap-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: 0 }}>
           <Filter size={32} color="var(--primary)" />
           {t('agentStats') || 'Agent Stats'}
         </h1>
 
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-4 w-full md:w-auto" style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <select 
             dir="auto"
-            className="glass-input" 
+            className="glass-input w-full md:w-auto" 
             value={period} 
             onChange={(e) => setPeriod(e.target.value)}
             style={{ padding: '0.5rem', borderRadius: 'var(--radius-md)' }}
@@ -70,7 +70,7 @@ export default function QualityAgentStats() {
             <option value="monthly">Monthly</option>
           </select>
           
-          <button dir="auto" className="btn-primary" onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <button dir="auto" className="btn-primary w-full md:w-auto" onClick={handleExport} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
             <Download size={16} /> {t('exportData') || 'Export to Excel'}
           </button>
         </div>
@@ -88,8 +88,8 @@ export default function QualityAgentStats() {
         />
       </div>
 
-      <div className="glass-card" style={{ padding: '1.5rem', overflowX: 'auto' }}>
-        <table dir="auto" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
+      <div className="glass-card table-responsive w-full overflow-x-auto" style={{ padding: '1.5rem', width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <table dir="auto" style={{ width: '100%', minWidth: '700px', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
           <thead>
             <tr>
               <th style={{ textAlign: isRtl ? 'right' : 'left' }}>{t('date')}</th>

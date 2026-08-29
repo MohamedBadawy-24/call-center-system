@@ -627,3 +627,149 @@ exports.startNoPhoneSession = async (userId, userRole, surveyId, io) => {
 
   return serialNumber;
 };
+
+exports.getMyResponses = async (userId) => {
+  return await Response.find({ agentId: userId })
+    .populate('surveyId', 'title sections')
+    .sort({ completedAt: -1, startedAt: -1 })
+    .lean();
+};
+
+exports.getFullResponseForEdit = async (serialNumber, userId, userRole) => {
+  if (!serialNumber) {
+    throw createError('Serial number is required', 400);
+  }
+
+  const response = await Response.findOne({ serialNumber })
+    .populate('surveyId')
+    .lean();
+
+  if (!response) {
+    throw createError('Response not found', 404);
+  }
+
+  if (String(response.agentId) !== String(userId) && userRole !== 'admin') {
+    throw createError('Unauthorized to access this response', 403);
+  }
+
+  if (!response.isEditUnlocked) {
+    throw createError('Edit not unlocked for this response', 403);
+  }
+
+  const precall = await PrecallCompletion.findOne({ serialNumber }).lean();
+
+  return {
+    response: {
+      _id: response._id,
+      serialNumber: response.serialNumber,
+      answers: response.answers || [],
+      status: response.status,
+      surveyId: response.surveyId,
+      isEditUnlocked: response.isEditUnlocked,
+      interviewOutcome: response.interviewOutcome,
+      outcomeReason: response.outcomeReason,
+      agentNotes: response.agentNotes || [],
+      completedAt: response.completedAt,
+    },
+    precall: precall ? {
+      _id: precall._id,
+      serialNumber: precall.serialNumber,
+      payload: precall.payload || {},
+      interviewOutcome: precall.interviewOutcome,
+      outcomeCategory: precall.outcomeCategory,
+      outcomeReason: precall.outcomeReason,
+      surveyId: precall.surveyId,
+      interviewStartedAt: precall.interviewStartedAt,
+      interviewDate: precall.interviewDate,
+      interviewStartDisplay: precall.interviewStartDisplay,
+    } : null,
+  };
+};
+
+exports.updatePrecall = async (serialNumber, userId, userRole, data, io) => {
+  if (!serialNumber) {
+    throw createError('Serial number is required', 400);
+  }
+
+  const response = await Response.findOne({ serialNumber });
+  if (response) {
+    if (String(response.agentId) !== String(userId) && userRole !== 'admin') {
+      throw createError('Unauthorized to update this precall', 403);
+    }
+    if (!response.isEditUnlocked) {
+      throw createError('Edit not unlocked for this response', 403);
+    }
+  }
+
+  const precall = await PrecallCompletion.findOne({ serialNumber });
+  if (!precall) {
+    throw createError('Precall data not found', 404);
+  }
+
+  if (!response && String(precall.userId) !== String(userId) && userRole !== 'admin') {
+    throw createError('Unauthorized to update this precall', 403);
+  }
+
+  const payload = data.payload && typeof data.payload === 'object' ? data.payload : {};
+  precall.payload = { ...(precall.payload || {}), ...payload };
+  precall.markModified('payload');
+
+  if (data.interviewOutcome) precall.interviewOutcome = data.interviewOutcome;
+  if (data.outcomeCategory) precall.outcomeCategory = data.outcomeCategory;
+  if (data.outcomeReason !== undefined) precall.outcomeReason = data.outcomeReason;
+  if (data.disqualified !== undefined) precall.disqualified = data.disqualified;
+
+  await precall.save();
+
+  if (io) {
+    io.emit('stats-update');
+  }
+
+  return { ok: true, serialNumber };
+};
+
+exports.updateResponse = async (serialNumber, userId, userRole, data, io) => {
+  if (!serialNumber) {
+    throw createError('Serial number is required', 400);
+  }
+
+  const response = await Response.findOne({ serialNumber });
+  if (!response) {
+    throw createError('Response not found', 404);
+  }
+
+  if (String(response.agentId) !== String(userId) && userRole !== 'admin') {
+    throw createError('Unauthorized to update this response', 403);
+  }
+
+  if (!response.isEditUnlocked) {
+    throw createError('Edit not unlocked for this response', 403);
+  }
+
+  if (Array.isArray(data.answers)) {
+    response.answers = data.answers;
+  }
+
+  if (Array.isArray(data.agentNotes)) {
+    response.agentNotes = data.agentNotes;
+    if (data.agentNotes.length > 0) {
+      response.agentNote = data.agentNotes[0];
+    }
+  }
+
+  if (data.interviewOutcome !== undefined) response.interviewOutcome = data.interviewOutcome;
+  if (data.outcomeCategory !== undefined) response.outcomeCategory = data.outcomeCategory;
+  if (data.outcomeReason !== undefined) response.outcomeReason = data.outcomeReason;
+  if (data.status !== undefined) response.status = data.status;
+
+  // Auto-lock the response after editing
+  response.isEditUnlocked = false;
+
+  await response.save();
+
+  if (io) {
+    io.emit('stats-update');
+  }
+
+  return { ok: true, responseId: response._id, serialNumber };
+};

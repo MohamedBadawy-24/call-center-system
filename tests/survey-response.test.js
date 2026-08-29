@@ -244,4 +244,80 @@ describe('Survey Response Submission & Campaign CRUD Limits', () => {
       expect(postponedDoc.agentId.toString()).toBe(user._id.toString());
     });
   });
+
+  describe('POST /admin/responses/:id/delete - Delete and Restore responses & precalls', () => {
+    it('Admin can soft-delete and restore a Response document', async () => {
+      const { token: adminToken } = await getAuthToken('admin');
+      const { token: agentToken, user: agent } = await getAuthToken('agent');
+      await makeRequest('POST', '/auth/status', { status: 'active' }, agentToken);
+      const survey = await createTestSurvey();
+
+      const Response = mongoose.model('Response');
+      const response = await Response.create({
+        surveyId: survey._id,
+        agentId: agent._id,
+        serialNumber: 'SR-TEST-001',
+        status: 'completed',
+        isValid: true,
+      });
+
+      // Soft delete
+      const softRes = await makeRequest('POST', `/admin/responses/${response._id}/delete`, { action: 'soft_delete' }, adminToken);
+      expect(softRes.status).toBe(200);
+      expect(softRes.data.success).toBe(true);
+
+      const softUpdated = await Response.findById(response._id);
+      expect(softUpdated.isValid).toBe(false);
+      expect(softUpdated.status).toBe('disqualified');
+
+      // Restore
+      const restoreRes = await makeRequest('POST', `/admin/responses/${response._id}/delete`, { action: 'restore' }, adminToken);
+      expect(restoreRes.status).toBe(200);
+      const restored = await Response.findById(response._id);
+      expect(restored.isValid).toBe(true);
+
+      // Hard delete
+      const hardRes = await makeRequest('POST', `/admin/responses/${response._id}/delete`, { action: 'hard_delete' }, adminToken);
+      expect(hardRes.status).toBe(200);
+      const hardDeleted = await Response.findById(response._id);
+      expect(hardDeleted).toBeNull();
+    });
+
+    it('Admin can soft-delete and hard-delete a PrecallCompletion document', async () => {
+      const { token: adminToken } = await getAuthToken('admin');
+      const { user: agent } = await getAuthToken('agent');
+      const survey = await createTestSurvey();
+
+      const PrecallCompletion = mongoose.model('PrecallCompletion');
+      const precall = await PrecallCompletion.create({
+        userId: agent._id,
+        surveyId: survey._id,
+        serialNumber: 'PC-TEST-002',
+        statusStartedAt: new Date(),
+        outcomeCategory: 'disqualified',
+        isValid: true,
+      });
+
+      // Soft delete
+      const softRes = await makeRequest('POST', `/admin/responses/${precall._id}/delete`, { action: 'soft_delete' }, adminToken);
+      expect(softRes.status).toBe(200);
+      expect(softRes.data.success).toBe(true);
+
+      const softUpdated = await PrecallCompletion.findById(precall._id);
+      expect(softUpdated.isValid).toBe(false);
+      expect(softUpdated.disqualified).toBe(true);
+
+      // Restore
+      const restoreRes = await makeRequest('POST', `/admin/responses/${precall._id}/delete`, { action: 'restore' }, adminToken);
+      expect(restoreRes.status).toBe(200);
+      const restored = await PrecallCompletion.findById(precall._id);
+      expect(restored.isValid).toBe(true);
+
+      // Hard delete
+      const hardRes = await makeRequest('POST', `/admin/responses/${precall._id}/delete`, { action: 'hard_delete' }, adminToken);
+      expect(hardRes.status).toBe(200);
+      const hardDeleted = await PrecallCompletion.findById(precall._id);
+      expect(hardDeleted).toBeNull();
+    });
+  });
 });

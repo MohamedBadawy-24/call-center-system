@@ -2,7 +2,7 @@ import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, SOCKET_BASE } from '../api/client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ClipboardList, Star, ArrowLeft } from 'lucide-react';
+import { ClipboardList, Star, ArrowLeft, History } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { toast } from 'react-toastify';
 
@@ -325,14 +325,28 @@ export default function AgentDashboard() {
           </h1>
         </motion.div>
 
-        {user?.role === 'agent' && user?.currentStatus === 'active' && (
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <motion.div variants={itemVariants}>
-            <button type="button" className="btn-secondary" onClick={() => navigate('/agent/precall')} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
-              <ArrowLeft size={18} />
-              {t('backToChecklist')}
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => navigate('/agent/history')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+            >
+              <History size={18} />
+              {t('mySubmissions') || 'My Submissions'}
             </button>
           </motion.div>
-        )}
+
+          {user?.role === 'agent' && user?.currentStatus === 'active' && (
+            <motion.div variants={itemVariants}>
+              <button type="button" className="btn-secondary" onClick={() => navigate('/agent/precall')} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                <ArrowLeft size={18} />
+                {t('backToChecklist')}
+              </button>
+            </motion.div>
+          )}
+        </div>
         
         {stats && typeof stats.completed === 'number' && (
           <motion.div 

@@ -8,7 +8,7 @@ import FlagPopover from '../components/FlagPopover';
 
 import { io } from 'socket.io-client';
 import { SOCKET_BASE } from '../api/client';
-import { Download, X as CloseIcon, Filter, Flag, AlertTriangle, Check, Trash2, RefreshCcw } from 'lucide-react';
+import { Download, X as CloseIcon, Filter, Flag, AlertTriangle, Check, Trash2, RefreshCcw, Lock, Unlock } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 
@@ -42,6 +42,29 @@ export default function ResponseHistory() {
   // Delete modal state
   const [deleteModalResponse, setDeleteModalResponse] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [unlockLoadingId, setUnlockLoadingId] = useState(null);
+
+  const handleUnlockEdit = async (responseId, e) => {
+    e.stopPropagation();
+    try {
+      setUnlockLoadingId(responseId);
+      const res = await api.patch(`/admin/responses/${responseId}/unlock-edit`);
+      if (res.data?.ok) {
+        setResponses(prev => prev.map(r => {
+          if (r._id === responseId) {
+            return { ...r, isEditUnlocked: true };
+          }
+          return r;
+        }));
+        toast.success(t('editUnlockedSuccess') || 'Edit access unlocked for agent');
+      }
+    } catch (err) {
+      console.error('[UNLOCK EDIT ERROR]', err);
+      toast.error(err.response?.data?.error || 'Failed to unlock edit access');
+    } finally {
+      setUnlockLoadingId(null);
+    }
+  };
 
   const handleDeleteResponse = async (responseId, action) => {
     try {
@@ -50,6 +73,14 @@ export default function ResponseHistory() {
       if (action === 'hard_delete') {
         setResponses(prev => prev.filter(r => r._id !== responseId));
         toast.success('Response permanently deleted');
+      } else if (action === 'restore') {
+        setResponses(prev => prev.map(r => {
+          if (r._id === responseId) {
+            return { ...r, isValid: true };
+          }
+          return r;
+        }));
+        toast.success('Response restored successfully');
       } else {
         setResponses(prev => prev.map(r => {
           if (r._id === responseId) {
@@ -553,6 +584,23 @@ export default function ResponseHistory() {
                         }}>
                           {r.interviewOutcome || r.status}
                         </span>
+                        {r.isEditUnlocked && (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
+                            marginLeft: '0.4rem',
+                            padding: '0.15rem 0.5rem',
+                            borderRadius: '12px',
+                            fontSize: '0.7rem',
+                            fontWeight: 800,
+                            background: 'rgba(245, 158, 11, 0.15)',
+                            color: 'var(--warning)',
+                            border: '1px solid rgba(245, 158, 11, 0.3)'
+                          }}>
+                            <Unlock size={11} /> {t('unlocked') || 'Unlocked'}
+                          </span>
+                        )}
                       </td>
                       <td style={{ padding: '1.25rem', textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', alignItems: 'center' }}>
@@ -563,6 +611,23 @@ export default function ResponseHistory() {
                             {expandedId === r._id ? t('closeAnswers') : t('viewAnswers')}
                             {expandedId === r._id ? <ChevronUp size={14} style={{ marginLeft: '0.4rem' }} /> : <ChevronDown size={14} style={{ marginLeft: '0.4rem' }} />}
                           </button>
+
+                          {user?.role === 'admin' && !viewFlagged && !r.isPrecallOnly && (
+                            <button
+                              className="btn-secondary"
+                              style={{
+                                padding: '0.4rem',
+                                color: r.isEditUnlocked ? 'var(--warning)' : 'var(--text-secondary)',
+                                background: r.isEditUnlocked ? 'rgba(245, 158, 11, 0.15)' : undefined,
+                                borderColor: r.isEditUnlocked ? 'rgba(245, 158, 11, 0.4)' : undefined
+                              }}
+                              onClick={(e) => handleUnlockEdit(r._id, e)}
+                              disabled={unlockLoadingId === r._id || r.isEditUnlocked}
+                              title={r.isEditUnlocked ? (t('editAlreadyUnlocked') || 'Edit Unlocked') : (t('unlockEdit') || 'Unlock Edit for Agent')}
+                            >
+                              {r.isEditUnlocked ? <Unlock size={14} /> : <Lock size={14} />}
+                            </button>
+                          )}
 
                           {viewFlagged && (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>

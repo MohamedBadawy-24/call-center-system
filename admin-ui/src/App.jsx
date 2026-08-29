@@ -22,6 +22,7 @@ import Analytics from './pages/Analytics';
 import Feedbacks from './pages/Feedbacks';
 import SopUpdates from './pages/SopUpdates';
 import ResponseHistory from './pages/ResponseHistory';
+import AgentResponseHistory from './pages/AgentResponseHistory';
 import QualityAgentStats from './pages/QualityAgentStats';
 import QualityDropOff from './pages/QualityDropOff';
 import CampaignComparison from './pages/CampaignComparison';
@@ -373,6 +374,9 @@ const NavBar = () => {
                 <Link to="/profile" className="drawer-item" onClick={() => setDrawerOpen(false)}>
                   <UserIcon size={18} /> {t('myProfile')}
                 </Link>
+                <Link to="/agent/history" className="drawer-item" onClick={() => setDrawerOpen(false)}>
+                  <History size={18} /> {t('mySubmissions') || 'My Submissions'}
+                </Link>
                 <Link to="/sops" className="drawer-item" onClick={() => { setDrawerOpen(false); setUnseenSopCount(0); }}>
                   <BookOpen size={18} /> {t('sopUpdates') || 'SOP Updates'}
                 </Link>
@@ -486,6 +490,7 @@ const AnimatedRoutes = () => {
         <Route path="/forgot-password" element={<PageWrapper><ForgotPassword /></PageWrapper>} />
         <Route path="/profile" element={<PrivateRoute><PageWrapper><ProfileSettings /></PageWrapper></PrivateRoute>} />
         <Route path="/" element={<PrivateRoute><PageWrapper><AgentDashboard /></PageWrapper></PrivateRoute>} />
+        <Route path="/agent/history" element={<PrivateRoute><PageWrapper><AgentResponseHistory /></PageWrapper></PrivateRoute>} />
         <Route path="/agent/precall" element={<PrivateRoute><PageWrapper><PreCallChecklist /></PageWrapper></PrivateRoute>} />
         <Route path="/take-survey/:id" element={<PrivateRoute><PageWrapper><TakeSurvey /></PageWrapper></PrivateRoute>} />
         <Route path="/sops" element={<PrivateRoute><PageWrapper><SopUpdates /></PageWrapper></PrivateRoute>} />

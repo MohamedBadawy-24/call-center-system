@@ -96,5 +96,9 @@ router.post('/assign-manual-number', agentActiveAuth, agentController.assignManu
 router.post('/mark-number/:id', [auth, agentActiveAuth], agentController.markNumberCalled);
 router.get('/pending-serials', auth, agentController.getPendingSerials);
 router.get('/handover-candidates', auth, agentController.listHandoverCandidates);
+router.get('/my-responses', auth, agentController.getMyResponses);
+router.get('/responses/:serialNumber/full', auth, agentController.getFullResponseForEdit);
+router.put('/precall/:serialNumber', auth, agentController.updatePrecall);
+router.put('/responses/:serialNumber', auth, agentController.updateResponse);
 
 module.exports = router;

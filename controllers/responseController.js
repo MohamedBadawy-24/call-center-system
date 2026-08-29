@@ -5,6 +5,8 @@ const path = require('path');
 const { VariableType } = require('sav-writer');
 const responseService = require('../services/responseService');
 const Response = require('../models/Response');
+const PrecallCompletion = require('../models/PrecallCompletion');
+const Review = require('../models/Review');
 const logger = require('../utils/logger');
 
 exports.submitResponse = async (req, res, next) => {
@@ -874,7 +876,7 @@ exports.exportAdvanced = async (req, res, next) => {
 
 /**
  * Admin-only: Delete a response (soft or hard).
- * POST /admin/responses/:id/delete  { action: 'soft_delete' | 'hard_delete' }
+ * POST /admin/responses/:id/delete  { action: 'soft_delete' | 'hard_delete' | 'restore' }
  */
 exports.deleteResponse = async (req, res) => {
   try {
@@ -885,31 +887,71 @@ exports.deleteResponse = async (req, res) => {
       return res.status(400).json({ error: 'Invalid action. Must be "soft_delete", "hard_delete", or "restore".' });
     }
 
-    const response = await Response.findById(id);
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid response ID' });
+    }
+
+    let response = await Response.findById(id);
+    let precall = null;
+
     if (!response) {
+      precall = await PrecallCompletion.findById(id);
+    } else if (response.serialNumber) {
+      precall = await PrecallCompletion.findOne({ serialNumber: response.serialNumber });
+    }
+
+    if (!response && !precall) {
       return res.status(404).json({ error: 'Response not found' });
     }
 
+    const io = req.app.get('io');
+
     if (action === 'soft_delete') {
-      response.status = 'disqualified';
-      response.isValid = false;
-      await response.save();
-      logger.info(`[ADMIN] Soft-deleted response ${id} by user ${req.user.id}`);
+      if (response) {
+        response.status = 'disqualified';
+        response.isValid = false;
+        await response.save();
+      }
+      if (precall) {
+        precall.disqualified = true;
+        precall.outcomeCategory = 'disqualified';
+        precall.isValid = false;
+        await precall.save();
+      }
+      logger.info(`[ADMIN] Soft-deleted response/precall ${id} by user ${req.user.id}`);
+      if (io) io.emit('stats-update');
       return res.json({ success: true, action: 'soft_delete', responseId: id });
     }
     
     if (action === 'restore') {
-      response.isValid = true;
-      // Optionally could reset status to completed/partial if we stored the previous status,
-      // but the requirement is mainly to set isValid to true.
-      await response.save();
-      logger.info(`[ADMIN] Restored response ${id} by user ${req.user.id}`);
+      if (response) {
+        response.isValid = true;
+        await response.save();
+      }
+      if (precall) {
+        precall.isValid = true;
+        precall.disqualified = false;
+        await precall.save();
+      }
+      logger.info(`[ADMIN] Restored response/precall ${id} by user ${req.user.id}`);
+      if (io) io.emit('stats-update');
       return res.json({ success: true, action: 'restore', responseId: id });
     }
 
     // hard_delete
-    await Response.findByIdAndDelete(id);
-    logger.info(`[ADMIN] Hard-deleted response ${id} by user ${req.user.id}`);
+    if (response) {
+      await Response.findByIdAndDelete(response._id);
+    }
+    if (precall) {
+      await PrecallCompletion.findByIdAndDelete(precall._id);
+    }
+    const targetIds = [id];
+    if (response) targetIds.push(response._id);
+    if (precall) targetIds.push(precall._id);
+    await Review.deleteMany({ responseId: { $in: targetIds } });
+
+    logger.info(`[ADMIN] Hard-deleted response/precall ${id} by user ${req.user.id}`);
+    if (io) io.emit('stats-update');
     return res.json({ success: true, action: 'hard_delete', responseId: id });
   } catch (err) {
     logger.error(`Delete Response Error: ${err.message}`, err);

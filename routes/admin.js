@@ -18,5 +18,6 @@ router.get('/users', adminAuth, adminController.listUsers);
 router.delete('/users/:id', adminAuth, adminController.deleteUser);
 router.patch('/users/:id/researcher-code', adminAuth, adminController.updateResearcherCode);
 router.post('/agents/:id/force-clear', adminAuth, adminController.forceClearAgentSession);
+router.patch('/responses/:id/unlock-edit', adminAuth, adminController.unlockResponseEdit);
 
 module.exports = router;

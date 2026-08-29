@@ -2,7 +2,7 @@ import React, { useCallback, useContext, useEffect, useMemo, useState, useRef } 
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, ClipboardList, Phone, User, Hash, CalendarClock, Loader2, UserPlus, Check, AlertTriangle, X } from 'lucide-react';
+import { CheckCircle2, ClipboardList, Phone, User, Hash, CalendarClock, Loader2, UserPlus, Check, AlertTriangle, X, Edit3 } from 'lucide-react';
 
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
@@ -554,6 +554,31 @@ export default function PreCallChecklist() {
         if (nextNum && nextNum.number && (!merged.phone || merged.phone !== nextNum.number)) {
           merged.phone = nextNum.number;
         }
+
+        // 3. Hydrate from backend if URL specifies mode=edit&serial=...
+        const isEditModeUrl = urlParams.get('mode') === 'edit';
+        const editSerialParam = urlParams.get('serial');
+        if (isEditModeUrl && editSerialParam && isOnline) {
+          try {
+            const editRes = await api.get(`/agent/responses/${editSerialParam}/full`, { signal });
+            const editData = editRes.data;
+            if (editData?.precall?.payload) {
+              merged = { ...merged, ...editData.precall.payload };
+            }
+            merged.serial_number = editSerialParam;
+            if (editData?.response?.surveyId?._id) {
+              setSurveyId(editData.response.surveyId._id);
+            } else if (editData?.precall?.surveyId) {
+              setSurveyId(editData.precall.surveyId);
+            }
+            setIsEditMode(true);
+            setCurrentNumber({ number: merged.phone || '', serialNumber: editSerialParam });
+          } catch (err) {
+            console.error("Failed to load full response for edit:", err);
+            toast.error(err.response?.data?.error || "Failed to load response for edit");
+          }
+        }
+
         if (!merged.serial_number || String(merged.serial_number).trim() === '') {
           merged.serial_number = `AUTO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         }
@@ -713,6 +738,27 @@ export default function PreCallChecklist() {
       interviewStartDisplay: formatLocalTime(frozen),
     };
 
+    const urlParams = new URLSearchParams(window.location.search);
+    const isEditModeUrl = urlParams.get('mode') === 'edit';
+
+    if (isEditModeUrl) {
+      if (isOnline) {
+        try {
+          await api.put(`/agent/precall/${finalSerial}`, {
+            payload: sanitizedPayload,
+            interviewOutcome: sanitizedPayload.interview_result || undefined,
+            outcomeReason: sanitizedPayload.outcome_reason || undefined
+          });
+        } catch (err) {
+          console.error("Online precall edit submission failed:", err);
+          const msg = err.response?.data?.message || err.response?.data?.error || err.response?.data?.errors?.[0]?.msg || 'Server Error';
+          toast.error(msg);
+          throw err;
+        }
+      }
+      return finalSerial;
+    }
+
     if (isOnline) {
       try {
         await api.post('/agent/precall-complete', checklistData);
@@ -769,7 +815,14 @@ export default function PreCallChecklist() {
         try { sessionStorage.setItem(draftKey, JSON.stringify({ ...answers, serial_number: finalSerial })); } catch (_) { /* quota */ }
       }
       await refreshFormsCount();
-      if (surveyId) {
+      const isEditModeUrl = new URLSearchParams(window.location.search).get('mode') === 'edit';
+      if (isEditModeUrl) {
+        if (surveyId) {
+          navigate(`/take-survey/${surveyId}?serial=${finalSerial}&mode=edit`, { replace: true });
+        } else {
+          navigate('/agent/history', { replace: true });
+        }
+      } else if (surveyId) {
         navigate(`/take-survey/${surveyId}?serial=${finalSerial}`, { replace: true });
       } else {
         navigate('/', { replace: true });
@@ -1106,6 +1159,34 @@ export default function PreCallChecklist() {
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       className="precall-shell"
     >
+      {new URLSearchParams(window.location.search).get('mode') === 'edit' && (
+        <div style={{
+          background: 'rgba(245, 158, 11, 0.15)',
+          border: '1px solid rgba(245, 158, 11, 0.4)',
+          borderRadius: '12px',
+          padding: '0.9rem 1.25rem',
+          marginBottom: '1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem',
+          color: 'var(--warning)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontWeight: 800 }}>
+            <Edit3 size={20} />
+            <span>{t('editingPrecallTitle') || `Editing Pre-Call Checklist (Serial #${answers.serial_number || ''})`}</span>
+          </div>
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ padding: '0.35rem 0.8rem', fontSize: '0.8rem', fontWeight: 700 }}
+            onClick={() => navigate('/agent/history')}
+          >
+            {t('backToHistory') || 'Back to History'}
+          </button>
+        </div>
+      )}
+
       {/* ── Hero header ── */}
       <div className="precall-hero glass-card">
         <div className="precall-hero-top">

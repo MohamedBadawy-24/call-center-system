@@ -6,7 +6,7 @@ import { UIContext } from '../context/UIContext';
 import { toast } from 'react-toastify';
 import { INTERVIEW_OUTCOME_OPTIONS, evaluateCondition } from '../utils/outboundPrecallConfig';
 import HandoverModal from '../components/HandoverModal';
-import { UserPlus, Menu, ChevronLeft, ChevronRight, Save, PhoneOff, AlertTriangle, ChevronDown, Check, Lock, ArrowLeft } from 'lucide-react';
+import { UserPlus, Menu, ChevronLeft, ChevronRight, Save, PhoneOff, AlertTriangle, ChevronDown, Check, Lock, ArrowLeft, Edit3 } from 'lucide-react';
 import SectionedSurveyView from '../components/SectionedSurveyView';
 import { getOtherPrefix, isOtherAnswer, extractOtherText, buildOtherAnswer } from '../utils/otherValueHelper';
 import { offlineDb } from '../utils/offlineDb';
@@ -1242,8 +1242,10 @@ export default function TakeSurvey({ mockSurvey }) {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const hasSerialParam = !!urlParams.get('serial');
+    const isEditMode = urlParams.get('mode') === 'edit';
     if (
       !hasSerialParam &&
+      !isEditMode &&
       user?.role === 'agent' &&
       user?.currentStatus === 'active' &&
       user?.precallCompletedForActiveSession !== true
@@ -1338,7 +1340,42 @@ export default function TakeSurvey({ mockSurvey }) {
     setEligLoading(true);
     try {
       const urlParams = new URLSearchParams(window.location.search);
+      const isEditMode = urlParams.get('mode') === 'edit';
       const serialParam = urlParams.get('serial');
+
+      if (isEditMode && serialParam) {
+        if (isOnline) {
+          try {
+            const editRes = await api.get(`/agent/responses/${serialParam}/full`);
+            const editData = editRes.data;
+            const existingAnswers = {};
+            if (Array.isArray(editData?.response?.answers)) {
+              editData.response.answers.forEach(a => {
+                existingAnswers[a.questionId] = a.value;
+              });
+            }
+            if (Array.isArray(editData?.response?.agentNotes)) {
+              setAgentNotes(editData.response.agentNotes);
+            }
+            setAnswers(existingAnswers);
+            setPrecallSerialNumber(serialParam);
+            setEligibility({ checked: true, canStart: true, reason: '' });
+            return {
+              canStartSurvey: true,
+              precallSerialNumber: serialParam,
+              existingAnswers,
+              payload: editData?.precall?.payload || {},
+              isEditMode: true
+            };
+          } catch (err) {
+            console.error("Failed to fetch full edit survey:", err);
+            const msg = err.response?.data?.error || "Failed to load response for editing";
+            toast.error(msg);
+            setEligibility({ checked: true, canStart: false, reason: msg });
+            return { canStartSurvey: false, reason: msg };
+          }
+        }
+      }
 
       if (isOnline) {
         try {
@@ -1397,6 +1434,10 @@ export default function TakeSurvey({ mockSurvey }) {
     refreshEligibility().then(async (data) => {
       if (cancelled) return;
       if (data?.canStartSurvey && data?.precallSerialNumber) {
+        if (data.isEditMode) {
+          handleStartCall(data, null);
+          return;
+        }
         try {
           let draftData = null;
           if (isOnline) {
@@ -1565,7 +1606,11 @@ export default function TakeSurvey({ mockSurvey }) {
     const mergedAnswers = { ...initialAnswers, ...draftAnswers };
     setAnswers(mergedAnswers);
 
-    if (draftAnswers) {
+    if (data?.isEditMode && data?.existingAnswers) {
+      const preloaded = new Set(Object.keys(data.existingAnswers).filter(k => data.existingAnswers[k] !== '' && data.existingAnswers[k] !== null));
+      interactedRef.current = preloaded;
+      setInteractedQuestions(preloaded);
+    } else if (draftAnswers) {
       const preloaded = new Set(Object.keys(draftAnswers).filter(k => draftAnswers[k] !== '' && draftAnswers[k] !== null));
       interactedRef.current = preloaded;
       setInteractedQuestions(preloaded);
@@ -1771,6 +1816,35 @@ export default function TakeSurvey({ mockSurvey }) {
         offlineStartedAt: startTime ? new Date(startTime) : new Date(),
         offlineCompletedAt: new Date(),
       };
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const isEditMode = urlParams.get('mode') === 'edit';
+
+      if (isEditMode) {
+        if (isOnline) {
+          try {
+            await api.put(`/agent/responses/${precallSerialNumber}`, {
+              answers: payload.answers,
+              agentNotes: payload.agentNotes,
+              interviewOutcome: payload.interviewOutcome,
+              outcomeReason: payload.outcomeReason,
+              status: payload.status
+            });
+            await offlineDb.deleteLocalDraft(precallSerialNumber);
+            toast.success(t('surveyUpdatedSuccess') || 'Survey response updated successfully!');
+            navigate('/agent/history', { replace: true });
+            return;
+          } catch (err) {
+            console.error("Online response edit submit failed:", err);
+            const errMsg = err.response?.data?.message || err.response?.data?.error || 'Failed to update survey.';
+            toast.error(`Update Blocked: ${errMsg}`);
+            return;
+          } finally {
+            setIsSubmitting(false);
+            isSubmittingRef.current = false;
+          }
+        }
+      }
 
       if (isOnline) {
         try {
@@ -2486,6 +2560,34 @@ export default function TakeSurvey({ mockSurvey }) {
   if (phase === 'intro') {
     return (
       <div className="glass-card fade-enter-active">
+        {new URLSearchParams(window.location.search).get('mode') === 'edit' && (
+          <div style={{
+            background: 'rgba(245, 158, 11, 0.15)',
+            border: '1px solid rgba(245, 158, 11, 0.4)',
+            borderRadius: '10px',
+            padding: '0.75rem 1.25rem',
+            marginBottom: '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem',
+            color: 'var(--warning)',
+            fontWeight: 700
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Edit3 size={18} />
+              <span>{t('editingSurveyResponse') || `Editing Survey Response (Serial #${precallSerialNumber || ''})`}</span>
+            </div>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem', fontWeight: 700 }}
+              onClick={() => navigate('/agent/history')}
+            >
+              {t('backToHistory') || 'Back to History'}
+            </button>
+          </div>
+        )}
         <h1 dir="auto">{survey.title}</h1>
         {survey.introScript && (
           <div className="agent-script-box">
@@ -3013,6 +3115,34 @@ export default function TakeSurvey({ mockSurvey }) {
             )}
           </div>
           <div className="survey-content" style={{ paddingTop: '1rem' }}>
+            {new URLSearchParams(window.location.search).get('mode') === 'edit' && (
+              <div style={{
+                background: 'rgba(245, 158, 11, 0.15)',
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                borderRadius: '10px',
+                padding: '0.75rem 1.25rem',
+                marginBottom: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '1rem',
+                color: 'var(--warning)',
+                fontWeight: 700
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Edit3 size={18} />
+                  <span>{t('editingSurveyResponse') || `Editing Survey Response (Serial #${precallSerialNumber || ''})`}</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem', fontWeight: 700 }}
+                  onClick={() => navigate('/agent/history')}
+                >
+                  {t('backToHistory') || 'Back to History'}
+                </button>
+              </div>
+            )}
             <div className="survey-progress-container">
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
                 {survey?.layoutMode === 'multi' ? (

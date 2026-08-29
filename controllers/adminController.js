@@ -80,3 +80,17 @@ exports.forceClearAgentSession = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.unlockResponseEdit = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const io = req.app.get('io');
+    const response = await adminService.unlockResponseEdit(id, io);
+    res.json({ ok: true, responseId: response._id, isEditUnlocked: response.isEditUnlocked });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
+  }
+};

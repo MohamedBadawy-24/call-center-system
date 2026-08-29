@@ -29,6 +29,8 @@ const PrecallCompletionSchema = new mongoose.Schema({
   syncedAt: { type: Date },
   offlineStartedAt: { type: Date },
   offlineCompletedAt: { type: Date },
+  isValid: { type: Boolean, default: true },
+  isEditUnlocked: { type: Boolean, default: false },
 });
 
 PrecallCompletionSchema.index({ userId: 1, statusStartedAt: 1, completedAt: -1 });

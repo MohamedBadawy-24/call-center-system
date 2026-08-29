@@ -165,3 +165,56 @@ exports.assignManualNumber = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.getMyResponses = async (req, res, next) => {
+  try {
+    const responses = await agentService.getMyResponses(req.user.id);
+    res.json(responses);
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
+  }
+};
+
+exports.getFullResponseForEdit = async (req, res, next) => {
+  try {
+    const { serialNumber } = req.params;
+    const result = await agentService.getFullResponseForEdit(serialNumber, req.user.id, req.user.role);
+    res.json(result);
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
+  }
+};
+
+exports.updatePrecall = async (req, res, next) => {
+  try {
+    const { serialNumber } = req.params;
+    const io = req.app.get('io');
+    const result = await agentService.updatePrecall(serialNumber, req.user.id, req.user.role, req.body, io);
+    res.json(result);
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
+  }
+};
+
+exports.updateResponse = async (req, res, next) => {
+  try {
+    const { serialNumber } = req.params;
+    const io = req.app.get('io');
+    const result = await agentService.updateResponse(serialNumber, req.user.id, req.user.role, req.body, io);
+    res.json(result);
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
+  }
+};

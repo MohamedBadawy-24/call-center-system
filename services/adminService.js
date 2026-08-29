@@ -119,3 +119,20 @@ exports.updateResearcherCode = async (id, researcherCode, io) => {
   if (io) io.emit('stats-update');
   return user;
 };
+
+exports.unlockResponseEdit = async (id, io) => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw createError('Invalid response id', 400);
+  }
+  let doc = await Response.findById(id);
+  if (!doc) {
+    doc = await PrecallCompletion.findById(id);
+  }
+  if (!doc) throw createError('Response not found', 404);
+
+  doc.isEditUnlocked = true;
+  await doc.save();
+
+  if (io) io.emit('stats-update');
+  return doc;
+};

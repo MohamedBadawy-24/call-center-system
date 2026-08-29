@@ -48,6 +48,8 @@ const ResponseSchema = new mongoose.Schema({
   }],
   /** Soft-delete flag — set to false when admin disqualifies/soft-deletes a response */
   isValid: { type: Boolean, default: true },
+  /** Secure flag to track agent edit permissions (unlocked by Admin) */
+  isEditUnlocked: { type: Boolean, default: false },
 });
 
 ResponseSchema.index({ agentId: 1, startedAt: -1 });

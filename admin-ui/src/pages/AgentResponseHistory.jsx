@@ -277,7 +277,7 @@ export default function AgentResponseHistory() {
                             onClick={(e) => handleEditClick(r, e)}
                             title={t('reEditSurvey')}
                           >
-                            <Edit3 size={14} /> {t('edit')}
+                            <Edit3 size={14} /> {t('editAction') || 'Edit'}
                           </button>
                         ) : (
                           <button

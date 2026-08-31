@@ -16,6 +16,14 @@ export const api = axios.create({
   baseURL: API_BASE,
 });
 
+api.interceptors.request.use((config) => {
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
+  if (token && !config.headers.Authorization) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export function setApiAuthToken(token) {
   if (token) {
     api.defaults.headers.common.Authorization = `Bearer ${token}`;
@@ -23,3 +31,4 @@ export function setApiAuthToken(token) {
     delete api.defaults.headers.common.Authorization;
   }
 }
+

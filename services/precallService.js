@@ -36,11 +36,19 @@ function toFiniteAge(raw) {
 }
 
 /**
- * Reads respondent age from a precall payload using multiple known field keys.
+ * Reads respondent age from a precall payload using system tag mapping with fallback to known field keys.
  * Avoids the Number("") === 0 pitfall.
  */
-function parseRespondentAgeYears(payload) {
+function parseRespondentAgeYears(payload, fields = []) {
   if (!payload || typeof payload !== 'object') return null;
+  if (Array.isArray(fields) && fields.length > 0) {
+    const ageField = fields.find((f) => (f.systemTag || '').trim().toLowerCase() === 'age');
+    if (ageField && Object.prototype.hasOwnProperty.call(payload, ageField.id)) {
+      const n = toFiniteAge(payload[ageField.id]);
+      if (n !== null) return n;
+      return NaN;
+    }
+  }
   const preferred = ['age_years', 'age', 'respondent_age'];
   for (const k of preferred) {
     if (!Object.prototype.hasOwnProperty.call(payload, k)) continue;

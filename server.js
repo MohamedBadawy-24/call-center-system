@@ -246,6 +246,10 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve uploaded campaign attachments & static uploads
+app.use('/uploads', express.static(path.resolve(__dirname, 'uploads')));
+
+
 app.use("/auth", authRoutes);
 app.use("/admin", adminRoutes);
 app.use("/agent", agentRoutes);
@@ -517,6 +521,7 @@ app.get("/admin/surveys-stats", staffAuth, async (req, res) => {
           title: 1,
           isActive: 1,
           goal: 1,
+          assets: 1,
           createdAt: 1,
           totalHandled: { $size: '$precalls' },
           completed: {

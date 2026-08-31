@@ -94,3 +94,61 @@ exports.unlockResponseEdit = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.uploadCampaignAttachment = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { category } = req.body;
+    const io = req.app.get('io');
+    const result = await adminService.uploadCampaignAttachment(id, req.file, category, io);
+    res.status(201).json({
+      success: true,
+      message: 'Attachment uploaded successfully',
+      assets: result.assets,
+      attachment: result.attachment
+    });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
+  }
+};
+
+exports.updateCampaignNotes = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { notes } = req.body;
+    const io = req.app.get('io');
+    const result = await adminService.updateCampaignNotes(id, notes, io);
+    res.json({
+      success: true,
+      message: 'Campaign notes updated successfully',
+      assets: result.assets
+    });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
+  }
+};
+
+exports.deleteCampaignAttachment = async (req, res, next) => {
+  try {
+    const { id, attachmentId } = req.params;
+    const io = req.app.get('io');
+    const result = await adminService.deleteCampaignAttachment(id, attachmentId, io);
+    res.json({
+      success: true,
+      message: 'Attachment deleted successfully',
+      assets: result.assets
+    });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
+  }
+};
+

@@ -629,9 +629,11 @@ export default function PreCallChecklist() {
 
   const setAnswer = useCallback((id, val) => {
     // Prevent client-side tampering of auto-filled agent identity fields
-    if (id === 'researcher_name' || id === 'researcher_code') return;
+    const f = config?.fields?.find((field) => field.id === id);
+    const tag = (f?.systemTag || '').trim().toLowerCase();
+    if (tag === 'researcher name' || tag === 'researcher code' || id === 'researcher_name' || id === 'researcher_code') return;
     setAnswers((prev) => ({ ...prev, [id]: val }));
-  }, []);
+  }, [config?.fields]);
 
   // ── Auto-clear skipped/hidden fields ────────────────────────────────────
   // When a field's logic action causes it to be hidden/skipped, clear its
@@ -670,9 +672,10 @@ export default function PreCallChecklist() {
 
   const scriptText = useMemo(() => {
     const raw = metaLine(config.meta, 'script', t);
-    const name = (answers.researcher_name || user?.name || '').trim();
+    const nameField = config?.fields?.find((f) => (f.systemTag || '').trim().toLowerCase() === 'researcher name');
+    const name = ((nameField ? answers[nameField.id] : answers.researcher_name) || user?.name || '').trim();
     return raw.split('{{name}}').join(name || '…');
-  }, [answers.researcher_name, config.meta, t, user?.name]);
+  }, [answers, config?.fields, config.meta, t, user?.name]);
 
   const interviewDateStr = formatLocalDate(tick);
   const interviewTimeStr = formatLocalTime(tick);
@@ -924,7 +927,13 @@ export default function PreCallChecklist() {
 
         setCurrentNumber(nextNum);
         if (nextNum && nextNum.number) {
-          setAnswers(prev => ({ ...prev, phone: nextNum.number, serial_number: nextNum.serialNumber || '' }));
+          const govField = config?.fields?.find(f => (f.systemTag || '').trim().toLowerCase() === 'governorate' || f.id === 'governorate');
+          const updates = { phone: nextNum.number, serial_number: nextNum.serialNumber || '' };
+          const govToSet = nextNum.governorate || (govToFetch !== 'All' ? govToFetch : '');
+          if (govField && govToSet) {
+            updates[govField.id] = govToSet;
+          }
+          setAnswers(prev => ({ ...prev, ...updates }));
           const cachedBefore = await offlineDb.getCachedNumbers();
           console.log(`[Offline Inventory] Fetched number online. Current cached numbers count before prefetch check: ${cachedBefore.length}`);
           prefetchNumbers(govToFetch);
@@ -943,7 +952,13 @@ export default function PreCallChecklist() {
         if (matched.length > 0) {
           const nextNum = matched[0];
           setCurrentNumber(nextNum);
-          setAnswers(prev => ({ ...prev, phone: nextNum.number, serial_number: nextNum.serialNumber || '' }));
+          const govField = config?.fields?.find(f => (f.systemTag || '').trim().toLowerCase() === 'governorate' || f.id === 'governorate');
+          const updates = { phone: nextNum.number, serial_number: nextNum.serialNumber || '' };
+          const govToSet = nextNum.governorate || (govToFetch !== 'All' ? govToFetch : '');
+          if (govField && govToSet) {
+            updates[govField.id] = govToSet;
+          }
+          setAnswers(prev => ({ ...prev, ...updates }));
           await offlineDb.deleteCachedNumber(nextNum._id);
           const cachedAfter = await offlineDb.getCachedNumbers();
           console.log(`[Offline Inventory] Loaded number ${nextNum.number} from offline cache. Remaining cached numbers count: ${cachedAfter.length}`);
@@ -994,7 +1009,12 @@ export default function PreCallChecklist() {
         });
         const nextNum = res.data;
         setCurrentNumber(nextNum);
-        setAnswers(prev => ({ ...prev, phone: nextNum.number, serial_number: nextNum.serialNumber || '' }));
+        const govField = config?.fields?.find(f => (f.systemTag || '').trim().toLowerCase() === 'governorate' || f.id === 'governorate');
+        const updates = { phone: nextNum.number, serial_number: nextNum.serialNumber || '' };
+        if (govField && selectedGov && selectedGov !== 'All') {
+          updates[govField.id] = selectedGov;
+        }
+        setAnswers(prev => ({ ...prev, ...updates }));
         toast.success('Manual number assigned successfully.');
         setIsManualModalOpen(false);
         setManualNumber('');
@@ -1013,7 +1033,12 @@ export default function PreCallChecklist() {
           assignedAt: new Date().toISOString()
         };
         setCurrentNumber(mockPhoneDoc);
-        setAnswers(prev => ({ ...prev, phone: mockPhoneDoc.number, serial_number: mockPhoneDoc.serialNumber }));
+        const govField = config?.fields?.find(f => (f.systemTag || '').trim().toLowerCase() === 'governorate' || f.id === 'governorate');
+        const updates = { phone: mockPhoneDoc.number, serial_number: mockPhoneDoc.serialNumber };
+        if (govField && selectedGov && selectedGov !== 'All') {
+          updates[govField.id] = selectedGov;
+        }
+        setAnswers(prev => ({ ...prev, ...updates }));
         toast.success('Manual number registered offline.');
         setIsManualModalOpen(false);
         setManualNumber('');
@@ -1413,7 +1438,15 @@ export default function PreCallChecklist() {
                     {sectionFields.map((field) => {
                       if (!isFieldVisible(field, answers)) return null;
                       const v = answers[field.id];
-                      const isFieldReadOnly = (field.id === 'phone' || field.id === 'serial_number' || field.id === 'researcher_name' || field.id === 'researcher_code');
+                      const tag = (field.systemTag || '').trim().toLowerCase();
+                      const isFieldReadOnly = (
+                        field.id === 'phone' ||
+                        field.id === 'serial_number' ||
+                        tag === 'researcher name' ||
+                        tag === 'researcher code' ||
+                        field.id === 'researcher_name' ||
+                        field.id === 'researcher_code'
+                      );
                       const fullWidth = isFullWidthField(field);
                       const errorText = getFieldError(field);
 

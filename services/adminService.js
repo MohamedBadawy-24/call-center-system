@@ -5,8 +5,13 @@ const StatusLog = require('../models/StatusLog');
 const Response = require('../models/Response');
 const Draft = require('../models/Draft');
 const PrecallCompletion = require('../models/PrecallCompletion');
+const Survey = require('../models/Survey');
 const sendEmail = require('../utils/mailer');
 const { runTransaction } = require('../utils/runTransaction');
+const fs = require('fs');
+const path = require('path');
+
+const VALID_ASSET_CATEGORIES = ['spss', 'word', 'ppt', 'infographic', 'coding_file', 'report', 'other'];
 
 const createError = (message, status = 500) => {
   const err = new Error(message);
@@ -136,3 +141,129 @@ exports.unlockResponseEdit = async (id, io) => {
   if (io) io.emit('stats-update');
   return doc;
 };
+
+exports.uploadCampaignAttachment = async (surveyId, file, category, io) => {
+  if (!mongoose.Types.ObjectId.isValid(surveyId)) {
+    throw createError('Invalid campaign id', 400);
+  }
+  if (!file) {
+    throw createError('No file provided for upload', 400);
+  }
+
+  const normalizedCategory = (category && VALID_ASSET_CATEGORIES.includes(String(category).toLowerCase()))
+    ? String(category).toLowerCase()
+    : 'other';
+
+  const survey = await Survey.findById(surveyId);
+  if (!survey) {
+    // If file was written to disk, clean it up
+    if (file.path && fs.existsSync(file.path)) {
+      try { fs.unlinkSync(file.path); } catch (_) {}
+    }
+    throw createError('Campaign not found', 404);
+  }
+
+  if (!survey.assets) {
+    survey.assets = { notes: '', attachments: [] };
+  }
+  if (!Array.isArray(survey.assets.attachments)) {
+    survey.assets.attachments = [];
+  }
+
+  const relativeUrl = `/uploads/campaigns/${surveyId}/${file.filename}`;
+
+  const newAttachment = {
+    category: normalizedCategory,
+    fileName: file.originalname,
+    fileUrl: relativeUrl,
+    fileSize: file.size,
+    uploadedAt: new Date()
+  };
+
+  survey.assets.attachments.push(newAttachment);
+  await survey.save();
+
+  if (io) io.emit('stats-update');
+
+  // Return the created attachment with generated _id
+  const savedAttachment = survey.assets.attachments[survey.assets.attachments.length - 1];
+  return {
+    assets: survey.assets,
+    attachment: savedAttachment
+  };
+};
+
+exports.updateCampaignNotes = async (surveyId, notes, io) => {
+  if (!mongoose.Types.ObjectId.isValid(surveyId)) {
+    throw createError('Invalid campaign id', 400);
+  }
+
+  const survey = await Survey.findById(surveyId);
+  if (!survey) {
+    throw createError('Campaign not found', 404);
+  }
+
+  if (!survey.assets) {
+    survey.assets = { notes: '', attachments: [] };
+  }
+
+  survey.assets.notes = typeof notes === 'string' ? notes : '';
+  await survey.save();
+
+  if (io) io.emit('stats-update');
+
+  return {
+    assets: survey.assets
+  };
+};
+
+exports.deleteCampaignAttachment = async (surveyId, attachmentId, io) => {
+  if (!mongoose.Types.ObjectId.isValid(surveyId)) {
+    throw createError('Invalid campaign id', 400);
+  }
+  if (!mongoose.Types.ObjectId.isValid(attachmentId) && typeof attachmentId !== 'string') {
+    throw createError('Invalid attachment id', 400);
+  }
+
+  const survey = await Survey.findById(surveyId);
+  if (!survey) {
+    throw createError('Campaign not found', 404);
+  }
+
+  if (!survey.assets || !Array.isArray(survey.assets.attachments) || survey.assets.attachments.length === 0) {
+    throw createError('Attachment not found', 404);
+  }
+
+  const attachment = survey.assets.attachments.find(
+    (a) => a._id?.toString() === String(attachmentId)
+  );
+
+  if (!attachment) {
+    throw createError('Attachment not found', 404);
+  }
+
+  // Safely delete file from disk if present
+  if (attachment.fileUrl) {
+    try {
+      const cleanRelPath = attachment.fileUrl.startsWith('/')
+        ? attachment.fileUrl.slice(1)
+        : attachment.fileUrl;
+      const absPath = path.resolve(__dirname, '..', cleanRelPath);
+      if (fs.existsSync(absPath)) {
+        fs.unlinkSync(absPath);
+      }
+    } catch (unlinkErr) {
+      console.error('[ATTACHMENT DISK DELETE WARNING]:', unlinkErr.message);
+    }
+  }
+
+  survey.assets.attachments.pull({ _id: attachment._id });
+  await survey.save();
+
+  if (io) io.emit('stats-update');
+
+  return {
+    assets: survey.assets
+  };
+};
+

@@ -1,8 +1,15 @@
 import React, { useContext, useState } from 'react';
 import { SurveyBuilderContext } from '../SurveyBuilderContext';
-import { OUTBOUND_FIELD_TYPES, OUTBOUND_TEMPLATE_PRESETS, normalizeOutboundPrecall, newFieldTemplate } from '../../../utils/outboundPrecallConfig';
+import {
+  OUTBOUND_FIELD_TYPES,
+  OUTBOUND_TEMPLATE_PRESETS,
+  SYSTEM_TAG_OPTIONS,
+  normalizeOutboundPrecall,
+  newFieldTemplate,
+  nextSequentialPrecallId
+} from '../../../utils/outboundPrecallConfig';
 import ConditionBuilder from '../../../components/ConditionBuilder';
-import { Layers } from 'lucide-react';
+import { Layers, Copy, HelpCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { UIContext } from '../../../context/UIContext';
 
@@ -102,6 +109,22 @@ export default function PrecallTab() {
     });
   };
 
+  const cloneField = (idx) => {
+    updateState(prev => {
+      const fields = [...prev.outboundConfig.fields];
+      const source = fields[idx];
+      if (!source) return prev;
+      const cloned = JSON.parse(JSON.stringify(source));
+      cloned.id = nextSequentialPrecallId(fields);
+      cloned.label = `${cloned.label || 'Question'} (Copy)`;
+      fields.splice(idx + 1, 0, cloned);
+      return {
+        ...prev,
+        outboundConfig: { ...prev.outboundConfig, fields }
+      };
+    });
+  };
+
   const moveSection = (idx, direction) => {
     updateState(prev => {
       const list = [...(prev.outboundConfig.sectionOrder || ['agent', 'call', 'phone'])];
@@ -126,7 +149,7 @@ export default function PrecallTab() {
   const addField = () => {
     updateState(prev => ({
       ...prev,
-      outboundConfig: { ...prev.outboundConfig, fields: [...prev.outboundConfig.fields, newFieldTemplate()] }
+      outboundConfig: { ...prev.outboundConfig, fields: [...prev.outboundConfig.fields, newFieldTemplate(prev.outboundConfig.fields)] }
     }));
   };
 
@@ -242,16 +265,42 @@ export default function PrecallTab() {
             {outboundConfig.fields.map((field, fIdx) => (
               <div key={`${field.id}-${fIdx}`} style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', background: 'var(--input-bg)' }}>
                 {isAdmin && (
-                  <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', alignItems: 'center' }}>
                     <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }} onClick={() => moveField(fIdx, -1)} disabled={fIdx === 0}>↑</button>
                     <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }} onClick={() => moveField(fIdx, 1)} disabled={fIdx === outboundConfig.fields.length - 1}>↓</button>
-                    <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }} onClick={() => removeField(fIdx)}>Remove</button>
+                    <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }} onClick={() => cloneField(fIdx)} title={t('cloneField') || 'Clone Field'}>
+                      <Copy size={13} /> {t('clone') || 'Clone'}
+                    </button>
+                    <button dir="auto" type="button" className="btn-secondary" style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }} onClick={() => removeField(fIdx)}>{t('remove') || 'Remove'}</button>
                   </div>
                 )}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
                   <div>
-                    <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>Field ID (stable)</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
+                      <label dir="auto" className="form-label" style={{ fontSize: '0.8rem', margin: 0 }}>Field ID (stable)</label>
+                      <span
+                        title={t('fieldIdStableTooltip') || "This is the column name for database and SPSS exports. It must remain stable to prevent data splitting."}
+                        style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center', color: 'var(--text-secondary)' }}
+                      >
+                        <HelpCircle size={14} />
+                      </span>
+                    </div>
                     <input dir="auto" className="input-field" value={field.id} onChange={(e) => updateField(fIdx, { id: e.target.value.replace(/\s+/g, '_') })} readOnly={!isAdmin} />
+                  </div>
+                  <div>
+                    <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>
+                      {t('systemTag') || 'System Role / Tag'}
+                    </label>
+                    <select
+                      className="input-field"
+                      value={field.systemTag || ''}
+                      onChange={(e) => updateField(fIdx, { systemTag: e.target.value })}
+                      disabled={!isAdmin}
+                    >
+                      {SYSTEM_TAG_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>Column</label>

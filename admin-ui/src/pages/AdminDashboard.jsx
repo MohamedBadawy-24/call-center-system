@@ -5,13 +5,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { io } from 'socket.io-client';
 import { 
   Plus, Users, UserPlus, GitBranch, History, BarChart3, Trash2, Edit3, 
-  Play, Pause, Eye, Download, Search, Target, TrendingUp, Clock, Activity, FileText, CheckCircle, MessageSquare, BookOpen
+  Play, Pause, Eye, Download, Search, Target, TrendingUp, Clock, Activity, FileText, CheckCircle, MessageSquare, BookOpen, Paperclip
 } from 'lucide-react';
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
 import { useLanguage } from '../hooks/useLanguage';
 import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
+import AssetsTooltip from '../components/AssetsTooltip';
+import CampaignAssetsModal from '../components/CampaignAssetsModal';
 
 export default function AdminDashboard() {
   const { t, language } = useLanguage();
@@ -26,6 +28,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const [dailyGoal, setDailyGoal] = useState(50);
   const [suspendModal, setSuspendModal] = useState({ open: false, agentId: null, reason: "" });
+  const [assetsModal, setAssetsModal] = useState({ open: false, campaign: null });
   const socketRef = useRef(null);
 
   const isAdmin = user?.role === 'admin';
@@ -156,7 +159,7 @@ export default function AdminDashboard() {
                 setSurveys(surveys.filter(s => s._id !== surveyId));
                 toast.success("Survey deleted");
               } catch (err) {
-                toast.error(err.response?.data?.error || "Failed to delete survey");
+                toast.error(err.response?.data?.error || "Failed to delete campaign");
               }
             }}>{t('confirmDeleteSurveyBtn') || 'Delete Survey'}</button>
             <button className="btn-secondary" onClick={closeToast}>{t('cancelDeleteSurvey') || 'Keep Survey'}</button>
@@ -165,6 +168,16 @@ export default function AdminDashboard() {
       ),
       { autoClose: false, closeOnClick: false }
     );
+  };
+
+  const handleAssetsUpdated = (campaignId, updatedAssets) => {
+    setSurveys(prev => prev.map(s => s._id === campaignId ? { ...s, assets: updatedAssets } : s));
+    if (assetsModal.campaign && assetsModal.campaign._id === campaignId) {
+      setAssetsModal(prev => ({
+        ...prev,
+        campaign: { ...prev.campaign, assets: updatedAssets }
+      }));
+    }
   };
 
   const handleSuspend = async () => {
@@ -337,14 +350,34 @@ export default function AdminDashboard() {
                 className="glass-card" 
                 style={{ marginBottom: 0, position: 'relative' }}
               >
-                {isAdmin && (
-                  <button 
-                    onClick={() => deleteSurvey(s._id, s.isActive)}
-                    style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'transparent', border: 'none', color: 'var(--danger)', cursor: s.isActive === false ? 'pointer' : 'not-allowed', opacity: s.isActive === false ? 0.6 : 0.2 }}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                )}
+                {/* Top-Right Card Actions */}
+                <div style={{ position: 'absolute', top: '0.85rem', right: isRtl ? 'auto' : '0.85rem', left: isRtl ? '0.85rem' : 'auto', display: 'flex', alignItems: 'center', gap: '0.35rem', zIndex: 5 }}>
+                  {isAdmin && (
+                    <AssetsTooltip assets={s.assets} campaignTitle={s.title}>
+                      <button 
+                        onClick={() => setAssetsModal({ open: true, campaign: s })}
+                        className={`campaign-asset-btn ${Boolean(s.assets?.notes) || (s.assets?.attachments?.length > 0) ? 'has-assets' : ''}`}
+                        title={t('viewManageAssets')}
+                        aria-label={t('viewManageAssets')}
+                      >
+                        <Paperclip size={16} />
+                        {(Boolean(s.assets?.notes) || (s.assets?.attachments?.length > 0)) && (
+                          <div className="assets-active-dot" />
+                        )}
+                      </button>
+                    </AssetsTooltip>
+                  )}
+
+                  {isAdmin && (
+                    <button 
+                      onClick={() => deleteSurvey(s._id, s.isActive)}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: s.isActive === false ? 'pointer' : 'not-allowed', opacity: s.isActive === false ? 0.6 : 0.2, padding: '0.35rem', display: 'inline-flex', alignItems: 'center' }}
+                      title={t('deleteAccount') || 'Delete'}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                   <div className={`status-dot ${s.isActive ? 'active' : 'off-duty'}`}></div>
@@ -543,6 +576,14 @@ export default function AdminDashboard() {
           </>
         )}
       </AnimatePresence>
+
+      {/* Campaign Assets & Attachments Modal */}
+      <CampaignAssetsModal
+        isOpen={assetsModal.open}
+        onClose={() => setAssetsModal({ open: false, campaign: null })}
+        campaign={assetsModal.campaign}
+        onAssetsUpdated={handleAssetsUpdated}
+      />
     </motion.div>
   );
 }

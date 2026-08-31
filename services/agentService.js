@@ -50,17 +50,36 @@ exports.completePrecall = async (userId, userRole, data, io) => {
   let doc;
   await runTransaction(async (session) => {
     payload = payload && typeof payload === 'object' ? { ...payload } : {};
-    payload.researcher_name = user.name || '';
-    payload.researcher_code = user.researcherCode || '';
-    const ageYears = parseRespondentAgeYears(payload);
-
-    const ir = String(payload.interview_result || '');
-    const { category, disqualified } = categorizeInterviewOutcome(ir);
 
     let sid;
     if (surveyId && mongoose.Types.ObjectId.isValid(surveyId)) {
       sid = new mongoose.Types.ObjectId(surveyId);
     }
+
+    let surveyDoc = null;
+    if (sid) {
+      surveyDoc = await Survey.findById(sid).session(session).lean();
+    }
+    const precallFields = surveyDoc?.outboundPrecall?.fields || [];
+
+    // Map system tags for agent identity
+    const nameField = precallFields.find((f) => (f.systemTag || '').trim().toLowerCase() === 'researcher name');
+    const codeField = precallFields.find((f) => (f.systemTag || '').trim().toLowerCase() === 'researcher code');
+    if (nameField) {
+      payload[nameField.id] = user.name || '';
+    } else {
+      payload.researcher_name = user.name || '';
+    }
+    if (codeField) {
+      payload[codeField.id] = user.researcherCode || '';
+    } else {
+      payload.researcher_code = user.researcherCode || '';
+    }
+
+    const ageYears = parseRespondentAgeYears(payload, precallFields);
+
+    const ir = String(payload.interview_result || '');
+    const { category, disqualified } = categorizeInterviewOutcome(ir);
 
     let rawSerial = payload.serial_number || '';
     let serialNumber = rawSerial.trim() !== '' ? rawSerial.trim() : undefined;

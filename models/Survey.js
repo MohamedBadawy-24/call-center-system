@@ -119,6 +119,21 @@ const SurveySchema = new mongoose.Schema({
   assignedAgents: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   isActive: { type: Boolean, default: true },
   draftData: { type: mongoose.Schema.Types.Mixed, default: undefined },
+  assets: {
+    notes: { type: String, default: '' },
+    attachments: [{
+      category: {
+        type: String,
+        enum: ['spss', 'word', 'ppt', 'infographic', 'coding_file', 'report', 'other'],
+        default: 'other',
+        required: true
+      },
+      fileName: { type: String, required: true },
+      fileUrl: { type: String, required: true },
+      fileSize: { type: Number },
+      uploadedAt: { type: Date, default: Date.now }
+    }]
+  },
   createdAt: { type: Date, default: Date.now },
 });
 

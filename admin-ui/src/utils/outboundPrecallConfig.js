@@ -48,6 +48,16 @@ export const PRECALL_ACTION_OPTIONS = [
   { value: 'terminate_call', labelEn: 'Terminate Call', labelAr: 'إنهاء المكالمة' },
 ];
 
+export const SYSTEM_TAG_OPTIONS = [
+  { value: '', label: 'None / لا شيء' },
+  { value: 'Age', label: 'Age / العمر' },
+  { value: 'Gender', label: 'Gender / النوع' },
+  { value: 'Governorate', label: 'Governorate / المحافظة' },
+  { value: 'Nationality', label: 'Nationality / الجنسية' },
+  { value: 'Sector', label: 'Sector / القطاع' },
+  { value: 'Researcher Name', label: 'Researcher Name / اسم الباحث' },
+];
+
 export const OUTBOUND_FIELD_TYPES = [
   { value: 'readonly_date', label: 'Live date (read-only)' },
   { value: 'readonly_time', label: 'Live time (read-only)' },
@@ -84,6 +94,7 @@ export const DEFAULT_OUTBOUND_V2 = {
       type: 'text',
       required: true,
       section: 'agent',
+      systemTag: 'Researcher Name',
     },
     {
       id: 'researcher_code',
@@ -91,6 +102,7 @@ export const DEFAULT_OUTBOUND_V2 = {
       type: 'text',
       required: true,
       section: 'agent',
+      systemTag: 'Researcher Code',
     },
     {
       id: 'serial_number',
@@ -99,6 +111,7 @@ export const DEFAULT_OUTBOUND_V2 = {
       required: true,
       min: 1,
       section: 'agent',
+      systemTag: '',
     },
     {
       id: 'interview_date',
@@ -106,6 +119,7 @@ export const DEFAULT_OUTBOUND_V2 = {
       type: 'readonly_date',
       required: false,
       section: 'agent',
+      systemTag: '',
     },
     {
       id: 'interview_time',
@@ -113,6 +127,7 @@ export const DEFAULT_OUTBOUND_V2 = {
       type: 'readonly_time',
       required: false,
       section: 'agent',
+      systemTag: '',
     },
     {
       id: 'is_egyptian',
@@ -120,6 +135,7 @@ export const DEFAULT_OUTBOUND_V2 = {
       type: 'segment',
       required: true,
       section: 'agent',
+      systemTag: 'Nationality',
       options: [
         { value: 'yes', label: 'Egyptian' },
         { value: 'no', label: 'Non-Egyptian' },
@@ -132,6 +148,7 @@ export const DEFAULT_OUTBOUND_V2 = {
       required: true,
       section: 'agent',
       placeholder: '',
+      systemTag: '',
       visibleWhen: { fieldId: 'is_egyptian', value: 'no' },
     },
     {
@@ -141,6 +158,7 @@ export const DEFAULT_OUTBOUND_V2 = {
       required: true,
       min: 1,
       section: 'agent',
+      systemTag: 'Age',
     },
     {
       id: 'phone',
@@ -148,6 +166,7 @@ export const DEFAULT_OUTBOUND_V2 = {
       type: 'text',
       required: true,
       section: 'phone',
+      systemTag: '',
     },
     {
       id: 'phone_type',
@@ -155,6 +174,7 @@ export const DEFAULT_OUTBOUND_V2 = {
       type: 'segment',
       required: true,
       section: 'call',
+      systemTag: '',
       options: [
         { value: 'landline', label: 'Landline' },
         { value: 'mobile', label: 'Mobile' },
@@ -166,6 +186,7 @@ export const DEFAULT_OUTBOUND_V2 = {
       type: 'select',
       required: true,
       section: 'call',
+      systemTag: '',
       options: [
         { value: 'contacted', label: 'Contacted' },
         { value: 'wrong_number', label: 'Wrong number' },
@@ -181,6 +202,7 @@ export const DEFAULT_OUTBOUND_V2 = {
       type: 'select',
       required: true,
       section: 'call',
+      systemTag: '',
       options: [
         { value: 'completed', label: 'Completed' },
         { value: 'partial', label: 'Partially completed' },
@@ -196,6 +218,7 @@ export const DEFAULT_OUTBOUND_V2 = {
       type: 'text',
       required: false,
       section: 'call',
+      systemTag: '',
       visibleWhen: { type: 'rule', fieldId: 'interview_result', operator: 'in', value: 'partial,refused,postponed' }
     },
   ],
@@ -304,6 +327,7 @@ function normalizeField(f, i) {
     type,
     required: !!f.required,
     section,
+    systemTag: typeof f.systemTag === 'string' ? f.systemTag : (d.systemTag || ''),
     options: Array.isArray(f.options) ? f.options.map((o) => ({ value: String(o.value ?? ''), label: String(o.label ?? '') })) : d.options,
     placeholder: typeof f.placeholder === 'string' ? f.placeholder : d.placeholder,
     min: typeof f.min === 'number' ? f.min : d.min,
@@ -375,6 +399,7 @@ export function normalizeOutboundPrecall(raw) {
         type: 'text',
         required: false,
         section: 'call',
+        systemTag: '',
         visibleWhen: { type: 'rule', fieldId: 'interview_result', operator: 'in', value: 'partial,refused,postponed' }
       };
       if (interviewResultIdx !== -1) {
@@ -558,42 +583,48 @@ export function validateOutboundAnswers(fields, answers) {
   return true;
 }
 
-export function buildInitialAnswers(fields, userName, userCode) {
+export function buildInitialAnswers(fields = [], userName = '', userCode = '', extraData = {}) {
   const answers = {};
   fields.forEach((f) => {
     if (f.type === 'readonly_date' || f.type === 'readonly_time') return;
-    if (f.type === 'segment' && f.options?.length) {
-      answers[f.id] = f.options[0].value;
-      return;
-    }
     answers[f.id] = '';
   });
-  if (fields.some((x) => x.id === 'researcher_name')) {
-    answers.researcher_name = userName || '';
-  }
-  if (fields.some((x) => x.id === 'researcher_code')) {
-    answers.researcher_code = userCode || '';
-  }
-  if (fields.some((x) => x.id === 'is_egyptian')) {
-    const seg = fields.find((x) => x.id === 'is_egyptian');
-    const yes = seg?.options?.find((o) => o.value === 'yes');
-    answers.is_egyptian = yes ? 'yes' : seg?.options?.[0]?.value ?? '';
-  }
-  if (fields.some((x) => x.id === 'phone_type')) {
-    const seg = fields.find((x) => x.id === 'phone_type');
-    const mobile = seg?.options?.find((o) => o.value === 'mobile');
-    answers.phone_type = mobile ? 'mobile' : seg?.options?.[0]?.value ?? '';
-  }
+
+  fields.forEach((f) => {
+    const tag = (f.systemTag || '').trim().toLowerCase();
+    if (tag === 'researcher name' || tag === 'researcher_name' || f.id === 'researcher_name') {
+      answers[f.id] = userName || '';
+    } else if (tag === 'researcher code' || tag === 'researcher_code' || f.id === 'researcher_code') {
+      answers[f.id] = userCode || '';
+    } else if ((tag === 'governorate' || f.id === 'governorate') && extraData?.governorate) {
+      answers[f.id] = extraData.governorate;
+    }
+  });
+
   return answers;
 }
 
-export function newFieldTemplate() {
+export function nextSequentialPrecallId(fields = []) {
+  let maxNum = 0;
+  for (const field of fields) {
+    if (!field || !field.id) continue;
+    const match = String(field.id).match(/^pre_(\d+)$/i);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  }
+  return `pre_${maxNum + 1}`;
+}
+
+export function newFieldTemplate(existingFields = []) {
   return {
-    id: `custom_${Date.now().toString(36)}`,
+    id: nextSequentialPrecallId(existingFields),
     label: 'New question',
     type: 'text',
     required: false,
     section: 'agent',
+    systemTag: '',
     options: [
       { value: 'a', label: 'Option A' },
       { value: 'b', label: 'Option B' },
@@ -612,13 +643,23 @@ export function hasStoredOutboundCustom(raw) {
 }
 
 /** Same age resolution as server (empty string must not become 0). */
-export function parseAgeYearsFromAnswers(answers) {
+export function parseAgeYearsFromAnswers(answers, fields = []) {
   if (!answers || typeof answers !== 'object') return NaN;
+  if (Array.isArray(fields) && fields.length > 0) {
+    const ageField = fields.find((f) => (f.systemTag || '').trim().toLowerCase() === 'age');
+    if (ageField && Object.prototype.hasOwnProperty.call(answers, ageField.id)) {
+      const raw = answers[ageField.id];
+      if (raw !== '' && raw != null) {
+        const n = Number(raw);
+        if (Number.isFinite(n)) return n;
+      }
+    }
+  }
   const preferred = ['age_years', 'age', 'respondent_age'];
   for (const k of preferred) {
     if (!Object.prototype.hasOwnProperty.call(answers, k)) continue;
     const raw = answers[k];
-    if (raw === '' || raw == null) continue;
+    if (raw === '' && raw != null) continue;
     const n = Number(raw);
     if (Number.isFinite(n)) return n;
   }
@@ -636,7 +677,7 @@ export function precallNextValidation(fields, answers) {
   const fieldsForNext = fields.filter((f) => f.id !== 'interview_result');
   if (!validateOutboundAnswers(fieldsForNext, answers)) return false;
   if (String(answers.call_result) !== 'contacted') return false;
-  const age = parseAgeYearsFromAnswers(answers);
+  const age = parseAgeYearsFromAnswers(answers, fields);
   if (Number.isFinite(age) && age < 18) return false;
   return true;
 }
@@ -649,12 +690,13 @@ export function precallNextValidation(fields, answers) {
  */
 export function precallNewFormValidation(fields, answers) {
   if (!validateOutboundAnswers(fields, answers)) return false;
-  const age = parseAgeYearsFromAnswers(answers);
+  const age = parseAgeYearsFromAnswers(answers, fields);
   if (Number.isFinite(age) && age < 18) {
     if (String(answers.interview_result) !== 'no_qualified') return false;
   }
   return true;
 }
+
 
 /** Final survey step — same value keys as precall interview_result. */
 export const INTERVIEW_OUTCOME_OPTIONS = [

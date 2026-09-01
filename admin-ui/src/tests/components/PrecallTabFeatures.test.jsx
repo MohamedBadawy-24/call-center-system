@@ -11,16 +11,20 @@ import {
   buildInitialAnswers,
   parseAgeYearsFromAnswers,
   normalizeOutboundPrecall,
+  isFieldSatisfied,
   DEFAULT_OUTBOUND_V2,
   SYSTEM_TAG_OPTIONS
 } from '../../utils/outboundPrecallConfig';
 
 describe('PrecallTab Features & Outbound Precall Config Tests', () => {
-  it('Task 1: nextSequentialPrecallId finds highest pre_N number and increments', () => {
+  it('Task 1: nextSequentialPrecallId finds highest number and increments, preserving custom sequences', () => {
     expect(nextSequentialPrecallId([])).toBe('pre_1');
     expect(nextSequentialPrecallId([{ id: 'researcher_name' }, { id: 'phone' }])).toBe('pre_1');
     expect(nextSequentialPrecallId([{ id: 'pre_1' }, { id: 'pre_2' }])).toBe('pre_3');
     expect(nextSequentialPrecallId([{ id: 'pre_1' }, { id: 'pre_10' }, { id: 'pre_5' }])).toBe('pre_11');
+    expect(nextSequentialPrecallId([{ id: '101' }])).toBe('102');
+    expect(nextSequentialPrecallId([{ id: '1' }, { id: '2' }])).toBe('3');
+    expect(nextSequentialPrecallId([{ id: 'q5' }, { id: 'q6' }])).toBe('q7');
   });
 
   it('Task 1: newFieldTemplate generates sequential ID instead of random hash', () => {
@@ -125,5 +129,28 @@ describe('PrecallTab Features & Outbound Precall Config Tests', () => {
     fireEvent.click(cloneBtns[0]);
     expect(mockUpdateState).toHaveBeenCalled();
   });
+
+  it('Task 3: SYSTEM_TAG_OPTIONS contains Researcher Code and Account ID', () => {
+    const values = SYSTEM_TAG_OPTIONS.map((o) => o.value);
+    expect(values).toContain('Researcher Code');
+    expect(values).toContain('Account ID');
+  });
+
+  it('Task 5: isFieldSatisfied enforces minValue and maxValue for number fields', () => {
+    const field = {
+      id: 'age',
+      type: 'number',
+      required: true,
+      minValue: 18,
+      maxValue: 65
+    };
+
+    expect(isFieldSatisfied(field, '17')).toBe(false);
+    expect(isFieldSatisfied(field, '18')).toBe(true);
+    expect(isFieldSatisfied(field, '40')).toBe(true);
+    expect(isFieldSatisfied(field, '65')).toBe(true);
+    expect(isFieldSatisfied(field, '66')).toBe(false);
+  });
 });
+
 

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { io } from 'socket.io-client';
 import { 
   Plus, Users, UserPlus, GitBranch, History, BarChart3, Trash2, Edit3, 
-  Play, Pause, Eye, Download, Search, Target, TrendingUp, Clock, Activity, FileText, CheckCircle, MessageSquare, BookOpen, Paperclip
+  Play, Pause, Eye, Download, Search, Target, TrendingUp, Clock, Activity, FileText, CheckCircle, MessageSquare, BookOpen, Paperclip, Copy
 } from 'lucide-react';
 import { UIContext } from '../context/UIContext';
 import { AuthContext } from '../context/AuthContext';
@@ -177,6 +177,21 @@ export default function AdminDashboard() {
         ...prev,
         campaign: { ...prev.campaign, assets: updatedAssets }
       }));
+    }
+  };
+
+  const handleCloneCampaign = async (id, title) => {
+    const confirmMsg = t('cloneCampaignConfirm') || 'Clone this campaign? A new inactive copy will be created with clean assets.';
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const res = await api.post(`/admin/campaigns/${id}/clone`);
+      if (res.data?.campaign) {
+        setSurveys(prev => [res.data.campaign, ...prev]);
+        toast.success(t('cloneCampaignSuccess') || 'Campaign cloned successfully as draft');
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || t('cloneCampaignError') || 'Failed to clone campaign');
     }
   };
 
@@ -366,6 +381,17 @@ export default function AdminDashboard() {
                         )}
                       </button>
                     </AssetsTooltip>
+                  )}
+
+                  {isAdmin && (
+                    <button 
+                      onClick={() => handleCloneCampaign(s._id, s.title)}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.35rem', display: 'inline-flex', alignItems: 'center' }}
+                      title={t('cloneCampaign') || 'Clone Campaign'}
+                      aria-label={t('cloneCampaign') || 'Clone Campaign'}
+                    >
+                      <Copy size={16} />
+                    </button>
                   )}
 
                   {isAdmin && (

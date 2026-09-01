@@ -78,6 +78,24 @@ exports.completePrecall = async (userId, userRole, data, io) => {
 
     const ageYears = parseRespondentAgeYears(payload, precallFields);
 
+    for (const f of precallFields) {
+      if (f.type === 'number' || (f.systemTag || '').trim().toLowerCase() === 'age') {
+        const valRaw = payload[f.id];
+        if (valRaw !== undefined && valRaw !== null && String(valRaw).trim() !== '') {
+          const valNum = Number(String(valRaw).trim());
+          if (!Number.isNaN(valNum)) {
+            const minV = f.minValue != null ? f.minValue : f.min;
+            if (minV != null && valNum < minV) {
+              throw createError(`${f.label || f.id} must be at least ${minV}`, 400);
+            }
+            if (f.maxValue != null && valNum > f.maxValue) {
+              throw createError(`${f.label || f.id} must be at most ${f.maxValue}`, 400);
+            }
+          }
+        }
+      }
+    }
+
     const ir = String(payload.interview_result || '');
     const { category, disqualified } = categorizeInterviewOutcome(ir);
 

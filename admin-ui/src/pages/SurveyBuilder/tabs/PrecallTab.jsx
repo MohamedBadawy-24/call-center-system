@@ -58,6 +58,8 @@ export default function PrecallTab() {
     if (type !== 'text') base.placeholder = undefined;
     if (type !== 'number') {
       base.min = undefined;
+      base.minValue = undefined;
+      base.maxValue = undefined;
       base.minLength = undefined;
       base.maxLength = undefined;
     }
@@ -67,6 +69,17 @@ export default function PrecallTab() {
       base.yearRange = undefined;
     }
     updateField(idx, base);
+  };
+
+  const handleSystemTagChange = (fIdx, newTag) => {
+    if (newTag) {
+      const existing = (outboundConfig.fields || []).find((f, i) => i !== fIdx && f.systemTag === newTag);
+      if (existing) {
+        const msg = (t('duplicateSystemTagWarning') || 'Another field already uses the system tag "{tag}". Only one field per system tag is recommended.').replace('{tag}', newTag);
+        toast.warning(msg);
+      }
+    }
+    updateField(fIdx, { systemTag: newTag });
   };
 
   const updateOption = (fIdx, oIdx, key, val) => {
@@ -294,7 +307,7 @@ export default function PrecallTab() {
                     <select
                       className="input-field"
                       value={field.systemTag || ''}
-                      onChange={(e) => updateField(fIdx, { systemTag: e.target.value })}
+                      onChange={(e) => handleSystemTagChange(fIdx, e.target.value)}
                       disabled={!isAdmin}
                     >
                       {SYSTEM_TAG_OPTIONS.map((opt) => (
@@ -359,6 +372,33 @@ export default function PrecallTab() {
                           onChange={(e) => updateField(fIdx, { maxLength: e.target.value === '' ? undefined : Number(e.target.value) })}
                           readOnly={!isAdmin}
                           placeholder="e.g. 10"
+                        />
+                      </div>
+                    </div>
+                    <label dir="auto" className="form-label" style={{ marginTop: '0.5rem', display: 'block' }}>{t('valueRangeConstraints') || 'Value Range Constraints (Optional)'}</label>
+                    <div style={{ display: 'flex', gap: '1rem' }}>
+                      <div style={{ flex: 1 }}>
+                        <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>{t('minValue') || 'Min Value'}</label>
+                        <input
+                          dir="auto"
+                          className="input-field"
+                          type="number"
+                          value={field.minValue != null ? field.minValue : ''}
+                          onChange={(e) => updateField(fIdx, { minValue: e.target.value === '' ? undefined : Number(e.target.value) })}
+                          readOnly={!isAdmin}
+                          placeholder="e.g. 18"
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label dir="auto" className="form-label" style={{ fontSize: '0.8rem' }}>{t('maxValue') || 'Max Value'}</label>
+                        <input
+                          dir="auto"
+                          className="input-field"
+                          type="number"
+                          value={field.maxValue != null ? field.maxValue : ''}
+                          onChange={(e) => updateField(fIdx, { maxValue: e.target.value === '' ? undefined : Number(e.target.value) })}
+                          readOnly={!isAdmin}
+                          placeholder="e.g. 99"
                         />
                       </div>
                     </div>

@@ -152,3 +152,22 @@ exports.deleteCampaignAttachment = async (req, res, next) => {
   }
 };
 
+exports.cloneCampaign = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const io = req.app.get('io');
+    const campaign = await adminService.cloneCampaign(id, io);
+    res.status(201).json({
+      success: true,
+      message: 'Campaign cloned successfully',
+      campaign
+    });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
+  }
+};
+
+

@@ -56,6 +56,8 @@ export const SYSTEM_TAG_OPTIONS = [
   { value: 'Nationality', label: 'Nationality / الجنسية' },
   { value: 'Sector', label: 'Sector / القطاع' },
   { value: 'Researcher Name', label: 'Researcher Name / اسم الباحث' },
+  { value: 'Researcher Code', label: 'Researcher Code / كود الباحث' },
+  { value: 'Account ID', label: 'Account ID / رقم الحساب' },
 ];
 
 export const OUTBOUND_FIELD_TYPES = [
@@ -331,6 +333,8 @@ function normalizeField(f, i) {
     options: Array.isArray(f.options) ? f.options.map((o) => ({ value: String(o.value ?? ''), label: String(o.label ?? '') })) : d.options,
     placeholder: typeof f.placeholder === 'string' ? f.placeholder : d.placeholder,
     min: typeof f.min === 'number' ? f.min : d.min,
+    minValue: typeof f.minValue === 'number' ? f.minValue : (typeof f.min === 'number' ? f.min : undefined),
+    maxValue: typeof f.maxValue === 'number' ? f.maxValue : undefined,
     minLength: typeof f.minLength === 'number' ? f.minLength : undefined,
     maxLength: typeof f.maxLength === 'number' ? f.maxLength : undefined,
     yearRange: f.yearRange ? {
@@ -359,6 +363,8 @@ function normalizeField(f, i) {
   if (type !== 'text') delete out.placeholder;
   if (type !== 'number') {
     delete out.min;
+    delete out.minValue;
+    delete out.maxValue;
     delete out.minLength;
     delete out.maxLength;
   }
@@ -560,12 +566,19 @@ export function isFieldSatisfied(field, value) {
   if (t === 'number') {
     const rawStr = String(value ?? '').trim();
     if (rawStr.startsWith('OFFLINE-') || rawStr.startsWith('AUTO-')) return true;
-    const str = rawStr.replace(/\D/g, '');
-    if (str.length === 0) return !field.required;
-    if (field.minLength != null && str.length < field.minLength) return false;
-    if (field.maxLength != null && str.length > field.maxLength) return false;
-    // Legacy fallback: support old min property for backward compat
-    if (field.min != null && Number(value) < field.min) return false;
+    if (rawStr === '') return !field.required;
+    const digitsOnly = rawStr.replace(/\D/g, '');
+    if (field.minLength != null && digitsOnly.length < field.minLength) return false;
+    if (field.maxLength != null && digitsOnly.length > field.maxLength) return false;
+    const numVal = Number(rawStr);
+    if (!Number.isNaN(numVal)) {
+      if (field.minValue != null && numVal < field.minValue) return false;
+      if (field.maxValue != null && numVal > field.maxValue) return false;
+      // Legacy fallback: support old min property for backward compat
+      if (field.min != null && numVal < field.min) return false;
+    } else if (field.required) {
+      return false;
+    }
     return true;
   }
   if (t === 'segment' || t === 'select') {
@@ -606,15 +619,28 @@ export function buildInitialAnswers(fields = [], userName = '', userCode = '', e
 
 export function nextSequentialPrecallId(fields = []) {
   let maxNum = 0;
+  let maxPrefix = 'pre_';
+  let foundNumeric = false;
+
   for (const field of fields) {
     if (!field || !field.id) continue;
-    const match = String(field.id).match(/^pre_(\d+)$/i);
+    const match = String(field.id).match(/^(.*?)(\d+)$/);
     if (match) {
-      const num = parseInt(match[1], 10);
-      if (num > maxNum) maxNum = num;
+      const prefix = match[1];
+      const num = parseInt(match[2], 10);
+      if (!foundNumeric || num > maxNum) {
+        maxNum = num;
+        maxPrefix = prefix;
+        foundNumeric = true;
+      }
     }
   }
-  return `pre_${maxNum + 1}`;
+
+  if (!foundNumeric) {
+    return 'pre_1';
+  }
+
+  return `${maxPrefix}${maxNum + 1}`;
 }
 
 export function newFieldTemplate(existingFields = []) {

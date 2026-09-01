@@ -65,6 +65,7 @@ router.patch('/responses/:id/unlock-edit', adminAuth, adminController.unlockResp
 router.post('/campaigns/:id/attachments', adminAuth, handleCampaignUpload, adminController.uploadCampaignAttachment);
 router.put('/campaigns/:id/notes', adminAuth, adminController.updateCampaignNotes);
 router.delete('/campaigns/:id/attachments/:attachmentId', adminAuth, adminController.deleteCampaignAttachment);
+router.post('/campaigns/:id/clone', adminAuth, adminController.cloneCampaign);
 
 module.exports = router;
 

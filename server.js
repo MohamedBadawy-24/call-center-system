@@ -857,23 +857,7 @@ app.post('/admin/campaigns/:campaignId/upload-numbers', [memoryUpload.single('fi
           }
 
           if (toInsert.length > 0) {
-            const maxDoc = await PhoneNumber.findOne({}, { serialNumber: 1 }).sort({ serialNumber: -1 }).session(session);
-            const counter = await Counter.findOne({ id: 'survey_numbers' }).session(session);
-            
-            const maxSeq = maxDoc && maxDoc.serialNumber ? parseInt(maxDoc.serialNumber, 10) : 0;
-            const currentSeq = counter ? counter.seq : 0;
-            const startSeq = Math.max(maxSeq, currentSeq) + 1;
-
-            const serials = [];
-            for (let i = 0; i < toInsert.length; i++) {
-              serials.push(String(startSeq + i).padStart(7, '0'));
-            }
-
-            await Counter.findOneAndUpdate(
-              { id: 'survey_numbers' },
-              { seq: startSeq + toInsert.length - 1 },
-              { upsert: true, session }
-            );
+            const serials = await allocateSerialBatch('survey_numbers', toInsert.length, session);
 
             const results = [];
             for (let i = 0; i < toInsert.length; i++) {

@@ -267,3 +267,35 @@ exports.deleteCampaignAttachment = async (surveyId, attachmentId, io) => {
   };
 };
 
+exports.cloneCampaign = async (surveyId, io) => {
+  if (!mongoose.Types.ObjectId.isValid(surveyId)) {
+    throw createError('Invalid campaign id', 400);
+  }
+
+  const original = await Survey.findById(surveyId).lean();
+  if (!original) {
+    throw createError('Campaign not found', 404);
+  }
+
+  const cloneData = {
+    ...original,
+    _id: new mongoose.Types.ObjectId(),
+    title: `${original.title || 'Campaign'} (Copy)`,
+    isActive: false,
+    assignedAgents: [],
+    assets: {
+      notes: '',
+      attachments: []
+    },
+    draftData: undefined,
+    createdAt: new Date()
+  };
+
+  const clonedSurvey = await Survey.create(cloneData);
+
+  if (io) io.emit('stats-update');
+
+  return clonedSurvey;
+};
+
+

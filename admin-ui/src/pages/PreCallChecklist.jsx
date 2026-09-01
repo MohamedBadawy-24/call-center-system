@@ -848,7 +848,10 @@ export default function PreCallChecklist() {
     setSubmitting(true);
     try {
       await completePrecallSubmission();
-      if (draftKey) sessionStorage.removeItem(draftKey);
+      if (draftKey) {
+        sessionStorage.removeItem(draftKey);
+        localStorage.removeItem(draftKey);
+      }
       setAnswers(buildInitialAnswers(config.fields, user?.name, user?.researcherCode));
       setTick(new Date());
 

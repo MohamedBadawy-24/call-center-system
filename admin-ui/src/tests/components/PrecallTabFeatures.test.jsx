@@ -130,10 +130,10 @@ describe('PrecallTab Features & Outbound Precall Config Tests', () => {
     expect(mockUpdateState).toHaveBeenCalled();
   });
 
-  it('Task 3: SYSTEM_TAG_OPTIONS contains Researcher Code and Account ID', () => {
+  it('Task 3: SYSTEM_TAG_OPTIONS contains merged Researcher Code / Account ID', () => {
     const values = SYSTEM_TAG_OPTIONS.map((o) => o.value);
     expect(values).toContain('Researcher Code');
-    expect(values).toContain('Account ID');
+    expect(values).not.toContain('Account ID');
   });
 
   it('Task 5: isFieldSatisfied enforces minValue and maxValue for number fields', () => {

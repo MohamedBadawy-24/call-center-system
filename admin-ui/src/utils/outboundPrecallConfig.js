@@ -56,8 +56,7 @@ export const SYSTEM_TAG_OPTIONS = [
   { value: 'Nationality', label: 'Nationality / الجنسية' },
   { value: 'Sector', label: 'Sector / القطاع' },
   { value: 'Researcher Name', label: 'Researcher Name / اسم الباحث' },
-  { value: 'Researcher Code', label: 'Researcher Code / كود الباحث' },
-  { value: 'Account ID', label: 'Account ID / رقم الحساب' },
+  { value: 'Researcher Code', label: 'Researcher Code / Account ID (كود الباحث / رقم الحساب)' },
 ];
 
 export const OUTBOUND_FIELD_TYPES = [

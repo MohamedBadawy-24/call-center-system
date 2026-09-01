@@ -211,7 +211,7 @@ export default function AuditPreCallChecklist() {
                 <button
                   key={opt.value}
                   type="button"
-                  className={`precall-seg-btn ${segValue === String(opt.value) ? 'active' : ''} ${hasError ? 'has-error' : ''}`}
+                  className={`precall-seg-btn ${segValue === String(opt.value) ? 'active' : ''} ${hasError && segValue !== String(opt.value) && !segOtherActive ? 'has-error' : ''}`}
                   onClick={() => !isReadOnly && onChange(field.id, opt.value)}
                   disabled={isReadOnly}
                 >
@@ -221,7 +221,7 @@ export default function AuditPreCallChecklist() {
               {field.allowOther && (
                 <button
                   type="button"
-                  className={`precall-seg-btn ${segOtherActive ? 'active' : ''} ${hasError ? 'has-error' : ''}`}
+                  className={`precall-seg-btn ${segOtherActive ? 'active' : ''} ${hasError && !segOtherActive && !segValue ? 'has-error' : ''}`}
                   onClick={() => !isReadOnly && onChange(field.id, segOtherActive ? '' : 'other:')}
                   disabled={isReadOnly}
                 >

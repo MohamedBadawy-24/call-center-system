@@ -749,10 +749,14 @@ td:last-child {
   font-size: var(--font-size-lg);
 }
 
-.input-field.has-error,
-.precall-seg-btn.has-error {
+.input-field.has-error {
   border-color: var(--danger) !important;
   box-shadow: var(--shadow-focus-danger) !important;
+}
+
+.precall-seg-btn.has-error:not(.active) {
+  border-color: var(--danger);
+  box-shadow: var(--shadow-focus-danger);
 }
 
 @media (min-width: 769px) {

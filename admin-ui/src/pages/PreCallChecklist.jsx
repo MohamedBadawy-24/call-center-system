@@ -203,7 +203,7 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
                 key={opt.value}
                 type="button"
                 data-testid={`precall-${field.id}-btn-${opt.value}`}
-                className={`precall-seg-btn ${segValue === String(opt.value) ? 'active' : ''} ${hasError ? 'has-error' : ''}`}
+                className={`precall-seg-btn ${segValue === String(opt.value) ? 'active' : ''} ${hasError && segValue !== String(opt.value) && !segOtherActive ? 'has-error' : ''}`}
                 onClick={() => !isReadOnly && onChange(field.id, opt.value)}
                 disabled={isReadOnly}
               >
@@ -214,7 +214,7 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
               <button
                 type="button"
                 data-testid={`precall-${field.id}-btn-other`}
-                className={`precall-seg-btn ${segOtherActive ? 'active' : ''} ${hasError ? 'has-error' : ''}`}
+                className={`precall-seg-btn ${segOtherActive ? 'active' : ''} ${hasError && !segOtherActive && !segValue ? 'has-error' : ''}`}
                 onClick={() => !isReadOnly && onChange(field.id, segOtherActive ? '' : `${otherValueCode}:`)}
                 disabled={isReadOnly}
               >
@@ -1056,6 +1056,7 @@ export default function PreCallChecklist() {
   const handleNoPhoneStart = async () => {
     setStartingNoPhone(true);
     try {
+      const govField = config?.fields?.find(f => (f.systemTag || '').trim().toLowerCase() === 'governorate' || f.id === 'governorate');
       if (isOnline) {
         try {
           const res = await api.post('/agent/start-no-phone-session', { surveyId });
@@ -1063,7 +1064,11 @@ export default function PreCallChecklist() {
             const serial = res.data.serialNumber;
             const dummyPhone = `AUTO-${serial}`;
             setCurrentNumber({ number: dummyPhone, serialNumber: serial });
-            setAnswers(prev => ({ ...prev, phone: dummyPhone, serial_number: serial }));
+            const updates = { phone: dummyPhone, serial_number: serial };
+            if (govField) {
+              updates[govField.id] = '';
+            }
+            setAnswers(prev => ({ ...prev, ...updates }));
             toast.success(t('serialAssigned') || `Serial ${serial} assigned successfully`);
             return;
           }
@@ -1091,7 +1096,11 @@ export default function PreCallChecklist() {
       } catch (_) {}
 
       setCurrentNumber(offlineSession);
-      setAnswers(prev => ({ ...prev, phone: dummyPhone, serial_number: offlineSerial }));
+      const updates = { phone: dummyPhone, serial_number: offlineSerial };
+      if (govField) {
+        updates[govField.id] = '';
+      }
+      setAnswers(prev => ({ ...prev, ...updates }));
       toast.info(t('offlineSerialAssigned') || 'Offline Mode: Temporary serial generated.');
     } catch (err) {
       console.error(err);

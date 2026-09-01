@@ -595,7 +595,7 @@ export function validateOutboundAnswers(fields, answers) {
   return true;
 }
 
-export function buildInitialAnswers(fields = [], userName = '', userCode = '', extraData = {}) {
+export function buildInitialAnswers(fields = [], userName = '', userCode = '') {
   const answers = {};
   fields.forEach((f) => {
     if (f.type === 'readonly_date' || f.type === 'readonly_time') return;
@@ -608,8 +608,6 @@ export function buildInitialAnswers(fields = [], userName = '', userCode = '', e
       answers[f.id] = userName || '';
     } else if (tag === 'researcher code' || tag === 'researcher_code' || f.id === 'researcher_code') {
       answers[f.id] = userCode || '';
-    } else if ((tag === 'governorate' || f.id === 'governorate') && extraData?.governorate) {
-      answers[f.id] = extraData.governorate;
     }
   });
 

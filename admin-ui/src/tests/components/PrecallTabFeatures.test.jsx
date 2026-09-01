@@ -62,7 +62,7 @@ describe('PrecallTab Features & Outbound Precall Config Tests', () => {
     expect(answers.custom_text).toBe('');
   });
 
-  it('Task 5 & 6: buildInitialAnswers auto-fills agent identity and governorate by systemTag', () => {
+  it('Task 5 & 6: buildInitialAnswers auto-fills agent identity by systemTag but leaves governorate empty', () => {
     const fields = [
       { id: 'custom_agent_field', type: 'text', systemTag: 'Researcher Name' },
       { id: 'custom_code_field', type: 'text', systemTag: 'Researcher Code' },
@@ -70,10 +70,10 @@ describe('PrecallTab Features & Outbound Precall Config Tests', () => {
       { id: 'regular_field', type: 'text', systemTag: '' }
     ];
 
-    const answers = buildInitialAnswers(fields, 'Dr. Smith', 'RC-999', { governorate: 'Alexandria' });
+    const answers = buildInitialAnswers(fields, 'Dr. Smith', 'RC-999');
     expect(answers.custom_agent_field).toBe('Dr. Smith');
     expect(answers.custom_code_field).toBe('RC-999');
-    expect(answers.gov_field).toBe('Alexandria');
+    expect(answers.gov_field).toBe('');
     expect(answers.regular_field).toBe('');
   });
 

@@ -927,12 +927,7 @@ export default function PreCallChecklist() {
 
         setCurrentNumber(nextNum);
         if (nextNum && nextNum.number) {
-          const govField = config?.fields?.find(f => (f.systemTag || '').trim().toLowerCase() === 'governorate' || f.id === 'governorate');
           const updates = { phone: nextNum.number, serial_number: nextNum.serialNumber || '' };
-          const govToSet = nextNum.governorate || (govToFetch !== 'All' ? govToFetch : '');
-          if (govField && govToSet) {
-            updates[govField.id] = govToSet;
-          }
           setAnswers(prev => ({ ...prev, ...updates }));
           const cachedBefore = await offlineDb.getCachedNumbers();
           console.log(`[Offline Inventory] Fetched number online. Current cached numbers count before prefetch check: ${cachedBefore.length}`);
@@ -952,12 +947,7 @@ export default function PreCallChecklist() {
         if (matched.length > 0) {
           const nextNum = matched[0];
           setCurrentNumber(nextNum);
-          const govField = config?.fields?.find(f => (f.systemTag || '').trim().toLowerCase() === 'governorate' || f.id === 'governorate');
           const updates = { phone: nextNum.number, serial_number: nextNum.serialNumber || '' };
-          const govToSet = nextNum.governorate || (govToFetch !== 'All' ? govToFetch : '');
-          if (govField && govToSet) {
-            updates[govField.id] = govToSet;
-          }
           setAnswers(prev => ({ ...prev, ...updates }));
           await offlineDb.deleteCachedNumber(nextNum._id);
           const cachedAfter = await offlineDb.getCachedNumbers();
@@ -1009,11 +999,7 @@ export default function PreCallChecklist() {
         });
         const nextNum = res.data;
         setCurrentNumber(nextNum);
-        const govField = config?.fields?.find(f => (f.systemTag || '').trim().toLowerCase() === 'governorate' || f.id === 'governorate');
         const updates = { phone: nextNum.number, serial_number: nextNum.serialNumber || '' };
-        if (govField && selectedGov && selectedGov !== 'All') {
-          updates[govField.id] = selectedGov;
-        }
         setAnswers(prev => ({ ...prev, ...updates }));
         toast.success('Manual number assigned successfully.');
         setIsManualModalOpen(false);
@@ -1033,11 +1019,7 @@ export default function PreCallChecklist() {
           assignedAt: new Date().toISOString()
         };
         setCurrentNumber(mockPhoneDoc);
-        const govField = config?.fields?.find(f => (f.systemTag || '').trim().toLowerCase() === 'governorate' || f.id === 'governorate');
         const updates = { phone: mockPhoneDoc.number, serial_number: mockPhoneDoc.serialNumber };
-        if (govField && selectedGov && selectedGov !== 'All') {
-          updates[govField.id] = selectedGov;
-        }
         setAnswers(prev => ({ ...prev, ...updates }));
         toast.success('Manual number registered offline.');
         setIsManualModalOpen(false);
@@ -1056,7 +1038,6 @@ export default function PreCallChecklist() {
   const handleNoPhoneStart = async () => {
     setStartingNoPhone(true);
     try {
-      const govField = config?.fields?.find(f => (f.systemTag || '').trim().toLowerCase() === 'governorate' || f.id === 'governorate');
       if (isOnline) {
         try {
           const res = await api.post('/agent/start-no-phone-session', { surveyId });
@@ -1064,11 +1045,7 @@ export default function PreCallChecklist() {
             const serial = res.data.serialNumber;
             const dummyPhone = `AUTO-${serial}`;
             setCurrentNumber({ number: dummyPhone, serialNumber: serial });
-            const updates = { phone: dummyPhone, serial_number: serial };
-            if (govField) {
-              updates[govField.id] = '';
-            }
-            setAnswers(prev => ({ ...prev, ...updates }));
+            setAnswers(prev => ({ ...prev, phone: dummyPhone, serial_number: serial }));
             toast.success(t('serialAssigned') || `Serial ${serial} assigned successfully`);
             return;
           }
@@ -1096,11 +1073,7 @@ export default function PreCallChecklist() {
       } catch (_) {}
 
       setCurrentNumber(offlineSession);
-      const updates = { phone: dummyPhone, serial_number: offlineSerial };
-      if (govField) {
-        updates[govField.id] = '';
-      }
-      setAnswers(prev => ({ ...prev, ...updates }));
+      setAnswers(prev => ({ ...prev, phone: dummyPhone, serial_number: offlineSerial }));
       toast.info(t('offlineSerialAssigned') || 'Offline Mode: Temporary serial generated.');
     } catch (err) {
       console.error(err);

@@ -109,10 +109,10 @@ test.describe('E2E Production Simulation: Survey Creation & Publishing', () => {
     // Verify the group container is rendered
     await expect(page.getByTestId(/group-label-/).filter({ hasText: 'Demographics' })).toBeVisible();
 
-    // 7. Add simple routing logic: If Q1 == 'No', skip Q2 (skip to Q3)
-    // Q2 -> Click Build Visibility Logic -> set action to 'skip' -> add Rule -> select 'No'
+    // 7. Add simple routing logic: If Q1 == 'No', hide Q2
+    // Q2 -> Click Build Visibility Logic -> set action to 'hide' -> add Rule -> select 'No'
     await q2Card.getByRole('button', { name: /Build Visibility Logic/i }).click();
-    await q2Card.locator('select').nth(1).selectOption('skip');
+    await q2Card.locator('select').nth(1).selectOption('hide');
     await q2Card.getByRole('button', { name: /Rule/i }).click();
     await q2Card.locator('select').nth(2).selectOption('q1');
     await q2Card.locator('select').nth(4).selectOption('No');

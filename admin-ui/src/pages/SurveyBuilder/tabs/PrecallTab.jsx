@@ -28,7 +28,8 @@ const META_KEYS = [
 
 export default function PrecallTab() {
   const { isAdmin, surveyState, updateState } = useContext(SurveyBuilderContext);
-  const { t } = useContext(UIContext);
+  const { t, language } = useContext(UIContext);
+  const isRtl = language === 'ar';
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
 
   const outboundConfig = surveyState.outboundConfig;
@@ -331,10 +332,38 @@ export default function PrecallTab() {
                       ))}
                     </select>
                   </div>
-                  <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, marginTop: '1.5rem' }}>
-                    <input dir="auto" type="checkbox" checked={!!field.required} onChange={(e) => updateField(fIdx, { required: e.target.checked })} disabled={!isAdmin} />
-                    Required to continue
-                  </label>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '0.2rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => isAdmin && updateField(fIdx, { required: !field.required })}
+                      disabled={!isAdmin}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        padding: '0.45rem 0.9rem',
+                        borderRadius: '9999px',
+                        fontWeight: 700,
+                        fontSize: '0.82rem',
+                        border: '1px solid',
+                        borderColor: field.required ? 'var(--primary-color, #2563eb)' : 'var(--border-color, #cbd5e1)',
+                        cursor: isAdmin ? 'pointer' : 'default',
+                        background: field.required ? 'var(--primary-color, #2563eb)' : 'var(--bg-secondary, #f1f5f9)',
+                        color: field.required ? '#ffffff' : 'var(--text-secondary, #64748b)',
+                        transition: 'all 0.2s ease',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <span style={{
+                        display: 'inline-block',
+                        width: '7px',
+                        height: '7px',
+                        borderRadius: '50%',
+                        backgroundColor: field.required ? '#ffffff' : '#94a3b8',
+                      }} />
+                      {field.required ? (isRtl ? 'مطلوب' : 'Required') : (isRtl ? 'اختياري' : 'Optional')}
+                    </button>
+                  </div>
                 </div>
                 <label dir="auto" className="form-label" style={{ marginTop: '0.75rem', display: 'block' }}>Question / label</label>
                 <input dir="auto" className="input-field" value={field.label} onChange={(e) => updateField(fIdx, { label: e.target.value })} readOnly={!isAdmin} />

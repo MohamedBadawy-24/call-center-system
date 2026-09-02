@@ -86,6 +86,7 @@ export default function SurveyCanvas() {
               script: '',
               type: 'text',
               category: 'main',
+              required: true,
               choices: [],
             },
           ],

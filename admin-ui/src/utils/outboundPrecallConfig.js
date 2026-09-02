@@ -648,7 +648,7 @@ export function newFieldTemplate(existingFields = []) {
     id: nextSequentialPrecallId(existingFields),
     label: 'New question',
     type: 'text',
-    required: false,
+    required: true,
     section: 'agent',
     systemTag: '',
     options: [

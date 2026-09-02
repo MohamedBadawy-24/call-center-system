@@ -171,10 +171,36 @@ export default function QuestionCard({
               </select>
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '0.5rem' }}>
-              <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, fontSize: '0.9rem', cursor: isAdmin ? 'pointer' : 'default' }}>
-                <input dir="auto" type="checkbox" checked={!!question.required} onChange={e => updateQ({ required: e.target.checked })} disabled={!isAdmin} />
-                Required
-              </label>
+              <button
+                type="button"
+                onClick={() => isAdmin && updateQ({ required: !question.required })}
+                disabled={!isAdmin}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  padding: '0.45rem 0.9rem',
+                  borderRadius: '9999px',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  border: '1px solid',
+                  borderColor: question.required ? 'var(--primary-color, #2563eb)' : 'var(--border-color, #cbd5e1)',
+                  cursor: isAdmin ? 'pointer' : 'default',
+                  background: question.required ? 'var(--primary-color, #2563eb)' : 'var(--bg-secondary, #f1f5f9)',
+                  color: question.required ? '#ffffff' : 'var(--text-secondary, #64748b)',
+                  transition: 'all 0.2s ease',
+                  userSelect: 'none',
+                }}
+              >
+                <span style={{
+                  display: 'inline-block',
+                  width: '7px',
+                  height: '7px',
+                  borderRadius: '50%',
+                  backgroundColor: question.required ? '#ffffff' : '#94a3b8',
+                }} />
+                {question.required ? (isRtl ? 'مطلوب' : 'Required') : (isRtl ? 'اختياري' : 'Optional')}
+              </button>
             </div>
           </div>
 

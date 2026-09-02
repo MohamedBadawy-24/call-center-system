@@ -44,7 +44,6 @@
 export const PRECALL_ACTION_OPTIONS = [
   { value: 'show', labelEn: 'Show Field', labelAr: 'عرض الحقل' },
   { value: 'hide', labelEn: 'Hide Field', labelAr: 'إخفاء الحقل' },
-  { value: 'skip', labelEn: 'Skip Field', labelAr: 'تخطي الحقل' },
   { value: 'terminate_call', labelEn: 'Terminate Call', labelAr: 'إنهاء المكالمة' },
 ];
 
@@ -329,7 +328,11 @@ function normalizeField(f, i) {
     required: !!f.required,
     section,
     systemTag: typeof f.systemTag === 'string' ? f.systemTag : (d.systemTag || ''),
-    options: Array.isArray(f.options) ? f.options.map((o) => ({ value: String(o.value ?? ''), label: String(o.label ?? '') })) : d.options,
+    options: Array.isArray(f.options) ? f.options.map((o) => {
+      const v = String(o?.value ?? '').trim();
+      const l = String(o?.label ?? '').trim();
+      return { value: v || l, label: l || v };
+    }) : d.options,
     placeholder: typeof f.placeholder === 'string' ? f.placeholder : d.placeholder,
     min: typeof f.min === 'number' ? f.min : d.min,
     minValue: typeof f.minValue === 'number' ? f.minValue : (typeof f.min === 'number' ? f.min : undefined),

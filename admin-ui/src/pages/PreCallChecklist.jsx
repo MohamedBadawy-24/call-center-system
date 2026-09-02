@@ -204,7 +204,14 @@ function renderFieldInput(field, value, onChange, tick, t, forceReadOnly = false
                 type="button"
                 data-testid={`precall-${field.id}-btn-${opt.value}`}
                 className={`precall-seg-btn ${segValue === String(opt.value) ? 'active' : ''} ${hasError && segValue !== String(opt.value) && !segOtherActive ? 'has-error' : ''}`}
-                onClick={() => !isReadOnly && onChange(field.id, opt.value)}
+                onClick={() => {
+                  if (isReadOnly) return;
+                  if (segValue === String(opt.value)) {
+                    onChange(field.id, '');
+                  } else {
+                    onChange(field.id, opt.value);
+                  }
+                }}
                 disabled={isReadOnly}
               >
                 {opt.label || opt.value}

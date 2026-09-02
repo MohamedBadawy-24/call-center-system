@@ -705,6 +705,15 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                               name={radioName}
                               value={optVal}
                               checked={isChecked}
+                              onClick={e => {
+                                if (isChecked) {
+                                  e.preventDefault();
+                                  if (activeInputIdRef) activeInputIdRef.current = radioId;
+                                  let currentQAnswer = { ...(answers[qId] || {}) };
+                                  delete currentQAnswer[sub.id];
+                                  handleAnswerChange(qId, currentQAnswer);
+                                }
+                              }}
                               onChange={e => {
                                 if (activeInputIdRef) activeInputIdRef.current = radioId;
                                 let currentQAnswer = { ...(answers[qId] || {}) };
@@ -759,6 +768,15 @@ const QuestionRenderer = React.memo(({ q, sIdx, qIdx, isLocked = false, question
                                 name={radioName}
                                 value={subOtherPrefix}
                                 checked={isChecked}
+                                onClick={e => {
+                                  if (isChecked) {
+                                    e.preventDefault();
+                                    if (activeInputIdRef) activeInputIdRef.current = otherRadioId;
+                                    let currentQAnswer = { ...(answers[qId] || {}) };
+                                    delete currentQAnswer[sub.id];
+                                    handleAnswerChange(qId, currentQAnswer);
+                                  }
+                                }}
                                 onChange={e => {
                                   if (activeInputIdRef) activeInputIdRef.current = otherRadioId;
                                   let currentQAnswer = { ...(answers[qId] || {}) };

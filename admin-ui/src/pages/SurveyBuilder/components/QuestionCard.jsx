@@ -183,20 +183,6 @@ export default function QuestionCard({
             <input dir="auto" className="input-field" value={question.text} onChange={e => updateQ({ text: e.target.value })} readOnly={!isAdmin} />
           </div>
 
-          {question.type !== 'info' && (
-            <div style={{ display: 'flex', alignItems: 'center', marginTop: '-0.25rem', marginBottom: '0.25rem' }}>
-              <label dir="auto" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, fontSize: '0.9rem', cursor: isAdmin ? 'pointer' : 'default' }}>
-                <input dir="auto" 
-                  type="checkbox" 
-                  checked={!!question.optional} 
-                  onChange={() => updateQ({ optional: !question.optional })} 
-                  disabled={!isAdmin} 
-                />
-                {isRtl ? "اختياري (يمكن للوكيل تخطيه)" : "Optional (agent can skip)"}
-              </label>
-            </div>
-          )}
-
           <div>
             <label dir="auto" className="form-label">Internal Script / Instruction (Optional)</label>
             <textarea dir="auto" className="input-field" rows={2} value={question.script || ''} onChange={e => updateQ({ script: e.target.value })} readOnly={!isAdmin} />

@@ -135,7 +135,9 @@ export default function ConditionBuilder({ condition, onChange, availableFields 
           borderRadius: '7px', fontSize: '0.76rem', fontFamily: 'monospace',
           color: 'var(--text-secondary)', lineHeight: 1.7, overflowX: 'auto', whiteSpace: 'nowrap',
         }}>
-          <span style={{ fontWeight: 800, color: 'hsl(220,70%,55%)', marginRight: '0.4rem' }}>Show if:</span>
+          <span style={{ fontWeight: 800, color: 'hsl(220,70%,55%)', marginRight: '0.4rem' }}>
+            {condition?.action === 'hide' ? 'Hide if:' : condition?.action === 'terminate_call' ? 'Terminate Call if:' : 'Show if:'}
+          </span>
           {summary}
         </div>
       )}

@@ -151,6 +151,32 @@ describe('PrecallTab Features & Outbound Precall Config Tests', () => {
     expect(isFieldSatisfied(field, '65')).toBe(true);
     expect(isFieldSatisfied(field, '66')).toBe(false);
   });
+
+  it('normalizeOutboundPrecall falls back empty option value to label and vice versa', () => {
+    const rawConfig = {
+      version: 2,
+      fields: [
+        {
+          id: 'governorate_field',
+          type: 'segment',
+          systemTag: 'Governorate',
+          options: [
+            { value: '', label: 'Cairo' },
+            { value: 'Alex', label: '' },
+            { value: 'Giza', label: 'Giza' }
+          ]
+        }
+      ]
+    };
+
+    const normalized = normalizeOutboundPrecall(rawConfig);
+    const govField = normalized.fields.find((f) => f.id === 'governorate_field');
+    expect(govField.options).toEqual([
+      { value: 'Cairo', label: 'Cairo' },
+      { value: 'Alex', label: 'Alex' },
+      { value: 'Giza', label: 'Giza' }
+    ]);
+  });
 });
 
 

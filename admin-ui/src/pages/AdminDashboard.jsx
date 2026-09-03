@@ -12,8 +12,9 @@ import { AuthContext } from '../context/AuthContext';
 import { useLanguage } from '../hooks/useLanguage';
 import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
-import AssetsTooltip from '../components/AssetsTooltip';
 import CampaignAssetsModal from '../components/CampaignAssetsModal';
+import KPICard from '../components/dashboard/KPICard';
+import CampaignCard from '../components/dashboard/CampaignCard';
 
 export default function AdminDashboard() {
   const { t, language } = useLanguage();
@@ -263,208 +264,317 @@ export default function AdminDashboard() {
 
   return (
     <motion.div variants={containerVariants} initial="hidden" animate="visible" style={{ paddingBottom: '4rem' }}>
-      {/* Header & Global Actions */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '3rem', flexWrap: 'wrap', gap: '1.5rem' }}>
+      {/* Header & Primary Action Row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <motion.h1 variants={itemVariants} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+          <motion.h1 variants={itemVariants} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: 0, fontSize: '1.75rem', fontWeight: 800 }}>
             <BarChart3 size={32} color="var(--primary)" />
             {isQuality ? t('qualityAgent') : t('adminDashboard')}
           </motion.h1>
         </div>
-        
+
         {isAdmin && (
-          <motion.div variants={itemVariants} className="admin-header-actions flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-3 w-full md:w-auto" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: 'var(--bg-secondary)', padding: '0.25rem 0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Daily Goal:</span>
-              <input 
-                type="number" 
-                value={dailyGoal}
-                onChange={e => setDailyGoal(e.target.value)}
-                onBlur={e => updateDailyGoal(e.target.value)}
-                style={{ width: '60px', padding: '0.25rem', border: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)', borderRadius: '4px', textAlign: 'center' }}
-              />
-            </div>
-            <Link to="/admin/requests" className="btn-secondary w-full md:w-auto" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><History size={16} />{t('changeRequests')}</Link>
-            <Link to="/admin/users" className="btn-secondary w-full md:w-auto" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Users size={16} />{t('teamMembers')}</Link>
-            <Link to="/admin/register" className="btn-secondary w-full md:w-auto" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><UserPlus size={16} />{t('addTeamMember')}</Link>
-            <Link to="/admin/builder" className="btn-primary w-full md:w-auto" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={18} />{t('createSurvey')}</Link>
+          <motion.div variants={itemVariants}>
+            <Link
+              to="/admin/builder"
+              className="btn-primary"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                padding: '0.65rem 1.25rem',
+                borderRadius: '10px',
+                fontWeight: 700,
+                fontSize: '0.95rem',
+                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.25)'
+              }}
+            >
+              <Plus size={18} />
+              {t('createSurvey')}
+            </Link>
           </motion.div>
         )}
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem', overflowX: 'auto' }}>
-        <button className="btn-secondary" onClick={() => setActiveTab('overview')} style={{ background: activeTab === 'overview' ? 'var(--primary)' : 'transparent', color: activeTab === 'overview' ? '#fff' : 'inherit', borderColor: activeTab === 'overview' ? 'transparent' : 'var(--glass-border)' }}>Overview & Campaigns</button>
-        <button className="btn-secondary" onClick={() => setActiveTab('workforce')} style={{ background: activeTab === 'workforce' ? 'var(--primary)' : 'transparent', color: activeTab === 'workforce' ? '#fff' : 'inherit', borderColor: activeTab === 'workforce' ? 'transparent' : 'var(--glass-border)' }}>Workforce</button>
+      {/* Secondary Action Bar: Team Management Actions + Relocated Daily Goal */}
+      {isAdmin && (
+        <motion.div
+          variants={itemVariants}
+          className="admin-header-actions"
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+            marginBottom: '2rem',
+            padding: '0.65rem 1rem',
+            background: 'var(--card-bg)',
+            borderRadius: '12px',
+            border: '1px solid var(--glass-border)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+            <Link
+              to="/admin/users"
+              className="btn-secondary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', padding: '0.45rem 0.85rem' }}
+            >
+              <Users size={15} />
+              {t('teamMembers')}
+            </Link>
+            <Link
+              to="/admin/register"
+              className="btn-secondary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', padding: '0.45rem 0.85rem' }}
+            >
+              <UserPlus size={15} />
+              {t('addTeamMember')}
+            </Link>
+            <Link
+              to="/admin/requests"
+              className="btn-secondary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', padding: '0.45rem 0.85rem' }}
+            >
+              <History size={15} />
+              {t('changeRequests')}
+            </Link>
+          </div>
+
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              background: 'var(--bg-secondary)',
+              padding: '0.3rem 0.75rem',
+              borderRadius: '8px',
+              border: '1px solid var(--glass-border)'
+            }}
+          >
+            <Target size={15} color="var(--primary)" />
+            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Daily Goal:</span>
+            <input
+              type="number"
+              value={dailyGoal}
+              onChange={e => setDailyGoal(e.target.value)}
+              onBlur={e => updateDailyGoal(e.target.value)}
+              style={{
+                width: '54px',
+                padding: '0.2rem 0.35rem',
+                border: '1px solid var(--glass-border)',
+                background: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                borderRadius: '4px',
+                textAlign: 'center',
+                fontWeight: 700,
+                fontSize: '0.85rem'
+              }}
+            />
+          </div>
+        </motion.div>
+      )}
+
+      {/* Modern Underline Tabs */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '2rem',
+          marginBottom: '2rem',
+          borderBottom: '1px solid var(--glass-border)',
+          overflowX: 'auto'
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setActiveTab('overview')}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeTab === 'overview' ? '3px solid var(--primary)' : '3px solid transparent',
+            padding: '0.75rem 0.25rem',
+            fontWeight: activeTab === 'overview' ? 700 : 500,
+            fontSize: '0.95rem',
+            color: activeTab === 'overview' ? 'var(--primary)' : 'var(--text-secondary)',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          <BarChart3 size={17} />
+          <span>Overview & Campaigns</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('workforce')}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeTab === 'workforce' ? '3px solid var(--primary)' : '3px solid transparent',
+            padding: '0.75rem 0.25rem',
+            fontWeight: activeTab === 'workforce' ? 700 : 500,
+            fontSize: '0.95rem',
+            color: activeTab === 'workforce' ? 'var(--primary)' : 'var(--text-secondary)',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          <Users size={17} />
+          <span>Workforce</span>
+        </button>
       </div>
 
       {activeTab === 'overview' && (
-      <>
-      <div className="kpi-grid">
-        <motion.div variants={itemVariants} className="kpi-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span className="kpi-label">{t('workforceActive')}</span>
-            <Activity size={16} color="var(--success)" />
+        <>
+          {/* Responsive KPI Grid */}
+          <div
+            className="kpi-grid"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: '1.25rem',
+              marginTop: '0.5rem',
+              marginBottom: '2.5rem'
+            }}
+          >
+            <KPICard
+              label={t('workforceActive')}
+              value={`${((activeAgentsCount / totalAgentsCount) * 100).toFixed(0)}%`}
+              subtext={`${activeAgentsCount} ${t('activeStaffMsg')} ${totalAgentsCount}`}
+              icon={Activity}
+              iconColor="#10b981"
+              iconBg="rgba(16, 185, 129, 0.12)"
+              variants={itemVariants}
+            />
+            <KPICard
+              label={t('globalSuccess')}
+              value={`${successRate}%`}
+              subtext={`${totalCompletedCount} ${t('completedSurveys')}`}
+              icon={Target}
+              iconColor="var(--primary)"
+              iconBg="rgba(59, 130, 246, 0.12)"
+              variants={itemVariants}
+            />
+            <KPICard
+              label={t('avgHandleTime')}
+              value={formatTime(ahtValue)}
+              subtext={t('avgHandleTime')}
+              icon={Clock}
+              iconColor="#8b5cf6"
+              iconBg="rgba(139, 92, 246, 0.12)"
+              variants={itemVariants}
+            />
+            <KPICard
+              label={t('liveCampaigns')}
+              value={surveys.filter(s => s.isActive).length}
+              subtext={t('harvestingData')}
+              icon={TrendingUp}
+              iconColor="#f59e0b"
+              iconBg="rgba(245, 158, 11, 0.12)"
+              variants={itemVariants}
+            />
           </div>
-          <span className="kpi-value">{((activeAgentsCount / totalAgentsCount) * 100).toFixed(0)}%</span>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{activeAgentsCount} {t('activeStaffMsg')} {totalAgentsCount} </span>
-        </motion.div>
-        <motion.div variants={itemVariants} className="kpi-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span className="kpi-label">{t('globalSuccess')}</span>
-            <Target size={16} color="var(--primary)" />
-          </div>
-          <span className="kpi-value">{successRate}%</span>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{totalCompletedCount} {t('completedSurveys')}</span>
-        </motion.div>
-        <motion.div variants={itemVariants} className="kpi-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span className="kpi-label">{t('avgHandleTime')}</span>
-            <Clock size={16} color="var(--accent)" />
-          </div>
-          <span className="kpi-value">{formatTime(ahtValue)}</span>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{t('avgHandleTime')}</span>
-        </motion.div>
-        <motion.div variants={itemVariants} className="kpi-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span className="kpi-label">{t('liveCampaigns')}</span>
-            <TrendingUp size={16} color="var(--warning)" />
-          </div>
-          <span className="kpi-value">{surveys.filter(s => s.isActive).length}</span>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{t('harvestingData')}</span>
-        </motion.div>
-      </div>
-      
-      {/* Search Bar */}
-      <div className="search-container" style={{ marginTop: '2rem' }}>
-        <Search className="search-icon" size={20} />
-        <input 
-          type="text" 
-          placeholder={t('searchPlaceholder')} 
-          className="search-input"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-      </div>
-      
-      {/* Survey Management */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-        <h2 style={{ marginBottom: 0 }}>{t('campaigns')}</h2>
-      </div>
 
-      <div className="choice-grid">
-        <AnimatePresence>
-          {filteredSurveys.map(s => {
-            const progress = s.totalHandled > 0 ? (s.completed / s.totalHandled) * 100 : 0;
-            return (
-              <motion.div 
-                layout
-                key={s._id} 
-                variants={itemVariants}
-                initial="hidden" animate="visible" exit="hidden"
-                className="glass-card" 
-                style={{ marginBottom: 0, position: 'relative' }}
+          {/* Section Header: Title on Left & Search Bar Aligned on Right */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '1rem',
+              marginBottom: '1.5rem'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 700 }}>{t('campaigns')}</h2>
+              <span
+                style={{
+                  fontSize: '0.85rem',
+                  color: 'var(--text-secondary)',
+                  background: 'var(--bg-secondary)',
+                  padding: '0.2rem 0.65rem',
+                  borderRadius: '12px',
+                  fontWeight: 700
+                }}
               >
-                {/* Top-Right Card Actions */}
-                <div style={{ position: 'absolute', top: '0.85rem', right: isRtl ? 'auto' : '0.85rem', left: isRtl ? '0.85rem' : 'auto', display: 'flex', alignItems: 'center', gap: '0.35rem', zIndex: 5 }}>
-                  {isAdmin && (
-                    <AssetsTooltip assets={s.assets} campaignTitle={s.title}>
-                      <button 
-                        onClick={() => setAssetsModal({ open: true, campaign: s })}
-                        className={`campaign-asset-btn ${Boolean(s.assets?.notes) || (s.assets?.attachments?.length > 0) ? 'has-assets' : ''}`}
-                        title={t('viewManageAssets')}
-                        aria-label={t('viewManageAssets')}
-                      >
-                        <Paperclip size={16} />
-                        {(Boolean(s.assets?.notes) || (s.assets?.attachments?.length > 0)) && (
-                          <div className="assets-active-dot" />
-                        )}
-                      </button>
-                    </AssetsTooltip>
-                  )}
+                {filteredSurveys.length}
+              </span>
+            </div>
 
-                  {isAdmin && (
-                    <button 
-                      onClick={() => handleCloneCampaign(s._id, s.title)}
-                      style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.35rem', display: 'inline-flex', alignItems: 'center' }}
-                      title={t('cloneCampaign') || 'Clone Campaign'}
-                      aria-label={t('cloneCampaign') || 'Clone Campaign'}
-                    >
-                      <Copy size={16} />
-                    </button>
-                  )}
+            <div className="search-container" style={{ margin: 0, maxWidth: '320px', width: '100%' }}>
+              <Search className="search-icon" size={18} />
+              <input
+                type="text"
+                placeholder={t('searchPlaceholder')}
+                className="search-input"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
 
-                  {isAdmin && (
-                    <button 
-                      onClick={() => deleteSurvey(s._id, s.isActive)}
-                      style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: s.isActive === false ? 'pointer' : 'not-allowed', opacity: s.isActive === false ? 0.6 : 0.2, padding: '0.35rem', display: 'inline-flex', alignItems: 'center' }}
-                      title={t('deleteAccount') || 'Delete'}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
-                
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                  <div className={`status-dot ${s.isActive ? 'active' : 'off-duty'}`}></div>
-                  <h3 style={{ marginBottom: 0 }}>{s.title}</h3>
-                </div>
-                
-                <p style={{ color: "var(--text-secondary)", fontSize: "0.8rem", fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
-                  <span>{t('fulfillmentProgress')}</span>
-                  {s.goal > 0 && <span style={{ color: 'var(--primary)' }}>{s.completed || 0} / {s.goal}</span>}
-                </p>
-                <div className="fulfillment-container">
-                  <div className="fulfillment-bar" style={{ width: `${s.goal > 0 ? Math.min((s.completed / s.goal) * 100, 100) : progress}%` }}></div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', margin: '1rem 0' }}>
-                  <div>
-                    <span style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>{t('totalHandled')}</span>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>{s.totalHandled || 0}</div>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--success)' }}>{t('completed')}</span>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>{s.completed || 0}</div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem' }}>
-                  {isAdmin ? (
-                    <Link to={`/admin/builder/${s._id}`} className="btn-secondary" style={{ flex: 1, padding: '0.5rem' }}><Edit3 size={14} />{t('edit')}</Link>
-                  ) : (
-                    <Link to={`/admin/builder/${s._id}`} className="btn-secondary" style={{ flex: 1, padding: '0.5rem', opacity: 0.8 }}><Eye size={14} /> {t('audit')}</Link>
-                  )}
-                  
-                  <button onClick={() => handleExport(s._id, s.title)} className="btn-secondary" style={{ flex: 1, padding: '0.5rem' }}>
-                    {isExporting === s._id ? <div className="spinner" style={{ width: '12px', height: '12px' }} /> : <><Download size={14} /> {t('exportData')}</>}
-                  </button>
-
-                  {isAdmin && (
-                    <button 
-                      onClick={() => toggleSurveyStatus(s._id)} 
-                      className="btn-primary" 
-                      style={{ padding: '0.5rem 0.75rem', background: s.isActive ? 'var(--danger)' : undefined }}
-                    >
-                      {s.isActive ? <Pause size={16} /> : <Play size={16} />}
-                    </button>
-                  )}
-                </div>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-      </div>
-      </>
+          <div className="choice-grid">
+            <AnimatePresence>
+              {filteredSurveys.map(s => (
+                <CampaignCard
+                  key={s._id}
+                  survey={s}
+                  isAdmin={isAdmin}
+                  isRtl={isRtl}
+                  t={t}
+                  onToggleStatus={toggleSurveyStatus}
+                  onDelete={deleteSurvey}
+                  onClone={handleCloneCampaign}
+                  onExport={handleExport}
+                  onOpenAssets={(survey) => setAssetsModal({ open: true, campaign: survey })}
+                  isExporting={isExporting === s._id}
+                  variants={itemVariants}
+                />
+              ))}
+            </AnimatePresence>
+          </div>
+        </>
       )}
 
       {activeTab === 'workforce' && (
-      <>
-      {/* Team Performance */}
-      <motion.h2 variants={itemVariants} style={{ marginTop: '4rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        <GitBranch size={24} color="var(--primary)" />
-        {t('teamPerformance')}
-      </motion.h2>
+        <>
+          {/* Team Performance Header with Search Bar */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '1rem',
+              marginTop: '2rem',
+              marginBottom: '1.5rem'
+            }}
+          >
+            <motion.h2 variants={itemVariants} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.4rem', fontWeight: 700 }}>
+              <GitBranch size={24} color="var(--primary)" />
+              {t('teamPerformance')}
+            </motion.h2>
+
+            <div className="search-container" style={{ margin: 0, maxWidth: '320px', width: '100%' }}>
+              <Search className="search-icon" size={18} />
+              <input
+                type="text"
+                placeholder={t('searchPlaceholder')}
+                className="search-input"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
 
       <motion.div variants={itemVariants} className="glass-card table-responsive w-full overflow-x-auto" style={{ padding: '1rem', width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>

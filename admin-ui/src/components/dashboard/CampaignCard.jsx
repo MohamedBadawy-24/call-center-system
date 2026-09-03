@@ -26,10 +26,8 @@ export default function CampaignCard({
       layout
       key={survey._id}
       variants={variants}
-      initial="hidden"
-      animate="visible"
       exit="hidden"
-      className="glass-card"
+      className="glass-card transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
       style={{
         marginBottom: 0,
         position: 'relative',
@@ -39,8 +37,7 @@ export default function CampaignCard({
         flexDirection: 'column',
         justifyContent: 'space-between',
         border: '1px solid var(--glass-border)',
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.04)',
-        transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.04)'
       }}
     >
       {/* Top Header Row: Status Dot, Title, and Action Icons */}

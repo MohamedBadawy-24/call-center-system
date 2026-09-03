@@ -254,12 +254,32 @@ export default function AdminDashboard() {
 
   const containerVariants = {
     hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.05 } }
+    visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.05 } }
+  };
+
+  const kpiContainerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { staggerChildren: 0.1, delayChildren: 0.05 }
+    }
+  };
+
+  const campaignContainerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { staggerChildren: 0.08, delayChildren: 0.1 }
+    }
   };
 
   const itemVariants = {
     hidden: { y: 20, opacity: 0 },
-    visible: { y: 0, opacity: 1 }
+    visible: {
+      y: 0,
+      opacity: 1,
+      transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] }
+    }
   };
 
   return (
@@ -277,7 +297,7 @@ export default function AdminDashboard() {
           <motion.div variants={itemVariants}>
             <Link
               to="/admin/builder"
-              className="btn-primary"
+              className="btn-primary transition-all duration-200 active:scale-95 hover:brightness-110"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -318,7 +338,7 @@ export default function AdminDashboard() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
             <Link
               to="/admin/users"
-              className="btn-secondary"
+              className="btn-secondary transition-all duration-200 active:scale-95 hover:brightness-110"
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', padding: '0.45rem 0.85rem' }}
             >
               <Users size={15} />
@@ -326,7 +346,7 @@ export default function AdminDashboard() {
             </Link>
             <Link
               to="/admin/register"
-              className="btn-secondary"
+              className="btn-secondary transition-all duration-200 active:scale-95 hover:brightness-110"
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', padding: '0.45rem 0.85rem' }}
             >
               <UserPlus size={15} />
@@ -334,7 +354,7 @@ export default function AdminDashboard() {
             </Link>
             <Link
               to="/admin/requests"
-              className="btn-secondary"
+              className="btn-secondary transition-all duration-200 active:scale-95 hover:brightness-110"
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', padding: '0.45rem 0.85rem' }}
             >
               <History size={15} />
@@ -434,9 +454,12 @@ export default function AdminDashboard() {
 
       {activeTab === 'overview' && (
         <>
-          {/* Responsive KPI Grid */}
-          <div
+          {/* Responsive KPI Grid with Staggered Entrance */}
+          <motion.div
             className="kpi-grid"
+            variants={kpiContainerVariants}
+            initial="hidden"
+            animate="visible"
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
@@ -481,7 +504,7 @@ export default function AdminDashboard() {
               iconBg="rgba(245, 158, 11, 0.12)"
               variants={itemVariants}
             />
-          </div>
+          </motion.div>
 
           {/* Section Header: Title on Left & Search Bar Aligned on Right */}
           <div
@@ -522,7 +545,12 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="choice-grid">
+          <motion.div
+            className="choice-grid"
+            variants={campaignContainerVariants}
+            initial="hidden"
+            animate="visible"
+          >
             <AnimatePresence>
               {filteredSurveys.map(s => (
                 <CampaignCard
@@ -541,7 +569,7 @@ export default function AdminDashboard() {
                 />
               ))}
             </AnimatePresence>
-          </div>
+          </motion.div>
         </>
       )}
 

@@ -67,11 +67,17 @@
   align-items: center;
   gap: var(--space-lg);
   letter-spacing: -0.05em;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-brand:hover {
+  transform: scale(1.03);
 }
 
 .nav-links {
   display: flex;
-  gap: var(--space-3xl);
+  gap: var(--space-2xl);
+  align-items: center;
 }
 
 .nav-links a {
@@ -79,15 +85,29 @@
   color: var(--text-secondary);
   font-weight: var(--font-weight-semibold);
   font-size: var(--font-size-lg);
-  transition: var(--transition-normal);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   padding: var(--space-md) var(--space-xl);
-  border-radius: var(--radius-sm);
+  border-radius: 9999px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
 }
 
-.nav-links a:hover,
-.nav-links a.active {
+.nav-links a:hover {
   color: var(--primary);
   background: var(--primary-low);
+  transform: translateY(-1px);
+}
+
+.nav-links a.active {
+  color: var(--primary);
+  background: hsla(var(--p-h), var(--p-s), var(--p-l), 0.12);
+  font-weight: var(--font-weight-bold);
+  box-shadow: 0 2px 8px hsla(var(--p-h), var(--p-s), var(--p-l), 0.15);
+}
+
+.nav-links a:active {
+  transform: scale(0.96);
 }
 
 /* Premium Side Drawer */

@@ -38,37 +38,52 @@ export default function Login() {
     }
   };
 
+  const cardVariants = {
+    hidden: { opacity: 0, y: 25, scale: 0.98 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: {
+        duration: 0.45,
+        ease: [0.16, 1, 0.3, 1],
+        staggerChildren: 0.1,
+        delayChildren: 0.08
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 15 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.35,
+        ease: [0.16, 1, 0.3, 1]
+      }
+    }
+  };
+
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
       <motion.div 
-        initial={{ opacity: 0, y: 30, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        variants={cardVariants}
+        initial="hidden"
+        animate="visible"
         className="glass-card" 
         style={{ width: '100%', maxWidth: '420px', padding: '3rem' }}
       >
-        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-          <motion.div 
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-            style={{ 
-              width: '64px', 
-              height: '64px', 
-              borderRadius: '20px', 
-              background: 'linear-gradient(135deg, var(--primary), var(--accent))',
-              margin: '0 auto 1.5rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 10px 25px -5px hsla(var(--p-h), var(--p-s), var(--p-l), 0.5)'
-            }}
-          >
-            <ShieldCheck size={32} color="white" />
-          </motion.div>
+        <motion.div variants={itemVariants} style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+          <motion.img 
+            src="/logo.png"
+            alt="Baseera Logo"
+            className="h-16 md:h-20 w-auto object-contain drop-shadow-md dark-glow transition-transform duration-300 hover:scale-105"
+            style={{ margin: '0 auto 1.5rem' }}
+          />
           <h1 style={{ marginBottom: '0.5rem' }}>{t('login')}</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 600 }}>{t('welcomeBack')}</p>
-        </div>
+        </motion.div>
 
         {error && (
           <motion.div 
@@ -92,10 +107,10 @@ export default function Login() {
         )}
 
         <form onSubmit={handleSubmit}>
-          <div className="form-group">
+          <motion.div variants={itemVariants} className="form-group">
             <label className="form-label">{t('emailAddress')}</label>
-            <div style={{ position: 'relative' }}>
-              <Mail size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+            <div className="input-wrapper focus-within:ring-2 transition-all duration-200" style={{ position: 'relative', borderRadius: 'var(--radius-md)' }}>
+              <Mail size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', pointerEvents: 'none' }} />
               <input 
                 type="email" 
                 data-testid="baseera-email-input"
@@ -107,17 +122,17 @@ export default function Login() {
                 required 
               />
             </div>
-          </div>
+          </motion.div>
           
-          <div className="form-group" style={{ marginBottom: '2.5rem' }}>
+          <motion.div variants={itemVariants} className="form-group" style={{ marginBottom: '2.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
               <label className="form-label" style={{ marginBottom: 0 }}>{t('password')}</label>
               <Link to="/forgot-password" style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary)', textDecoration: 'none' }}>
                 {t('forgotPassword')}
               </Link>
             </div>
-            <div style={{ position: 'relative' }}>
-              <Lock size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+            <div className="input-wrapper focus-within:ring-2 transition-all duration-200" style={{ position: 'relative', borderRadius: 'var(--radius-md)' }}>
+              <Lock size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', pointerEvents: 'none' }} />
               <input 
                 type="password" 
                 data-testid="baseera-password-input"
@@ -129,26 +144,30 @@ export default function Login() {
                 required 
               />
             </div>
-          </div>
+          </motion.div>
 
-          <button 
-            type="submit" 
-            data-testid="baseera-login-button"
-            className="btn-primary" 
-            style={{ width: '100%', padding: '1rem', marginBottom: !hasUsers ? '1rem' : '0' }}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <div className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></div>
-            ) : (
-              <><LogIn size={20} /> {t('signIn')}</>
-            )}
-          </button>
+          <motion.div variants={itemVariants}>
+            <button 
+              type="submit" 
+              data-testid="baseera-login-button"
+              className="btn-primary transition-all duration-200 active:scale-95 hover:brightness-110" 
+              style={{ width: '100%', padding: '1rem', marginBottom: !hasUsers ? '1rem' : '0' }}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <div className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></div>
+              ) : (
+                <><LogIn size={20} /> {t('signIn')}</>
+              )}
+            </button>
+          </motion.div>
           
           {!hasUsers && (
-            <Link to="/register" style={{ display: 'block', textAlign: 'center', color: 'var(--primary)', fontWeight: 'bold', textDecoration: 'none' }}>
-              {t('createInitialAdmin')}
-            </Link>
+            <motion.div variants={itemVariants} style={{ marginTop: '1rem' }}>
+              <Link to="/register" style={{ display: 'block', textAlign: 'center', color: 'var(--primary)', fontWeight: 'bold', textDecoration: 'none' }}>
+                {t('createInitialAdmin')}
+              </Link>
+            </motion.div>
           )}
         </form>
       </motion.div>

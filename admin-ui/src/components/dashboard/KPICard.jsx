@@ -13,7 +13,7 @@ export default function KPICard({
   return (
     <motion.div
       variants={variants}
-      className="kpi-card"
+      className="kpi-card transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
       style={{
         padding: '1.35rem 1.5rem',
         borderRadius: '16px',

@@ -81,6 +81,7 @@ export default function Login() {
             className="w-56 md:w-64 h-auto object-contain drop-shadow-sm dark-glow transition-transform duration-300 hover:scale-105"
             style={{ margin: '0 auto 1.5rem' }}
           />
+          <h1 className="sr-only">Login</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 600 }}>{t('welcomeBack')}</p>
         </motion.div>
 

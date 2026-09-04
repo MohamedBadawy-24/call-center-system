@@ -74,11 +74,11 @@ export default function Login() {
         className="glass-card" 
         style={{ width: '100%', maxWidth: '420px', padding: '3rem' }}
       >
-        <motion.div variants={itemVariants} style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+        <motion.div variants={itemVariants} className="flex flex-col items-center mb-8">
           <motion.img 
-            src="/logo.png"
-            alt="Baseera Logo"
-            className="h-16 md:h-20 w-auto object-contain drop-shadow-md dark-glow transition-transform duration-300 hover:scale-105"
+            src="/baseera-logo-full.png"
+            alt="Baseera"
+            className="w-56 md:w-64 h-auto object-contain drop-shadow-sm dark-glow transition-transform duration-300 hover:scale-105"
             style={{ margin: '0 auto 1.5rem' }}
           />
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 600 }}>{t('welcomeBack')}</p>

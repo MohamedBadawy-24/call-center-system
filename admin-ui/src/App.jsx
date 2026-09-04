@@ -251,7 +251,7 @@ const NavBar = () => {
         className="nav-bar"
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-          <Link to="/" className="nav-brand">
+          <Link to="/" className="nav-brand" aria-label="Baseera">
             <img src="/icon.png" alt="Baseera Icon" className="block md:hidden h-8 w-8 dark-glow transition-transform duration-300 hover:scale-105" />
             <img src="/logo.png" alt="Baseera Logo" className="hidden md:block h-8 w-auto dark-glow transition-transform duration-300 hover:scale-105" />
           </Link>

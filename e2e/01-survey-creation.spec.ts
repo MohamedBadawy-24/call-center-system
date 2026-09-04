@@ -13,7 +13,8 @@ test.describe('E2E Production Simulation: Survey Creation & Publishing', () => {
 
     // Wait for redirect to /admin or check dashboard elements
     await page.waitForURL('**/admin', { timeout: 15000 });
-    await expect(page.getByText(/Baseera/i).first()).toBeVisible();
+    await expect(page.locator('.nav-brand')).toBeVisible();
+    await expect(page.getByRole('link', { name: /\+ Create New Survey/i })).toBeVisible({ timeout: 10000 });
 
     // 2. Navigate to Survey Builder
     await page.getByRole('link', { name: /\+ Create New Survey/i }).click();

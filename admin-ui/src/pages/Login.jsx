@@ -74,16 +74,20 @@ export default function Login() {
         className="glass-card" 
         style={{ width: '100%', maxWidth: '420px', padding: '3rem' }}
       >
-        <motion.div variants={itemVariants} className="flex flex-col items-center mb-8">
-          <motion.img 
-            src="/baseera-logo-full.png"
-            alt="Baseera"
-            className="w-56 md:w-64 h-auto object-contain drop-shadow-sm dark-glow transition-transform duration-300 hover:scale-105 dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.6)]"
-            style={{ margin: '0 auto 1.5rem' }}
+        <motion.div 
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+          className="w-full flex flex-col items-center justify-center text-center mb-6"
+        >
+          <img 
+            src="/logo.png" 
+            alt="Baseera" 
+            className="w-48 sm:w-64 h-auto object-contain dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.6)]" 
           />
-          <h1 className="sr-only">Login</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 600 }}>{t('welcomeBack')}</p>
         </motion.div>
+        <h1 className="sr-only">Login</h1>
+        <p className="text-center w-full" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 600, marginBottom: '2rem' }}>{t('welcomeBack')}</p>
 
         {error && (
           <motion.div 

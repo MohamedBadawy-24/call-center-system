@@ -146,7 +146,7 @@ const MIME_TYPES = {
 app.use((req, res, next) => {
   const urlPath = req.path || req.url;
   
-  if (urlPath.startsWith('/assets/') || urlPath === '/favicon.ico' || urlPath === '/manifest.json' || urlPath === '/robots.txt' || urlPath === '/sw.js' || urlPath === '/logo192.png' || urlPath === '/logo512.png' || urlPath === '/icon.png' || urlPath === '/logo.png') {
+  if (urlPath.startsWith('/assets/') || urlPath === '/manifest.json' || urlPath === '/robots.txt' || urlPath === '/sw.js' || urlPath === '/icon.png' || urlPath === '/logo.png') {
     const filePath = path.join(frontendPath, urlPath);
     
     try {

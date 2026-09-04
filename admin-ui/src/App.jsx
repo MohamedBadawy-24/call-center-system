@@ -252,8 +252,8 @@ const NavBar = () => {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
           <Link to="/" className="nav-brand" aria-label="Baseera">
-            <img src="/icon.png" alt="Baseera Icon" className="block md:hidden h-8 w-8 dark-glow transition-transform duration-300 hover:scale-105" />
-            <img src="/logo.png" alt="Baseera Logo" className="hidden md:block h-8 w-auto dark-glow transition-transform duration-300 hover:scale-105" />
+            <img src="/icon.png" alt="Baseera Icon" className="block md:hidden h-8 w-8 dark-glow transition-transform duration-300 hover:scale-105 dark:drop-shadow-[0_0_12px_rgba(255,255,255,0.7)]" />
+            <img src="/logo.png" alt="Baseera Logo" className="hidden md:block h-8 w-auto dark-glow transition-transform duration-300 hover:scale-105 dark:drop-shadow-[0_0_12px_rgba(255,255,255,0.7)]" />
           </Link>
           
           {user && (

@@ -78,7 +78,7 @@ export default function Login() {
           <motion.img 
             src="/baseera-logo-full.png"
             alt="Baseera"
-            className="w-56 md:w-64 h-auto object-contain drop-shadow-sm dark-glow transition-transform duration-300 hover:scale-105"
+            className="w-56 md:w-64 h-auto object-contain drop-shadow-sm dark-glow transition-transform duration-300 hover:scale-105 dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.6)]"
             style={{ margin: '0 auto 1.5rem' }}
           />
           <h1 className="sr-only">Login</h1>

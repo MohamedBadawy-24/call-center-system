@@ -63,7 +63,7 @@ export default function LiveMonitorAudit() {
     const token = localStorage.getItem('token');
     socketRef.current = io(SOCKET_BASE, {
       auth: { token },
-      transports: ['polling', 'websocket'],
+      transports: ['polling'],
     });
     socketRef.current.emit('join-monitoring', { id: user.id, role: user.role });
 

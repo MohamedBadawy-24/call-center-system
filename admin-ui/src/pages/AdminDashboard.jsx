@@ -60,7 +60,7 @@ export default function AdminDashboard() {
     const token = localStorage.getItem('token');
     socketRef.current = io(SOCKET_BASE, {
       auth: { token },
-      transports: ['polling', 'websocket'],
+      transports: ['polling'],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 500,

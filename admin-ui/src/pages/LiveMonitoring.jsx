@@ -25,7 +25,7 @@ export default function LiveMonitoring() {
     const token = localStorage.getItem('token');
     socketRef.current = io(SOCKET_BASE, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
     });
     socketRef.current.emit('join-monitoring', { id: user.id, role: user.role });
 

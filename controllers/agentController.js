@@ -129,8 +129,8 @@ exports.handoverCall = async (req, res, next) => {
 
 exports.saveDraft = async (req, res, next) => {
   try {
-    const { surveyId, serialNumber, answers, currentIdx } = req.body;
-    const draft = await agentService.saveDraft(req.user.id, surveyId, serialNumber, answers, currentIdx);
+    const { surveyId, serialNumber, answers, currentIdx, otherValues, currentSectionIdx } = req.body;
+    const draft = await agentService.saveDraft(req.user.id, surveyId, serialNumber, answers, currentIdx, otherValues, currentSectionIdx);
     res.json({ success: true, draft });
   } catch (err) {
     if (err.status) {

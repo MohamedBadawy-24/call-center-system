@@ -506,12 +506,21 @@ export default function PreCallChecklist() {
           precallData = { surveyId: sidUrl, outboundPrecall: null, targetGovernorate: 'All', numberAssignmentMode: 'queue_only' };
         }
 
+        const urlSerial = urlParams.get('serial');
+        const isEditModeUrl = urlParams.get('mode') === 'edit';
+        const isResumeMode = urlParams.get('mode') === 'resume' || (Boolean(urlSerial) && !isEditModeUrl);
+
+        const eligParams = new URLSearchParams();
+        if (precallData.surveyId) eligParams.set('surveyId', precallData.surveyId);
+        if (urlSerial) eligParams.set('serial', urlSerial);
+        const eligQuery = eligParams.toString() ? `?${eligParams.toString()}` : '';
+
         const [numberRes, eligibilityRes] = await Promise.all([
           (isEditMode || editAnswersRef.current)
             ? Promise.resolve({ data: { number: editAnswersRef.current?.phone || currentNumber?.number, serialNumber: editAnswersRef.current?.serial_number || currentNumber?.serialNumber } })
             : Promise.resolve({ data: null }),
           (isOnline && user?.role === 'agent')
-            ? api.get(`/agent/survey-eligibility${precallData.surveyId ? `?surveyId=${precallData.surveyId}` : ''}`, { signal }).catch(() => ({ data: null }))
+            ? api.get(`/agent/survey-eligibility${eligQuery}`, { signal }).catch(() => ({ data: null }))
             : Promise.resolve({ data: null })
         ]);
         if (cancelled) return;
@@ -525,7 +534,6 @@ export default function PreCallChecklist() {
         const norm = normalizeOutboundPrecall(precallData.outboundPrecall);
         setConfig(norm);
         const nextNum = numberRes.data;
-        setCurrentNumber(nextNum);
         const initial = buildInitialAnswers(norm.fields, user?.name, user?.researcherCode);
 
         let merged = initial;
@@ -565,7 +573,6 @@ export default function PreCallChecklist() {
         }
 
         // 3. Hydrate from backend if URL specifies mode=edit&serial=...
-        const isEditModeUrl = urlParams.get('mode') === 'edit';
         const editSerialParam = urlParams.get('serial');
         if (isEditModeUrl && editSerialParam && isOnline) {
           try {
@@ -586,6 +593,16 @@ export default function PreCallChecklist() {
             console.error("Failed to load full response for edit:", err);
             toast.error(err.response?.data?.error || "Failed to load response for edit");
           }
+        }
+
+        const activeSerial = editSerialParam || urlSerial || eligibilityRes?.data?.precallSerialNumber || merged.serial_number;
+        const activePhone = merged.phone || eligibilityRes?.data?.payload?.phone || '';
+        if (activeSerial && (isResumeMode || isEditModeUrl || (activePhone && activePhone !== 'none'))) {
+          setCurrentNumber({ number: activePhone, serialNumber: activeSerial });
+          merged.serial_number = activeSerial;
+          if (activePhone) merged.phone = activePhone;
+        } else {
+          setCurrentNumber(nextNum);
         }
 
         if (!merged.serial_number || String(merged.serial_number).trim() === '') {
@@ -753,8 +770,9 @@ export default function PreCallChecklist() {
 
     const urlParams = new URLSearchParams(window.location.search);
     const isEditModeUrl = urlParams.get('mode') === 'edit';
+    const isResumeMode = urlParams.get('mode') === 'resume' || (Boolean(urlParams.get('serial')) && !isEditModeUrl);
 
-    if (isEditModeUrl) {
+    if (isEditModeUrl || isResumeMode) {
       if (isOnline) {
         try {
           await api.put(`/agent/precall/${finalSerial}`, {
@@ -762,14 +780,21 @@ export default function PreCallChecklist() {
             interviewOutcome: sanitizedPayload.interview_result || undefined,
             outcomeReason: sanitizedPayload.outcome_reason || undefined
           });
+          return finalSerial;
         } catch (err) {
-          console.error("Online precall edit submission failed:", err);
-          const msg = err.response?.data?.message || err.response?.data?.error || err.response?.data?.errors?.[0]?.msg || 'Server Error';
-          toast.error(msg);
-          throw err;
+          if (isResumeMode && err.response?.status === 404) {
+            console.warn("Precall update 404 on resume, falling back to complete submission");
+          } else {
+            console.error("Online precall submission failed:", err);
+            const msg = err.response?.data?.message || err.response?.data?.error || err.response?.data?.errors?.[0]?.msg || 'Server Error';
+            toast.error(msg);
+            throw err;
+          }
         }
+      } else {
+        await offlineDb.saveOfflinePrecall(checklistData);
+        return finalSerial;
       }
-      return finalSerial;
     }
 
     if (isOnline) {
@@ -1352,85 +1377,100 @@ export default function PreCallChecklist() {
                 {/* Card body */}
                 <div className="precall-card-body">
                   {/* ── Phone/Serial section: governorate picker + fetch/assign button ── */}
-                  {sec === 'phone' && !isEditMode && (
-                    <div className="precall-fields-grid" style={{ marginBottom: '1rem' }}>
-                      <div className="precall-field precall-field-full"
-                        style={{ padding: '1rem', background: isNoPhone ? 'rgba(16, 185, 129, 0.05)' : 'rgba(59, 130, 246, 0.05)', border: `1px solid ${isNoPhone ? 'rgba(16, 185, 129, 0.25)' : 'rgba(59, 130, 246, 0.2)'}`, borderRadius: '8px' }}>
-                        {isNoPhone ? (
-                          /* ── No Phone Required mode: single "Assign serial" button ── */
-                          <>
-                            <label className="precall-label" style={{ fontWeight: 600, color: 'var(--success)' }}>
-                              {t('serialAssignment') || 'Serial Assignment'}
-                            </label>
-                            {!currentNumber && (
-                              <div style={{ marginTop: '0.5rem' }}>
-                                <button
-                                  type="button"
-                                  className="btn-primary"
-                                  data-testid="precall-assign-serial-btn"
-                                  onClick={handleNoPhoneStart}
-                                  disabled={startingNoPhone}
-                                  style={{ width: '100%' }}
-                                >
-                                  {startingNoPhone ? <Loader2 size={16} className="spin-icon" /> : (t('assignSerial') || 'Assign serial')}
-                                </button>
-                                <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                  {t('assignSerialHint') || "Click 'Assign serial' to auto-generate a unique serial number for this survey session."}
-                                </p>
-                              </div>
-                            )}
-                            {currentNumber && (
-                              <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <Hash size={16} color="var(--success)" />
-                                <span style={{ fontWeight: 700, color: 'var(--success)' }}>{answers.serial_number}</span>
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          /* ── Standard phone queue mode ── */
-                          <>
-                            <label className="precall-label" style={{ fontWeight: 600, color: 'var(--primary)' }}>{t('targetGovernorate') || 'Target Governorate'}</label>
-                            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                              <select
-                                className="input-field"
-                                data-testid="precall-governorate-select"
-                                style={{ flex: 1, minWidth: '200px' }}
-                                value={selectedGov}
-                                onChange={handleGovChange}
-                                disabled={numberLoading || user?.role === 'agent'}
-                              >
-                                <option value="All">All Governorates (Random)</option>
-                                {EGYPTIAN_GOVERNORATES.map(g => (
-                                  <option key={g} value={g}>{g}</option>
-                                ))}
-                              </select>
-                              {!currentNumber && (
-                                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', flex: 1, minWidth: '150px' }}>
+                  {sec === 'phone' && !isEditMode && (() => {
+                    const hasAssignedLead = Boolean(currentNumber || (answers.phone && String(answers.phone).trim() !== '' && String(answers.phone).trim() !== 'none'));
+                    return (
+                      <div className="precall-fields-grid" style={{ marginBottom: '1rem' }}>
+                        <div className="precall-field precall-field-full"
+                          style={{ padding: '1rem', background: isNoPhone ? 'rgba(16, 185, 129, 0.05)' : 'rgba(59, 130, 246, 0.05)', border: `1px solid ${isNoPhone ? 'rgba(16, 185, 129, 0.25)' : 'rgba(59, 130, 246, 0.2)'}`, borderRadius: '8px' }}>
+                          {isNoPhone ? (
+                            /* ── No Phone Required mode: single "Assign serial" button ── */
+                            <>
+                              <label className="precall-label" style={{ fontWeight: 600, color: 'var(--success)' }}>
+                                {t('serialAssignment') || 'Serial Assignment'}
+                              </label>
+                              {!hasAssignedLead && (
+                                <div style={{ marginTop: '0.5rem' }}>
                                   <button
                                     type="button"
                                     className="btn-primary"
-                                    data-testid="precall-get-number-btn"
-                                    onClick={() => fetchNumber(selectedGov)}
-                                    disabled={numberLoading}
-                                    style={{ flex: 1 }}
+                                    data-testid="precall-assign-serial-btn"
+                                    onClick={handleNoPhoneStart}
+                                    disabled={startingNoPhone}
+                                    style={{ width: '100%' }}
                                   >
-                                    {numberLoading ? <Loader2 size={16} className="spin-icon" /> : 'Get Number'}
+                                    {startingNoPhone ? <Loader2 size={16} className="spin-icon" /> : (t('assignSerial') || 'Assign serial')}
                                   </button>
+                                  <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                    {t('assignSerialHint') || "Click 'Assign serial' to auto-generate a unique serial number for this survey session."}
+                                  </p>
                                 </div>
                               )}
-                            </div>
-                            {!currentNumber && (
-                              <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                {user?.role === 'agent'
-                                  ? "Click 'Get Number' to fetch the next available lead from your assigned region."
-                                  : "Select a region and click 'Get Number' to fetch the next available lead."}
-                              </p>
-                            )}
-                          </>
-                        )}
+                              {hasAssignedLead && (
+                                <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <Hash size={16} color="var(--success)" />
+                                  <span style={{ fontWeight: 700, color: 'var(--success)' }}>{answers.serial_number}</span>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            /* ── Standard phone queue mode ── */
+                            <>
+                              <label className="precall-label" style={{ fontWeight: 600, color: 'var(--primary)' }}>{t('targetGovernorate') || 'Target Governorate'}</label>
+                              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                                <select
+                                  className="input-field"
+                                  data-testid="precall-governorate-select"
+                                  style={{ flex: 1, minWidth: '200px' }}
+                                  value={selectedGov}
+                                  onChange={handleGovChange}
+                                  disabled={numberLoading || user?.role === 'agent'}
+                                >
+                                  <option value="All">All Governorates (Random)</option>
+                                  {EGYPTIAN_GOVERNORATES.map(g => (
+                                    <option key={g} value={g}>{g}</option>
+                                  ))}
+                                </select>
+                                {!hasAssignedLead ? (
+                                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', flex: 1, minWidth: '150px' }}>
+                                    <button
+                                      type="button"
+                                      className="btn-primary"
+                                      data-testid="precall-get-number-btn"
+                                      onClick={() => fetchNumber(selectedGov)}
+                                      disabled={numberLoading}
+                                      style={{ flex: 1 }}
+                                    >
+                                      {numberLoading ? <Loader2 size={16} className="spin-icon" /> : 'Get Number'}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.75rem', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                                    <Phone size={15} color="var(--success)" />
+                                    <span style={{ fontWeight: 600, color: 'var(--success)', fontSize: '0.875rem' }}>
+                                      {answers.phone}
+                                    </span>
+                                    {answers.serial_number && (
+                                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: '0.25rem' }}>
+                                        ({answers.serial_number})
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              {!hasAssignedLead && (
+                                <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                  {user?.role === 'agent'
+                                    ? "Click 'Get Number' to fetch the next available lead from your assigned region."
+                                    : "Select a region and click 'Get Number' to fetch the next available lead."}
+                                </p>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Fields grid */}
                   <div className="precall-fields-grid">

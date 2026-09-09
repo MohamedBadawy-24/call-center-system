@@ -9,10 +9,12 @@ import { vi } from 'vitest';
 // Mock api client
 const mockGet = vi.fn();
 const mockPost = vi.fn();
+const mockPut = vi.fn();
 vi.mock('../../api/client', () => ({
   api: {
     get: (...args) => mockGet(...args),
-    post: (...args) => mockPost(...args)
+    post: (...args) => mockPost(...args),
+    put: (...args) => mockPut(...args)
   }
 }));
 
@@ -364,5 +366,82 @@ describe('PreCallChecklist Page Component Tests', () => {
 
     // Should NOT navigate when server rejects the request
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('RESUME MODE: hides Get Number button, displays existing phone, and calls api.put on Next', async () => {
+    // Set URL with resume mode and serial
+    delete window.location;
+    window.location = new URL('http://localhost:3000/agent/precall?surveyId=survey-123&serial=SN-EXISTING-123&mode=resume');
+
+    mockGet.mockImplementation((url) => {
+      if (url.startsWith('/agent/outbound-precall')) {
+        return Promise.resolve({ data: mockPrecallConfig });
+      }
+      if (url.startsWith('/agent/survey-eligibility')) {
+        return Promise.resolve({
+          data: {
+            canStartSurvey: true,
+            precallSerialNumber: 'SN-EXISTING-123',
+            payload: {
+              phone: '01099887766',
+              serial_number: 'SN-EXISTING-123',
+              age_years: '28',
+              call_result: 'contacted',
+              interview_result: 'completed'
+            }
+          }
+        });
+      }
+      if (url.startsWith('/agent/precall-session-count')) {
+        return Promise.resolve({ data: { count: 5 } });
+      }
+      return Promise.resolve({ data: {} });
+    });
+
+    mockPut.mockResolvedValue({ data: { ok: true, serialNumber: 'SN-EXISTING-123' } });
+
+    render(
+      <MemoryRouter>
+        <UIContext.Provider value={uiValue}>
+          <AuthContext.Provider value={authValue}>
+            <PreCallChecklist />
+          </AuthContext.Provider>
+        </UIContext.Provider>
+      </MemoryRouter>
+    );
+
+    // Wait for the form to hydrate
+    await screen.findByText('Agent Checklist');
+
+    // "Get Number" button should NOT be in the document because a phone is assigned
+    expect(screen.queryByTestId('precall-get-number-btn')).not.toBeInTheDocument();
+
+    // The assigned phone should be displayed in the lead status badge
+    expect(screen.getByText('01099887766')).toBeInTheDocument();
+
+    // Click Next button
+    const nextBtn = screen.getByTestId('precall-next-btn');
+    await act(async () => {
+      fireEvent.click(nextBtn);
+    });
+
+    // Should call api.put to update in-place instead of api.post to precall-complete
+    await waitFor(() => {
+      expect(mockPut).toHaveBeenCalledWith(
+        '/agent/precall/SN-EXISTING-123',
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            phone: '01099887766',
+            serial_number: 'SN-EXISTING-123'
+          })
+        })
+      );
+    });
+
+    // Should NOT call api.post('/agent/precall-complete')
+    expect(mockPost).not.toHaveBeenCalledWith('/agent/precall-complete', expect.anything());
+
+    // Should navigate to take-survey with the exact same serial
+    expect(mockNavigate).toHaveBeenCalledWith('/take-survey/survey-123?serial=SN-EXISTING-123', { replace: true });
   });
 });

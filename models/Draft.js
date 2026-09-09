@@ -9,9 +9,11 @@ const DraftSchema = new mongoose.Schema({
   agentId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   surveyId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Survey', required: true },
   serialNumber: { type: String, required: true },
-  answers:      { type: mongoose.Schema.Types.Mixed, default: {} },
-  currentIdx:   { type: Number, default: 0 },
-  updatedAt:    { type: Date, default: Date.now },
+  answers:           { type: mongoose.Schema.Types.Mixed, default: {} },
+  otherValues:       { type: mongoose.Schema.Types.Mixed, default: {} },
+  currentIdx:        { type: Number, default: 0 },
+  currentSectionIdx: { type: Number, default: 0 },
+  updatedAt:         { type: Date, default: Date.now },
 });
 
 // Unique: one draft per agent+serial

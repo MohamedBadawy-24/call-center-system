@@ -1466,8 +1466,20 @@ export default function TakeSurvey({ mockSurvey }) {
               console.error("Network draft fetch failed, trying localIndexedDB...");
             }
           }
-          if (!draftData) {
+          if (!draftData || !draftData.answers || Object.keys(draftData.answers).length === 0) {
             draftData = await offlineDb.getLocalDraft(data.precallSerialNumber);
+          }
+          if (!draftData || !draftData.answers || Object.keys(draftData.answers).length === 0) {
+            try {
+              const localDraftKey = `survey_draft_${id}_${data.precallSerialNumber}`;
+              const raw = localStorage.getItem(localDraftKey);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.answers && Object.keys(parsed.answers).length > 0) {
+                  draftData = parsed;
+                }
+              }
+            } catch (_) {}
           }
           if (draftData && draftData.answers && Object.keys(draftData.answers).length > 0) {
             handleStartCall(data, draftData);
@@ -1598,6 +1610,7 @@ export default function TakeSurvey({ mockSurvey }) {
 
     if (preloadedDraft) {
       draftAnswers = preloadedDraft.answers || {};
+      if (preloadedDraft.otherValues) setOtherValues(preloadedDraft.otherValues);
       draftIdx = preloadedDraft.currentIdx;
       draftSecIdx = preloadedDraft.currentSectionIdx;
     } else if (data?.precallSerialNumber) {
@@ -1609,8 +1622,20 @@ export default function TakeSurvey({ mockSurvey }) {
             draftResData = draftRes.data;
           } catch (_) {}
         }
-        if (!draftResData) {
+        if (!draftResData || !draftResData.answers || Object.keys(draftResData.answers).length === 0) {
           draftResData = await offlineDb.getLocalDraft(data.precallSerialNumber);
+        }
+        if (!draftResData || !draftResData.answers || Object.keys(draftResData.answers).length === 0) {
+          try {
+            const localDraftKey = `survey_draft_${id}_${data.precallSerialNumber}`;
+            const raw = localStorage.getItem(localDraftKey);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (parsed && parsed.answers && Object.keys(parsed.answers).length > 0) {
+                draftResData = parsed;
+              }
+            }
+          } catch (_) {}
         }
         if (draftResData && draftResData.answers) {
           draftAnswers = draftResData.answers;
@@ -1727,7 +1752,9 @@ export default function TakeSurvey({ mockSurvey }) {
       }
 
       // 3. Navigate back to Pre-Call Checklist route with serial
-      navigate(`/agent/precall?surveyId=${id}&serial=${activeSerial}`);
+      const isEditParam = new URLSearchParams(window.location.search).get('mode') === 'edit';
+      const modeParam = (isEditMode || isEditParam) ? 'edit' : 'resume';
+      navigate(`/agent/precall?surveyId=${id}&serial=${activeSerial}&mode=${modeParam}`);
     } else {
       navigate(id ? `/agent/precall?surveyId=${id}` : '/agent/precall');
     }

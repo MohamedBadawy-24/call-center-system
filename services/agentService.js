@@ -152,7 +152,10 @@ exports.completePrecall = async (userId, userRole, data, io) => {
       if (newSerial) {
         const existingWithSerial = await PhoneNumber.findOne({ serialNumber: { $eq: String(newSerial) } }).session(session);
         if (existingWithSerial && (!currentNumberDoc || String(existingWithSerial._id) !== String(currentNumberDoc._id))) {
-          newSerial = await getNextSerialNumber('survey_numbers', session);
+          const isSameAgentAndPhone = String(existingWithSerial.agentId) === String(user._id) && existingWithSerial.number === phoneInPayload;
+          if (!isSameAgentAndPhone) {
+            newSerial = await getNextSerialNumber('survey_numbers', session);
+          }
         }
       } else {
         newSerial = await getNextSerialNumber('survey_numbers', session);
@@ -499,7 +502,7 @@ exports.handoverCall = async (userId, targetAgentId, serialNumber, io) => {
   return targetAgent.name;
 };
 
-exports.saveDraft = async (userId, surveyId, serialNumber, answers, currentIdx) => {
+exports.saveDraft = async (userId, surveyId, serialNumber, answers, currentIdx, otherValues, currentSectionIdx) => {
   if (!surveyId || !serialNumber) {
     throw createError('surveyId and serialNumber are required', 400);
   }
@@ -509,16 +512,18 @@ exports.saveDraft = async (userId, surveyId, serialNumber, answers, currentIdx) 
   const cleanUserId = new mongoose.Types.ObjectId(userId);
   const cleanSurveyId = new mongoose.Types.ObjectId(surveyId);
 
+  const updateFields = {
+    surveyId: cleanSurveyId,
+    answers: answers || {},
+    currentIdx: currentIdx || 0,
+    updatedAt: new Date()
+  };
+  if (otherValues !== undefined) updateFields.otherValues = otherValues;
+  if (currentSectionIdx !== undefined) updateFields.currentSectionIdx = currentSectionIdx;
+
   const draft = await Draft.findOneAndUpdate(
     { agentId: cleanUserId, serialNumber: { $eq: cleanSerial } },
-    {
-      $set: {
-        surveyId: cleanSurveyId,
-        answers: answers || {},
-        currentIdx: currentIdx || 0,
-        updatedAt: new Date()
-      }
-    },
+    { $set: updateFields },
     { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   );
 
@@ -535,10 +540,15 @@ exports.getDraft = async (userId, serialNumber) => {
 
   const draft = await Draft.findOne({ agentId: cleanUserId, serialNumber: { $eq: cleanSerial } }).lean();
   if (!draft) {
-    return { answers: {}, currentIdx: 0 };
+    return { answers: {}, currentIdx: 0, otherValues: {}, currentSectionIdx: 0 };
   }
 
-  return { answers: draft.answers, currentIdx: draft.currentIdx };
+  return {
+    answers: draft.answers || {},
+    currentIdx: draft.currentIdx || 0,
+    otherValues: draft.otherValues || {},
+    currentSectionIdx: draft.currentSectionIdx || 0
+  };
 };
 
 exports.assignManualNumber = async (userId, userRole, surveyId, number, governorateInput) => {

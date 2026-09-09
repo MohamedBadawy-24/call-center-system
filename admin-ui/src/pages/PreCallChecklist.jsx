@@ -626,7 +626,8 @@ export default function PreCallChecklist() {
     if (!draftKey || configLoading) return;
     const timer = setTimeout(() => {
       try {
-        const payloadStr = JSON.stringify(answers);
+        const { phone, serial_number, ...safeAnswers } = answers;
+        const payloadStr = JSON.stringify(safeAnswers);
         sessionStorage.setItem(draftKey, payloadStr);
         localStorage.setItem(draftKey, payloadStr);
       } catch (_) { /* quota / private mode */ }

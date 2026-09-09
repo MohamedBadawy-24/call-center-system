@@ -150,7 +150,7 @@ exports.completePrecall = async (userId, userRole, data, io) => {
     if (phoneInPayload && (!currentNumberDoc || currentNumberDoc.number !== phoneInPayload)) {
       let newSerial = payload.serial_number;
       if (newSerial) {
-        const existingWithSerial = await PhoneNumber.findOne({ serialNumber: newSerial }).session(session);
+        const existingWithSerial = await PhoneNumber.findOne({ serialNumber: { $eq: String(newSerial) } }).session(session);
         if (existingWithSerial && (!currentNumberDoc || String(existingWithSerial._id) !== String(currentNumberDoc._id))) {
           newSerial = await getNextSerialNumber('survey_numbers', session);
         }
@@ -311,7 +311,7 @@ exports.getNextNumber = async (userId, userRole, governorateInput, surveyId) => 
 
     if (!number && isStationActive) {
       const assignQuery = { surveyId: s._id, status: 'pending', agentId: { $exists: false } };
-      if (governorate && governorate !== 'All') assignQuery.governorate = governorate;
+      if (governorate && governorate !== 'All') assignQuery.governorate = { $eq: String(governorate) };
       
       number = await PhoneNumber.findOneAndUpdate(
         assignQuery,
@@ -342,7 +342,7 @@ exports.markNumberCalled = async (numberId, userId, userRole, status) => {
   }
 
   const number = await PhoneNumber.findOneAndUpdate(
-    { _id: numberId, agentId: userId },
+    { _id: { $eq: new mongoose.Types.ObjectId(numberId) }, agentId: { $eq: new mongoose.Types.ObjectId(userId) } },
     { status, calledAt: new Date() },
     { returnDocument: 'after' }
   );
@@ -465,27 +465,27 @@ exports.handoverCall = async (userId, targetAgentId, serialNumber, io) => {
 
   await runTransaction(async (session) => {
     await PrecallCompletion.updateMany(
-      { serialNumber, userId },
+      { serialNumber: { $eq: cleanSerial }, userId: { $eq: cleanUserId } },
       { $set: { userId: targetAgentId } },
       { session }
     );
     await Response.updateMany(
-      { serialNumber, agentId: userId },
+      { serialNumber: { $eq: cleanSerial }, agentId: { $eq: cleanUserId } },
       { $set: { agentId: targetAgentId } },
       { session }
     );
     await PhoneNumber.updateMany(
-      { serialNumber, agentId: userId },
+      { serialNumber: { $eq: cleanSerial }, agentId: { $eq: cleanUserId } },
       { $set: { agentId: targetAgentId } },
       { session }
     );
     await Draft.updateMany(
-      { serialNumber, agentId: userId },
+      { serialNumber: { $eq: cleanSerial }, agentId: { $eq: cleanUserId } },
       { $set: { agentId: targetAgentId } },
       { session }
     );
     await PostponedSerial.updateMany(
-      { serialNumber, agentId: userId },
+      { serialNumber: { $eq: cleanSerial }, agentId: { $eq: cleanUserId } },
       { $set: { agentId: targetAgentId } },
       { session }
     );
@@ -579,7 +579,7 @@ exports.assignManualNumber = async (userId, userRole, surveyId, number, governor
       }
     }
     const assignQuery = { surveyId: survey._id, status: 'pending', agentId: { $exists: false } };
-    if (governorate && governorate !== 'All') assignQuery.governorate = governorate;
+    if (governorate && governorate !== 'All') assignQuery.governorate = { $eq: String(governorate) };
 
     const queueCount = await PhoneNumber.countDocuments(assignQuery);
     if (queueCount > 0) {

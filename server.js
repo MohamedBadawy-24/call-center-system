@@ -332,10 +332,10 @@ app.put("/survey/:id", adminAuth, async (req, res) => {
     const newLinkIdStr = survey.linkedCampaignId ? String(survey.linkedCampaignId) : null;
     if (oldLinkIdStr !== newLinkIdStr) {
       if (oldLinkIdStr && mongoose.Types.ObjectId.isValid(oldLinkIdStr)) {
-        await Survey.findByIdAndUpdate(new mongoose.Types.ObjectId(oldLinkIdStr), { linkedCampaignId: null });
+        await Survey.updateOne({ _id: { $eq: new mongoose.Types.ObjectId(oldLinkIdStr) } }, { linkedCampaignId: null });
       }
       if (newLinkIdStr && mongoose.Types.ObjectId.isValid(newLinkIdStr)) {
-        await Survey.findByIdAndUpdate(new mongoose.Types.ObjectId(newLinkIdStr), { linkedCampaignId: survey._id });
+        await Survey.updateOne({ _id: { $eq: new mongoose.Types.ObjectId(newLinkIdStr) } }, { linkedCampaignId: survey._id });
       }
     }
 

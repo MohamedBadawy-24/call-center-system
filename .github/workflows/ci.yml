@@ -25,6 +25,9 @@ on:
 env:
   NODE_ENV: test
 
+permissions:
+  contents: read
+
 jobs:
   # ────────────────────────────────────────────────
   # Job 1: Unit & Integration Tests

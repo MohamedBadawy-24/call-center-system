@@ -5,7 +5,7 @@ import { AuthContext } from '../context/AuthContext';
 import { UIContext } from '../context/UIContext';
 import { toast } from 'react-toastify';
 import { INTERVIEW_OUTCOME_OPTIONS, evaluateCondition } from '../utils/outboundPrecallConfig';
-import { AlertTriangle, Check, X, ShieldAlert, ArrowLeft, ArrowRight, Save, Clock, Menu } from 'lucide-react';
+import { AlertTriangle, Check, X, ShieldAlert, ArrowLeft, ArrowRight, Save, Clock, Menu, ChevronRight, ChevronLeft, ChevronDown, PhoneOff } from 'lucide-react';
 import { getOtherPrefix, isOtherAnswer, extractOtherText, buildOtherAnswer } from '../utils/otherValueHelper';
 
 export default function AuditTakeSurvey() {
@@ -23,7 +23,7 @@ export default function AuditTakeSurvey() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [currentIdx, setCurrentIdx] = useState(0);
   const [currentSectionIdx, setCurrentSectionIdx] = useState(0);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(() => typeof window !== 'undefined' && window.innerWidth > 768);
   const [showEndCallConfirm, setShowEndCallConfirm] = useState(false);
   const [defaultOpenSectionIdx, setDefaultOpenSectionIdx] = useState(0);
   const [openSections, setOpenSections] = useState({});
@@ -63,7 +63,7 @@ export default function AuditTakeSurvey() {
 
     const syncAgentDraft = async () => {
       try {
-        const draftRes = await api.get(`/agent/draft/${serialNumber}`);
+        const draftRes = await api.get(`/agent/draft/${serialNumber}?agentId=${agentId}`);
         if (draftRes.data && draftRes.data.answers) {
           const agentDraftAnswers = draftRes.data.answers;
           
@@ -573,12 +573,13 @@ export default function AuditTakeSurvey() {
   };
 
   const jumpToQuestionIdx = (idx) => {
+    setIsMirroring(false); // Pause live mirror so auditor navigation sticks
     setCurrentIdx(idx);
     const targetQ = questions[idx];
     if (targetQ && survey?.sections) {
-      const qId = targetQ.questionId || String(targetQ._id);
+      const qId = targetQ.id || targetQ.questionId || String(targetQ._id);
       const secIdx = survey.sections.findIndex(sec =>
-        (sec.questions || []).some(q => (q.questionId || String(q._id)) === qId)
+        (sec.questions || []).some(q => (q.id || q.questionId || String(q._id)) === qId)
       );
       if (secIdx !== -1) {
         setCurrentSectionIdx(secIdx);
@@ -858,19 +859,14 @@ export default function AuditTakeSurvey() {
   }
 
   return (
-    <div className="survey-layout">
-      {/* Mobile Toggle */}
-      <button dir="auto" className="btn-secondary mobile-sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
-        <Menu size={20} />
-      </button>
-
-      {/* Sidebar Overlay */}
-      {sidebarOpen && (
-        <div className="survey-sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+    <div className="survey-layout" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* Sidebar Overlay (mobile) */}
+      {sidebarVisible && (
+        <div className="survey-sidebar-overlay desktop-hidden" onClick={() => setSidebarVisible(false)} />
       )}
 
       {/* Sidebar */}
-      <div className={`survey-sidebar ${sidebarOpen ? 'open' : ''}`} style={{ width: '300px' }}>
+      <div className={`survey-sidebar ${sidebarVisible ? 'open' : 'collapsed'}`} style={{ width: '300px' }}>
         <h3 dir="auto" style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 700 }}>{t('sections') || 'Sections'}</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {survey.sections && survey.sections.map((sec, sIdx) => {
@@ -914,39 +910,56 @@ export default function AuditTakeSurvey() {
                 </div>
 
                 {isOpen && (
-                  <div className="sidebar-section-content" style={{ padding: '0.5rem', background: 'var(--surface)' }}>
-                    <div className="q-badge-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(35px, 1fr))', gap: '0.4rem', marginTop: 0 }}>
-                      {visibleQuestionsInSec.map((qst) => {
-                        const qId = qst.questionId || String(qst._id);
-                        const idx = questions.findIndex(q => (q.questionId || String(q._id)) === qId);
+                  <div
+                    className="sidebar-section-content"
+                    style={{ padding: '0.25rem 0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem', background: 'var(--surface)' }}
+                  >
+                    {visibleQuestionsInSec.map((qst) => {
+                      const qId = qst.id || qst.questionId || String(qst._id);
+                      const idx = questions.findIndex(q => (q.id || q.questionId || String(q._id)) === qId);
+                      const isCurrent = idx === currentIdx;
+                      const isAnswered = answers[qId] !== undefined && answers[qId] !== null && answers[qId] !== '';
 
-                        let statusClass = '';
-                        if (idx === currentIdx) {
-                          statusClass = 'current';
-                        } else if (answers[qId] !== undefined && answers[qId] !== null && answers[qId] !== '') {
-                          statusClass = 'answered';
-                        }
+                      let statusIcon = null;
+                      if (isAnswered) {
+                        statusIcon = <Check size={12} style={{ color: 'var(--success)' }} />;
+                      } else if (isCurrent) {
+                        statusIcon = <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--primary)', display: 'inline-block' }} />;
+                      } else {
+                        statusIcon = <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--border-color)', display: 'inline-block' }} />;
+                      }
 
-                        return (
-                          <div
-                            key={idx}
-                            className={`q-badge ${statusClass}`}
-                            onClick={() => {
-                              jumpToQuestionIdx(idx);
-                            }}
-                            style={{
-                              width: '35px',
-                              height: '35px',
-                              fontSize: '0.8rem',
-                              ...(idx === currentIdx ? { backgroundColor: 'var(--primary)', color: 'white', borderColor: 'var(--primary)', boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.3)' } : {})
-                            }}
-                            title={qst.text}
-                          >
-                            {idx + 1}
-                          </div>
-                        );
-                      })}
-                    </div>
+                      return (
+                        <div
+                          key={idx}
+                          className={`sidebar-question-item ${isCurrent ? 'current' : ''} ${isAnswered ? 'answered' : ''}`}
+                          onClick={() => jumpToQuestionIdx(idx)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            padding: '0.4rem 0.6rem',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem',
+                            color: 'var(--text-primary)',
+                            background: isCurrent ? 'var(--primary-low)' : 'transparent',
+                            border: isCurrent ? '1px solid var(--primary)' : '1px solid transparent',
+                            transition: 'all 0.2s ease',
+                            fontWeight: isCurrent ? '600' : 'normal',
+                          }}
+                          title={qst.text}
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '16px', flexShrink: 0 }}>
+                            {statusIcon}
+                          </span>
+                          {/* CSS handles overflow/ellipsis — safe for RTL Arabic text */}
+                          <span dir="auto" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                            {qst.text || `${t('question') || 'Question'} ${idx + 1}`}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -957,6 +970,22 @@ export default function AuditTakeSurvey() {
 
       {/* Main Content */}
       <div className="survey-main">
+        {/* Focus Mode Toggle Bar */}
+        <div style={{ padding: '1rem 2rem 0', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            dir="auto"
+            type="button"
+            className="btn-secondary"
+            onClick={() => setSidebarVisible(!sidebarVisible)}
+            title={sidebarVisible ? (t('focusMode') || 'Focus Mode') : (t('showSidebar') || 'Show Sidebar')}
+            style={{ padding: '0.5rem 0.75rem', display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}
+          >
+            <Menu size={20} />
+            <span dir="auto" style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+              {sidebarVisible ? (t('focusMode') || 'Focus Mode') : (t('showSidebar') || 'Show Sidebar')}
+            </span>
+          </button>
+        </div>
         <div className="survey-content">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <div className="survey-progress-container" style={{ flex: 1, marginBottom: 0, marginRight: '1.5rem' }}>
@@ -973,11 +1002,32 @@ export default function AuditTakeSurvey() {
               </div>
             </div>
 
-            {/* Live Mirror Indicator */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '0.4rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 700 }}>
-              <span dir="auto" className="status-dot active" style={{ background: 'var(--primary)', width: '8px', height: '8px' }}></span>
-              {t('shadowMirrorLive') || 'Mirrored Live'}
-            </div>
+            {/* Live Mirror Indicator — click to pause/resume */}
+            <button
+              type="button"
+              onClick={() => setIsMirroring(!isMirroring)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                background: isMirroring ? 'rgba(59, 130, 246, 0.1)' : 'rgba(107, 114, 128, 0.1)',
+                border: `1px solid ${isMirroring ? 'rgba(59, 130, 246, 0.3)' : 'rgba(107, 114, 128, 0.3)'}`,
+                padding: '0.4rem 0.8rem',
+                borderRadius: '20px',
+                fontSize: '0.8rem',
+                color: isMirroring ? 'var(--primary)' : 'var(--text-secondary)',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              title={isMirroring ? (t('pauseMirror') || 'Click to pause live mirror') : (t('resumeMirror') || 'Click to resume live mirror')}
+            >
+              <span
+                className={`status-dot ${isMirroring ? 'active' : ''}`}
+                style={{ background: isMirroring ? 'var(--primary)' : 'var(--text-secondary)', width: '8px', height: '8px' }}
+              />
+              {isMirroring ? (t('shadowMirrorLive') || 'Mirrored Live') : (t('mirrorPaused') || 'Mirror Paused — Click to Sync')}
+            </button>
           </div>
 
           {survey?.layoutMode === 'multi' ? (

@@ -143,7 +143,10 @@ exports.saveDraft = async (req, res, next) => {
 exports.getDraft = async (req, res, next) => {
   try {
     const { serialNumber } = req.params;
-    const result = await agentService.getDraft(req.user.id, serialNumber);
+    // Admin/quality staff can pass ?agentId= to read an agent's live draft for auditing
+    const isStaff = req.user.role === 'admin' || req.user.role === 'quality';
+    const targetUserId = (isStaff && req.query.agentId) ? req.query.agentId : req.user.id;
+    const result = await agentService.getDraft(targetUserId, serialNumber);
     res.json(result);
   } catch (err) {
     if (err.status) {

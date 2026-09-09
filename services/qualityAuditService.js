@@ -24,8 +24,8 @@ exports.getAgentPrecall = async (agentId, serialNumber = null) => {
   // Priority 2: Match by statusStartedAt if still active
   // Priority 3: Fall back to most recent PrecallCompletion for this agent
   let precall = null;
-  if (serialNumber) {
-    precall = await PrecallCompletion.findOne({ userId: agentId, serialNumber }).lean();
+  if (typeof serialNumber === 'string' && serialNumber.trim()) {
+    precall = await PrecallCompletion.findOne({ userId: agentId, serialNumber: { $eq: String(serialNumber).trim() } }).lean();
   }
   if (!precall && agent.statusStartedAt) {
     precall = await PrecallCompletion.findOne({
@@ -94,8 +94,8 @@ exports.submitAudit = async (userId, data, io) => {
   // Priority 2: Most recent for this agent (covers break/status-change edge cases)
   // Priority 3: null — gracefully allowed for no_phone_required campaigns
   let precall = null;
-  if (payloadSerialNumber) {
-    precall = await PrecallCompletion.findOne({ serialNumber: payloadSerialNumber, userId: agentId }).lean();
+  if (typeof payloadSerialNumber === 'string' && payloadSerialNumber.trim()) {
+    precall = await PrecallCompletion.findOne({ serialNumber: { $eq: String(payloadSerialNumber).trim() }, userId: agentId }).lean();
   }
   if (!precall) {
     // Fall back to most recent session regardless of current statusStartedAt

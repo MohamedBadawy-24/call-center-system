@@ -18,7 +18,8 @@ const adminController = require('../controllers/adminController');
 // Multer storage for campaign attachments with recursive directory creation (IISNode safe)
 const campaignStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const surveyId = req.params.id;
+    const surveyId = String(req.params.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!surveyId) return cb(new Error('Invalid campaign ID'));
     const uploadDir = path.resolve(__dirname, '..', 'uploads', 'campaigns', surveyId);
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });

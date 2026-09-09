@@ -222,24 +222,13 @@ app.use(
 );
 app.use(express.json({ limit: '10mb' }));
 
-// Recursive helper to sanitize NoSQL operator injection keys (starting with $)
-function nosqlSanitize(obj) {
-  if (obj && typeof obj === "object") {
-    for (const key in obj) {
-      if (key.startsWith("$")) {
-        delete obj[key];
-      } else {
-        nosqlSanitize(obj[key]);
-      }
-    }
-  }
-}
+const mongoSanitize = require('mongo-sanitize');
 
-// Register global NoSQL sanitization middleware
+// Register global NoSQL sanitization middleware recognized by CodeQL
 app.use((req, _res, next) => {
-  if (req.body) nosqlSanitize(req.body);
-  if (req.query) nosqlSanitize(req.query);
-  if (req.params) nosqlSanitize(req.params);
+  if (req.body) req.body = mongoSanitize(req.body);
+  if (req.query) req.query = mongoSanitize(req.query);
+  if (req.params) req.params = mongoSanitize(req.params);
   next();
 });
 
@@ -285,7 +274,7 @@ app.post("/survey", adminAuth, async (req, res) => {
 
     await survey.save();
 
-    if (survey.linkedCampaignId) {
+    if (survey.linkedCampaignId && mongoose.Types.ObjectId.isValid(String(survey.linkedCampaignId))) {
       await Survey.findByIdAndUpdate(survey.linkedCampaignId, { linkedCampaignId: survey._id });
     }
 
@@ -302,6 +291,9 @@ app.post("/survey", adminAuth, async (req, res) => {
 // UPDATE SURVEY (Admins only) - Publishes changes
 app.put("/survey/:id", adminAuth, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: "Invalid survey ID" });
+    }
     const survey = await Survey.findById(req.params.id);
     if (!survey) return res.status(404).json({ error: "Survey not found" });
     
@@ -338,10 +330,10 @@ app.put("/survey/:id", adminAuth, async (req, res) => {
 
     const newLinkId = survey.linkedCampaignId;
     if (String(oldLinkId) !== String(newLinkId)) {
-      if (oldLinkId) {
+      if (oldLinkId && mongoose.Types.ObjectId.isValid(String(oldLinkId))) {
         await Survey.findByIdAndUpdate(oldLinkId, { linkedCampaignId: null });
       }
-      if (newLinkId) {
+      if (newLinkId && mongoose.Types.ObjectId.isValid(String(newLinkId))) {
         await Survey.findByIdAndUpdate(newLinkId, { linkedCampaignId: survey._id });
       }
     }
@@ -359,6 +351,9 @@ app.put("/survey/:id", adminAuth, async (req, res) => {
 // AUTOSAVE SURVEY DRAFT (Admins only)
 app.put("/survey/:id/autosave", adminAuth, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: "Invalid survey ID" });
+    }
     const survey = await Survey.findById(req.params.id);
     if (!survey) return res.status(404).json({ error: "Survey not found" });
     
@@ -411,6 +406,9 @@ app.get("/surveys", auth, async (req, res) => {
 // TOGGLE SURVEY STATUS (Admin Only)
 app.put("/surveys/:id/toggle", adminAuth, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: "Invalid survey ID" });
+    }
     const survey = await Survey.findById(req.params.id);
     if (!survey) return res.status(404).json({ error: "Survey not found" });
 
@@ -441,8 +439,12 @@ app.put("/surveys/:id/toggle", adminAuth, async (req, res) => {
 app.get("/admin/compare", staffAuth, async (req, res) => {
   try {
     const { surveyId, searchValue } = req.query;
-    if (!surveyId || !searchValue) {
-      return res.status(400).json({ error: "Missing surveyId or searchValue" });
+    if (typeof surveyId !== 'string' || !mongoose.Types.ObjectId.isValid(surveyId) || typeof searchValue !== 'string') {
+      return res.status(400).json({ error: "Missing or invalid surveyId or searchValue" });
+    }
+    const safeSearchValue = String(searchValue).trim();
+    if (!safeSearchValue) {
+      return res.status(400).json({ error: "Search value cannot be empty" });
     }
 
     const surveyA = await Survey.findById(surveyId);
@@ -456,13 +458,13 @@ app.get("/admin/compare", staffAuth, async (req, res) => {
 
     let phoneDocA = await PhoneNumber.findOne({
       surveyId: surveyA._id,
-      $or: [{ serialNumber: searchValue }, { number: searchValue }]
+      $or: [{ serialNumber: { $eq: safeSearchValue } }, { number: { $eq: safeSearchValue } }]
     });
 
     if (!phoneDocA) {
-      const directResponse = await Response.findOne({ surveyId: surveyA._id, serialNumber: searchValue });
+      const directResponse = await Response.findOne({ surveyId: surveyA._id, serialNumber: { $eq: safeSearchValue } });
       if (directResponse) {
-        phoneDocA = { serialNumber: searchValue, number: "" };
+        phoneDocA = { serialNumber: safeSearchValue, number: "" };
       } else {
         return res.status(404).json({ error: "No matching record found in primary campaign" });
       }
@@ -564,6 +566,9 @@ app.get("/admin/surveys-stats", staffAuth, async (req, res) => {
 // GET SURVEY (Auth required)
 app.get("/survey/:id", [auth, validateSurveyId], async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: "Invalid survey ID" });
+    }
     const survey = await Survey.findById(req.params.id);
     if (!survey) return res.status(404).json({ error: "Survey not found" });
     res.json(survey);
@@ -575,7 +580,10 @@ app.get("/survey/:id", [auth, validateSurveyId], async (req, res) => {
 // GET RESPONSES (Admin + Quality)
 app.get("/responses/:surveyId", staffAuth, async (req, res) => {
   try {
-    const responses = await Response.find({ surveyId: req.params.surveyId });
+    if (!mongoose.Types.ObjectId.isValid(req.params.surveyId)) {
+      return res.status(400).json({ error: "Invalid survey ID" });
+    }
+    const responses = await Response.find({ surveyId: new mongoose.Types.ObjectId(req.params.surveyId) });
     res.json(responses);
   } catch (err) {
     res.status(500).json({ error: "Server error" });
@@ -592,8 +600,12 @@ app.get("/admin/responses", staffAuth, async (req, res) => {
   try {
     const { surveyId, agentId, limit = 50, skip = 0, showDeleted } = req.query;
     const filter = {};
-    if (surveyId && mongoose.Types.ObjectId.isValid(surveyId)) filter.surveyId = surveyId;
-    if (agentId && mongoose.Types.ObjectId.isValid(agentId)) filter.agentId = agentId;
+    if (typeof surveyId === 'string' && mongoose.Types.ObjectId.isValid(surveyId)) {
+      filter.surveyId = new mongoose.Types.ObjectId(surveyId);
+    }
+    if (typeof agentId === 'string' && mongoose.Types.ObjectId.isValid(agentId)) {
+      filter.agentId = new mongoose.Types.ObjectId(agentId);
+    }
     
     if (showDeleted === 'true') {
       filter.isValid = false;
@@ -691,7 +703,10 @@ app.get("/quality/other-coding/:surveyId/:questionId/export", staffAuth, otherCo
 app.post('/admin/survey/:id/numbers', [upload.single('xlsx'), adminAuth, validateSurveyId], async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'XLSX file required' });
-    const surveyId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid survey ID' });
+    }
+    const surveyId = new mongoose.Types.ObjectId(req.params.id);
     
     const workbook = xlsx.readFile(req.file.path);
     const sheetName = workbook.SheetNames[0];
@@ -915,10 +930,13 @@ app.post('/admin/campaigns/:campaignId/upload-numbers', [memoryUpload.single('fi
 // PHONE NUMBERS - ADMIN LIST AND STATS
 app.get('/admin/survey/:id/numbers', [staffAuth, validateSurveyId], async (req, res) => {
   try {
-    const { governorate } = req.query;
-    const filter = { surveyId: req.params.id };
-    if (governorate && governorate !== 'All') {
-      filter.governorate = governorate;
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid survey ID' });
+    }
+    const surveyId = new mongoose.Types.ObjectId(req.params.id);
+    const filter = { surveyId };
+    if (typeof req.query.governorate === 'string' && req.query.governorate !== 'All' && req.query.governorate.trim()) {
+      filter.governorate = String(req.query.governorate).trim();
     }
     
     const list = await PhoneNumber.find(filter).sort({ createdAt: -1 }).limit(200);
@@ -940,7 +958,11 @@ app.get('/admin/survey/:id/numbers', [staffAuth, validateSurveyId], async (req, 
 // PHONE NUMBERS - ADMIN EXPORT DISQUALIFIED
 app.get('/admin/survey/:id/numbers/disqualified/export', [staffAuth, validateSurveyId], async (req, res) => {
   try {
-    const disqualified = await PhoneNumber.find({ surveyId: req.params.id, status: 'disqualified' }, 'number calledAt -_id').lean();
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid survey ID' });
+    }
+    const surveyId = new mongoose.Types.ObjectId(req.params.id);
+    const disqualified = await PhoneNumber.find({ surveyId, status: 'disqualified' }, 'number calledAt -_id').lean();
     if (disqualified.length === 0) {
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename=disqualified_${req.params.id}.csv`);
@@ -969,7 +991,11 @@ app.get('/admin/survey/:id/numbers/disqualified/export', [staffAuth, validateSur
 // PHONE NUMBERS - CLEAR LIST (ADMIN)
 app.delete('/admin/survey/:id/numbers', [adminAuth, validateSurveyId], async (req, res) => {
   try {
-    await PhoneNumber.deleteMany({ surveyId: req.params.id });
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid survey ID' });
+    }
+    const surveyId = new mongoose.Types.ObjectId(req.params.id);
+    await PhoneNumber.deleteMany({ surveyId });
     const io = req.app.get('io');
     if (io) io.emit("stats-update");
     res.json({ message: 'Numbers list cleared successfully' });
@@ -982,6 +1008,9 @@ app.delete('/admin/survey/:id/numbers', [adminAuth, validateSurveyId], async (re
 // QUALITY: SUSPEND AGENT
 app.post("/quality/suspend-agent/:id", staffAuth, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid agent ID' });
+    }
     const { reason } = req.body;
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: "User not found" });
@@ -1010,6 +1039,9 @@ app.post("/quality/suspend-agent/:id", staffAuth, async (req, res) => {
 // QUALITY: UNSUSPEND AGENT
 app.post("/quality/unsuspend-agent/:id", staffAuth, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid agent ID' });
+    }
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: "User not found" });
 
@@ -1351,7 +1383,10 @@ app.get("/quality/export-agent-stats", staffAuth, async (req, res) => {
 // QUALITY: GET DROP-OFF RATE PER QUESTION
 app.get("/quality/drop-off/:surveyId", staffAuth, async (req, res) => {
   try {
-    const surveyId = req.params.surveyId;
+    if (!mongoose.Types.ObjectId.isValid(req.params.surveyId)) {
+      return res.status(400).json({ error: "Invalid survey ID" });
+    }
+    const surveyId = new mongoose.Types.ObjectId(req.params.surveyId);
     const survey = await Survey.findById(surveyId);
     if (!survey) return res.status(404).json({ error: "Survey not found" });
 
@@ -1411,13 +1446,16 @@ app.post("/quality/audit", staffAuth, qualityAuditController.submitAudit);
 // QUALITY: SHADOW REVIEW (GET)
 app.get("/quality/shadow/:serialNumber", staffAuth, async (req, res) => {
   try {
-    const serialNumber = req.params.serialNumber;
-    let draft = await Draft.findOne({ serialNumber }).lean();
+    if (typeof req.params.serialNumber !== 'string') {
+      return res.status(400).json({ error: "Invalid serial number" });
+    }
+    const serialNumber = String(req.params.serialNumber).trim();
+    let draft = await Draft.findOne({ serialNumber: { $eq: serialNumber } }).lean();
     let isCompleted = false;
 
     // Fallback to completed Response if draft doesn't exist
     if (!draft) {
-      const completedResponse = await Response.findOne({ serialNumber }).lean();
+      const completedResponse = await Response.findOne({ serialNumber: { $eq: serialNumber } }).lean();
       if (!completedResponse) {
         return res.status(404).json({ error: "No active draft or completed response found for this serial number." });
       }
@@ -1425,7 +1463,7 @@ app.get("/quality/shadow/:serialNumber", staffAuth, async (req, res) => {
       isCompleted = true;
     }
 
-    const precallData = await PrecallCompletion.findOne({ serialNumber }).lean();
+    const precallData = await PrecallCompletion.findOne({ serialNumber: { $eq: serialNumber } }).lean();
     
     // Add openedAt to allow the client to pass it back
     res.json({
@@ -1445,8 +1483,17 @@ app.get("/quality/shadow/:serialNumber", staffAuth, async (req, res) => {
 // QUALITY: SHADOW REVIEW (POST)
 app.post("/quality/shadow/:serialNumber", staffAuth, async (req, res) => {
   try {
-    const serialNumber = req.params.serialNumber;
+    if (typeof req.params.serialNumber !== 'string') {
+      return res.status(400).json({ error: "Invalid serial number" });
+    }
+    const serialNumber = String(req.params.serialNumber).trim();
     const { shadowAnswers, notes, openedAt, agentId, surveyId } = req.body;
+    if (agentId && (typeof agentId !== 'string' || !mongoose.Types.ObjectId.isValid(agentId))) {
+      return res.status(400).json({ error: "Invalid agent ID" });
+    }
+    if (surveyId && (typeof surveyId !== 'string' || !mongoose.Types.ObjectId.isValid(surveyId))) {
+      return res.status(400).json({ error: "Invalid survey ID" });
+    }
 
     const review = new Review({
       type: 'ShadowReview',
@@ -1496,6 +1543,9 @@ app.post("/reviews", staffAuth, async (req, res) => {
     const reviewData = { qualityId: req.user.id, feedbackText, type: type || 'Feedback' };
     
     if (agentId && agentId !== 'none') {
+      if (typeof agentId !== 'string' || !mongoose.Types.ObjectId.isValid(agentId)) {
+        return res.status(400).json({ error: "Invalid agent ID format" });
+      }
       const targetUser = await User.findById(agentId);
       if (!targetUser) return res.status(404).json({ error: "User not found" });
       if (req.user.role === 'quality' && targetUser.role === 'admin') {
@@ -1907,6 +1957,9 @@ app.get("/sops/unseen-count", auth, async (req, res) => {
 // DELETE SURVEY (Admins only)
 app.delete("/survey/:id", adminAuth, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: "Invalid survey ID" });
+    }
     const survey = await Survey.findById(req.params.id);
     if (!survey) return res.status(404).json({ error: "Survey not found" });
 

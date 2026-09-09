@@ -13,9 +13,13 @@ exports.getOtherCoding = async (surveyId, questionId) => {
   if (!mongoose.Types.ObjectId.isValid(surveyId)) {
     throw createError('Invalid survey ID format', 400);
   }
+  if (typeof questionId !== 'string') {
+    throw createError('Invalid question ID format', 400);
+  }
+  const cleanQuestionId = String(questionId);
 
   // 1. Fetch saved codings
-  const saved = await OtherCoding.findOne({ surveyId, questionId }).lean();
+  const saved = await OtherCoding.findOne({ surveyId: new mongoose.Types.ObjectId(surveyId), questionId: { $eq: cleanQuestionId } }).lean();
   const savedMap = new Map();
   if (saved && Array.isArray(saved.codings)) {
     saved.codings.forEach(item => savedMap.set(item.answer, item.value));
@@ -23,8 +27,8 @@ exports.getOtherCoding = async (surveyId, questionId) => {
 
   // 2. Fetch responses to extract distinct "other:..." answers
   const responses = await Response.find({
-    surveyId,
-    'answers.questionId': questionId
+    surveyId: new mongoose.Types.ObjectId(surveyId),
+    'answers.questionId': cleanQuestionId
   }, 'answers').lean();
 
   const distinctOthers = new Set();
@@ -73,17 +77,21 @@ exports.updateOtherCoding = async (surveyId, questionId, codings, userId) => {
   if (!mongoose.Types.ObjectId.isValid(surveyId)) {
     throw createError('Invalid survey ID format', 400);
   }
+  if (typeof questionId !== 'string') {
+    throw createError('Invalid question ID format', 400);
+  }
   if (!Array.isArray(codings)) {
     throw createError('Codings must be an array', 400);
   }
 
+  const cleanQuestionId = String(questionId);
   const payload = codings.map(item => ({
     answer: String(item.answer || '').trim(),
     value: String(item.value || '').trim()
   })).filter(item => item.answer !== '');
 
   const doc = await OtherCoding.findOneAndUpdate(
-    { surveyId, questionId },
+    { surveyId: new mongoose.Types.ObjectId(surveyId), questionId: { $eq: cleanQuestionId } },
     {
       $set: {
         codings: payload,
@@ -100,6 +108,9 @@ exports.updateOtherCoding = async (surveyId, questionId, codings, userId) => {
 exports.exportOtherCoding = async (surveyId, questionId) => {
   if (!mongoose.Types.ObjectId.isValid(surveyId)) {
     throw createError('Invalid survey ID format', 400);
+  }
+  if (typeof questionId !== 'string') {
+    throw createError('Invalid question ID format', 400);
   }
 
   const survey = await Survey.findById(surveyId).lean();

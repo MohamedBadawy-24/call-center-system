@@ -16,6 +16,9 @@ exports.createSurvey = async (data) => {
 };
 
 exports.updateSurvey = async (surveyId, data) => {
+  if (!surveyId || !mongoose.Types.ObjectId.isValid(surveyId)) {
+    throw createError('Invalid survey ID', 400);
+  }
   const survey = await Survey.findById(surveyId);
   if (!survey) throw createError('Survey not found', 404);
   if (survey.isActive !== false) {
@@ -56,6 +59,9 @@ exports.getAllSurveys = async (userRole, userId) => {
 };
 
 exports.toggleSurveyStatus = async (surveyId) => {
+  if (!surveyId || !mongoose.Types.ObjectId.isValid(surveyId)) {
+    throw createError('Invalid survey ID', 400);
+  }
   const survey = await Survey.findById(surveyId);
   if (!survey) throw createError('Survey not found', 404);
   survey.isActive = survey.isActive === undefined ? false : !survey.isActive;
@@ -64,12 +70,18 @@ exports.toggleSurveyStatus = async (surveyId) => {
 };
 
 exports.getSurvey = async (surveyId) => {
+  if (!surveyId || !mongoose.Types.ObjectId.isValid(surveyId)) {
+    throw createError('Invalid survey ID', 400);
+  }
   const survey = await Survey.findById(surveyId);
   if (!survey) throw createError('Survey not found', 404);
   return survey;
 };
 
 exports.deleteSurvey = async (surveyId) => {
+  if (!surveyId || !mongoose.Types.ObjectId.isValid(surveyId)) {
+    throw createError('Invalid survey ID', 400);
+  }
   const survey = await Survey.findById(surveyId);
   if (!survey) throw createError('Survey not found', 404);
   if (survey.isActive !== false) {

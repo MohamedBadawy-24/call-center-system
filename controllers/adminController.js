@@ -64,7 +64,11 @@ exports.updateResearcherCode = async (req, res, next) => {
 exports.forceClearAgentSession = async (req, res, next) => {
   try {
     const User = require('../models/User');
+    const mongoose = require('mongoose');
     const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid agent ID" });
+    }
     await User.findByIdAndUpdate(id, {
       $set: {
         precallCompletedForActiveSession: false,

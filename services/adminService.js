@@ -26,6 +26,9 @@ exports.listProfileRequests = async () => {
 };
 
 exports.resolveProfileRequest = async (id, status, adminNote, io) => {
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    throw createError('Invalid request ID', 400);
+  }
   if (!['approved', 'rejected'].includes(status)) {
     throw createError('Invalid status', 400);
   }
@@ -102,6 +105,9 @@ exports.deleteUser = async (targetId, adminId, io) => {
 };
 
 exports.updateResearcherCode = async (id, researcherCode, io) => {
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    throw createError('Invalid user ID', 400);
+  }
   let finalCode = researcherCode;
   if (finalCode !== undefined && finalCode !== null) {
     finalCode = String(finalCode).trim();

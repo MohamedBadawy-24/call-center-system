@@ -478,10 +478,16 @@ exports.getResponses = async (query) => {
 };
 
 exports.getResponsesBySurveyId = async (surveyId) => {
-  return await Response.find({ surveyId });
+  if (!surveyId || !mongoose.Types.ObjectId.isValid(surveyId)) {
+    throw createError('Valid Survey ID is required', 400);
+  }
+  return await Response.find({ surveyId: new mongoose.Types.ObjectId(surveyId) });
 };
 
 exports.getSurveyAndCursor = async (surveyId) => {
+  if (!surveyId || !mongoose.Types.ObjectId.isValid(surveyId)) {
+    throw createError('Valid Survey ID is required', 400);
+  }
   const survey = await Survey.findById(surveyId);
   if (!survey) throw createError('Survey not found', 404);
 
@@ -510,9 +516,9 @@ exports.getAdvancedExportData = async (surveyId, queryParams) => {
   if (!survey) throw createError('Survey not found', 404);
 
   const { agentId, status, startDate, endDate } = queryParams;
-  const filter = { surveyId, isValid: { $ne: false } };
-  if (agentId && mongoose.Types.ObjectId.isValid(agentId)) filter.agentId = agentId;
-  if (status) filter.status = status;
+  const filter = { surveyId: new mongoose.Types.ObjectId(surveyId), isValid: { $ne: false } };
+  if (agentId && mongoose.Types.ObjectId.isValid(agentId)) filter.agentId = new mongoose.Types.ObjectId(agentId);
+  if (typeof status === 'string' && status.trim()) filter.status = String(status).trim();
   if (startDate || endDate) {
     filter.completedAt = {};
     if (startDate) filter.completedAt.$gte = new Date(startDate);

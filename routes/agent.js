@@ -18,8 +18,8 @@ router.get('/outbound-precall', auth, async (req, res) => {
     const Survey = require('../models/Survey');
     const { surveyId } = req.query;
     let survey;
-    if (surveyId && mongoose.Types.ObjectId.isValid(surveyId)) {
-      survey = await Survey.findById(surveyId).lean();
+    if (typeof surveyId === 'string' && mongoose.Types.ObjectId.isValid(surveyId)) {
+      survey = await Survey.findById(new mongoose.Types.ObjectId(surveyId)).lean();
     } else {
       const filter = { isActive: { $ne: false } };
       if (req.user.role === 'agent') {

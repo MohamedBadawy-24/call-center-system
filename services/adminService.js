@@ -157,8 +157,12 @@ exports.uploadCampaignAttachment = async (surveyId, file, category, io) => {
   const survey = await Survey.findById(surveyId);
   if (!survey) {
     // If file was written to disk, clean it up
-    if (file.path && fs.existsSync(file.path)) {
-      try { fs.unlinkSync(file.path); } catch { /* ignore cleanup error */ }
+    const uploadsRoot = path.resolve(__dirname, '..', 'uploads');
+    if (file.path) {
+      const resolvedPath = path.resolve(file.path);
+      if (resolvedPath.startsWith(uploadsRoot + path.sep) && fs.existsSync(resolvedPath)) {
+        try { fs.unlinkSync(resolvedPath); } catch { /* ignore cleanup error */ }
+      }
     }
     throw createError('Campaign not found', 404);
   }
@@ -248,8 +252,9 @@ exports.deleteCampaignAttachment = async (surveyId, attachmentId, io) => {
       const cleanRelPath = attachment.fileUrl.startsWith('/')
         ? attachment.fileUrl.slice(1)
         : attachment.fileUrl;
+      const uploadsRoot = path.resolve(__dirname, '..', 'uploads');
       const absPath = path.resolve(__dirname, '..', cleanRelPath);
-      if (fs.existsSync(absPath)) {
+      if (absPath.startsWith(uploadsRoot + path.sep) && fs.existsSync(absPath)) {
         fs.unlinkSync(absPath);
       }
     } catch (unlinkErr) {

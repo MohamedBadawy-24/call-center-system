@@ -849,7 +849,12 @@ exports.exportAdvanced = async (req, res, next) => {
       });
 
       const { saveToFile } = require('sav-writer');
-      const tempFile = path.join(__dirname, '..', 'uploads', `${filenameBase}.sav`);
+      const safeBase = filenameBase.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const uploadsDir = path.resolve(__dirname, '..', 'uploads');
+      const tempFile = path.resolve(uploadsDir, `${safeBase}.sav`);
+      if (!tempFile.startsWith(uploadsDir + path.sep)) {
+        return res.status(400).json({ error: 'Invalid export filename' });
+      }
       
       try {
         saveToFile(tempFile, records, vars);
@@ -858,8 +863,10 @@ exports.exportAdvanced = async (req, res, next) => {
         return res.status(500).json({ error: 'Failed to create SPSS file. ' + err.message });
       }
 
-      res.download(tempFile, `${filenameBase}.sav`, () => {
-        if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+      res.download(tempFile, `${safeBase}.sav`, () => {
+        if (tempFile.startsWith(uploadsDir + path.sep) && fs.existsSync(tempFile)) {
+          try { fs.unlinkSync(tempFile); } catch { /* ignore cleanup error */ }
+        }
       });
       return;
     }

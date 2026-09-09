@@ -91,28 +91,33 @@ app.use(
   })
 );
 
+const rateLimit = require('express-rate-limit');
+
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'test' ? 1000000 : 10000,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(generalLimiter);
+
 // ── Static Frontend Serving (BEFORE CORS — Vite adds crossorigin attr to tags) ──
 const frontendPath = path.resolve(__dirname, 'admin-ui', 'dist');
 
-// VERSION TAG: v5-before-cors
-app.get('/debug-static', (req, res) => {
-  const assetsDir = path.join(frontendPath, 'assets');
-  let files = [];
-  try { files = fs.readdirSync(assetsDir); } catch (e) { files = ['ERROR: ' + e.message]; }
-  res.json({
-    version: 'v5-before-cors',
-    __dirname: __dirname,
-    frontendPath: frontendPath,
-    assetsDir: assetsDir,
-    assetsDirExists: fs.existsSync(assetsDir),
-    frontendDirExists: fs.existsSync(frontendPath),
-    indexHtmlExists: fs.existsSync(path.join(frontendPath, 'index.html')),
-    filesInAssets: files,
-    reqUrl: req.url,
-    reqPath: req.path,
-    reqOriginalUrl: req.originalUrl
+if (process.env.NODE_ENV === 'development') {
+  app.get('/debug-static', (req, res) => {
+    const assetsDir = path.join(frontendPath, 'assets');
+    let files = [];
+    try { files = fs.readdirSync(assetsDir); } catch (e) { files = ['ERROR: ' + e.message]; }
+    res.json({
+      version: 'v5-before-cors',
+      assetsDirExists: fs.existsSync(assetsDir),
+      frontendDirExists: fs.existsSync(frontendPath),
+      indexHtmlExists: fs.existsSync(path.join(frontendPath, 'index.html')),
+      filesInAssets: files
+    });
   });
-});
+}
 
 const MIME_TYPES = {
   '.js': 'application/javascript',
@@ -135,8 +140,13 @@ app.use((req, res, next) => {
   const urlPath = req.path || req.url;
   
   if (urlPath.startsWith('/assets/') || urlPath === '/manifest.json' || urlPath === '/robots.txt' || urlPath === '/sw.js' || urlPath === '/icon.png' || urlPath === '/logo.png' || urlPath === '/favicon.ico' || urlPath === '/baseera-icon-only.png' || urlPath === '/baseera-logo-full.png') {
-    const filePath = path.join(frontendPath, urlPath);
+    const safeRel = path.normalize(urlPath).replace(/^(\.\.[\/\\])+/, '');
+    const filePath = path.resolve(frontendPath, '.' + safeRel);
     
+    if (!filePath.startsWith(frontendPath)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     try {
       if (fs.existsSync(filePath)) {
         const ext = path.extname(filePath).toLowerCase();
@@ -146,10 +156,10 @@ app.use((req, res, next) => {
         res.setHeader('Access-Control-Allow-Origin', '*');
         return res.status(200).send(fileContent);
       }
-    } catch (err) {
-      return res.status(500).send('Error reading file: ' + err.message);
+    } catch {
+      return res.status(500).json({ error: 'Error reading static file' });
     }
-    return res.status(404).send('Static file not found: ' + urlPath);
+    return res.status(404).json({ error: 'Static file not found' });
   }
   
   next();
@@ -189,9 +199,20 @@ app.use(
         return callback(null, true);
       }
 
-      // Allow same-origin requests (production hosting)
-      if (origin.includes('.ltempurl.com') || origin.includes('.smarterasp.net')) {
-        return callback(null, true);
+      // Allow same-origin requests (production hosting) via safe URL parsing
+      try {
+        const originUrl = new URL(origin);
+        const host = originUrl.hostname.toLowerCase();
+        if (
+          host === 'ltempurl.com' ||
+          host.endsWith('.ltempurl.com') ||
+          host === 'smarterasp.net' ||
+          host.endsWith('.smarterasp.net')
+        ) {
+          return callback(null, true);
+        }
+      } catch {
+        // Invalid origin format
       }
 
       callback(new Error("Not allowed by CORS"));
@@ -749,7 +770,13 @@ app.post('/admin/survey/:id/numbers', [upload.single('xlsx'), adminAuth, validat
       }
     }
 
-    fs.unlinkSync(req.file.path);
+    const uploadsRoot = path.resolve('uploads');
+    if (req.file && req.file.path) {
+      const resolvedPath = path.resolve(req.file.path);
+      if (resolvedPath.startsWith(uploadsRoot + path.sep) && fs.existsSync(resolvedPath)) {
+        try { fs.unlinkSync(resolvedPath); } catch { /* ignore unlink error */ }
+      }
+    }
 
     const io = req.app.get('io');
     if (io) io.emit("stats-update");
@@ -761,8 +788,12 @@ app.post('/admin/survey/:id/numbers', [upload.single('xlsx'), adminAuth, validat
       total
     });
   } catch (err) {
-    if (req.file && fs.existsSync(req.file.path)) {
-      try { fs.unlinkSync(req.file.path); } catch { /* ignore unlink error */ }
+    const uploadsRoot = path.resolve('uploads');
+    if (req.file && req.file.path) {
+      const resolvedPath = path.resolve(req.file.path);
+      if (resolvedPath.startsWith(uploadsRoot + path.sep) && fs.existsSync(resolvedPath)) {
+        try { fs.unlinkSync(resolvedPath); } catch { /* ignore unlink error */ }
+      }
     }
     console.error("XLSX Import Critical Error:", err);
     res.status(500).json({ error: 'Import failed: ' + err.message });

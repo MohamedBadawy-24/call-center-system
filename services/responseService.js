@@ -256,7 +256,11 @@ exports.submitResponse = async (userId, userRole, data, io) => {
     }
 
     const rawAnswers = Array.isArray(data.answers) ? data.answers : [];
-    const surveyDoc = await Survey.findById(data.surveyId).session(session);
+    if (!data.surveyId || !mongoose.Types.ObjectId.isValid(data.surveyId)) {
+      throw createError('Valid Survey ID is required', 400);
+    }
+    const safeSurveyId = new mongoose.Types.ObjectId(data.surveyId);
+    const surveyDoc = await Survey.findById(safeSurveyId).session(session);
     if (surveyDoc) {
       const qTypeMap = {};
       const collectTypes = (questions) => {
@@ -356,12 +360,12 @@ exports.submitResponse = async (userId, userRole, data, io) => {
       phoneFinalStatus = 'completed';
     }
 
-    let phoneDoc = finalSerial ? await PhoneNumber.findOne({ serialNumber: finalSerial }).session(session) : null;
+    let phoneDoc = finalSerial ? await PhoneNumber.findOne({ serialNumber: { $eq: String(finalSerial) } }).session(session) : null;
     if (!phoneDoc && finalSerial) {
       const phoneAnswer = data.answers?.find(a => a.questionId === 'phone')?.value || data.phone;
       if (phoneAnswer) {
         const phonePayload = {
-          surveyId: data.surveyId,
+          surveyId: safeSurveyId,
           number: String(phoneAnswer).trim(),
           agentId: user._id,
           status: phoneFinalStatus,
@@ -370,7 +374,7 @@ exports.submitResponse = async (userId, userRole, data, io) => {
           calledAt: now,
           outcomeReason: `Contacted | ${interviewOutcome}`
         };
-        if (finalSerial) phonePayload.serialNumber = finalSerial;
+        if (finalSerial) phonePayload.serialNumber = String(finalSerial);
         
         [phoneDoc] = await PhoneNumber.create([phonePayload], { session });
       }
@@ -384,8 +388,8 @@ exports.submitResponse = async (userId, userRole, data, io) => {
       await phoneDoc.save({ session });
     } else {
       const phoneFilter = finalSerial
-        ? { serialNumber: finalSerial }
-        : { agentId: user._id, surveyId: new mongoose.Types.ObjectId(String(data.surveyId)) };
+        ? { serialNumber: { $eq: String(finalSerial) } }
+        : { agentId: user._id, surveyId: safeSurveyId };
 
       await PhoneNumber.findOneAndUpdate(
         phoneFilter,
@@ -395,14 +399,10 @@ exports.submitResponse = async (userId, userRole, data, io) => {
     }
 
     if (interviewOutcome === 'postponed' && serialNumber) {
-      let sid;
-      if (data.surveyId && mongoose.Types.ObjectId.isValid(data.surveyId)) {
-        sid = new mongoose.Types.ObjectId(data.surveyId);
-      }
       await PostponedSerial.create(
         [{
           agentId: user._id,
-          surveyId: sid,
+          surveyId: safeSurveyId,
           statusStartedAt: user.statusStartedAt,
           serialNumber: String(serialNumber),
           source: 'survey',
@@ -412,7 +412,7 @@ exports.submitResponse = async (userId, userRole, data, io) => {
     }
 
     if (serialNumber) {
-      const draftFilter = { serialNumber };
+      const draftFilter = { serialNumber: { $eq: String(serialNumber) } };
       if (!isStaff) draftFilter.agentId = user._id;
       await Draft.deleteOne(draftFilter, { session });
     }

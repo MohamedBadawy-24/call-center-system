@@ -110,14 +110,14 @@ async function getSurveyEligibilityState(user, surveyId, serialParam = null, ses
   if (isStaff) {
     let lastPrecall = null;
     if (serialParamTrimmed) {
-      let pcQ = PrecallCompletion.findOne({ serialNumber: serialParamTrimmed }).lean();
+      let pcQ = PrecallCompletion.findOne({ serialNumber: { $eq: serialParamTrimmed } }).lean();
       if (session) pcQ = pcQ.session(session);
       lastPrecall = await pcQ;
     }
     let existingAnswers = {};
     let existingResponse = null;
     if (serialParamTrimmed) {
-      let respQ = Response.findOne({ serialNumber: serialParamTrimmed }).lean();
+      let respQ = Response.findOne({ serialNumber: { $eq: serialParamTrimmed } }).lean();
       if (session) respQ = respQ.session(session);
       existingResponse = await respQ;
       if (existingResponse) {
@@ -180,7 +180,7 @@ async function getSurveyEligibilityState(user, surveyId, serialParam = null, ses
         : '';
   const payload = lastPrecall.payload || {};
 
-  let respQ = Response.findOne({ serialNumber: serial }).lean();
+  let respQ = Response.findOne({ serialNumber: { $eq: serial } }).lean();
   if (session) respQ = respQ.session(session);
   const existingResponse = await respQ;
 

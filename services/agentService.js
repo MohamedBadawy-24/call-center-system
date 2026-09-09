@@ -382,13 +382,16 @@ exports.listHandoverCandidates = async (userId, userRole) => {
 };
 
 exports.searchBySerial = async (serial, userId, userRole) => {
+  const cleanSerial = String(serial || '').trim();
+  const cleanUserId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
+
   // 1. Check Responses first
-  const query = { serialNumber: serial };
-  if (userRole === 'agent') query.agentId = userId;
+  const query = { serialNumber: { $eq: cleanSerial } };
+  if (userRole === 'agent') query.agentId = cleanUserId;
   
   const response = await Response.findOne(query).sort({ completedAt: -1 }).lean();
   if (response) {
-    const phoneNumber = await PhoneNumber.findOne({ serialNumber: serial }).lean();
+    const phoneNumber = await PhoneNumber.findOne({ serialNumber: { $eq: cleanSerial } }).lean();
     return {
       surveyId: response.surveyId,
       answers: response.answers.reduce((acc, a) => ({ ...acc, [a.questionId]: a.value }), {}),
@@ -401,12 +404,12 @@ exports.searchBySerial = async (serial, userId, userRole) => {
   }
 
   // 2. Check PrecallCompletions
-  const precallQuery = { serialNumber: serial };
-  if (userRole === 'agent') precallQuery.userId = userId;
+  const precallQuery = { serialNumber: { $eq: cleanSerial } };
+  if (userRole === 'agent') precallQuery.userId = cleanUserId;
   
   const precall = await PrecallCompletion.findOne(precallQuery).sort({ completedAt: -1 }).lean();
   if (precall) {
-    const phoneNumber = await PhoneNumber.findOne({ serialNumber: serial }).lean();
+    const phoneNumber = await PhoneNumber.findOne({ serialNumber: { $eq: cleanSerial } }).lean();
     return {
       surveyId: precall.surveyId,
       answers: precall.payload,
@@ -419,8 +422,8 @@ exports.searchBySerial = async (serial, userId, userRole) => {
   }
 
   // 3. Check PhoneNumbers
-  const phoneQuery = { serialNumber: serial };
-  if (userRole === 'agent') phoneQuery.agentId = userId;
+  const phoneQuery = { serialNumber: { $eq: cleanSerial } };
+  if (userRole === 'agent') phoneQuery.agentId = cleanUserId;
   
   const phone = await PhoneNumber.findOne(phoneQuery).lean();
   if (phone) {
@@ -440,15 +443,21 @@ exports.handoverCall = async (userId, targetAgentId, serialNumber, io) => {
   if (!serialNumber || !targetAgentId) {
     throw createError('SerialNumber and TargetAgentId are required', 400);
   }
+  if (!mongoose.Types.ObjectId.isValid(targetAgentId)) {
+    throw createError('Invalid target agent ID', 400);
+  }
 
-  const targetAgent = await User.findById(targetAgentId);
+  const targetAgent = await User.findById(new mongoose.Types.ObjectId(targetAgentId));
   if (!targetAgent || !['agent', 'quality'].includes(targetAgent.role)) {
     throw createError('Target agent not found or invalid role', 404);
   }
 
-  const precall = await PrecallCompletion.findOne({ serialNumber, userId });
+  const cleanSerial = String(serialNumber).trim();
+  const cleanUserId = new mongoose.Types.ObjectId(userId);
+
+  const precall = await PrecallCompletion.findOne({ serialNumber: { $eq: cleanSerial }, userId: cleanUserId });
   if (!precall) {
-    const phone = await PhoneNumber.findOne({ serialNumber, agentId: userId });
+    const phone = await PhoneNumber.findOne({ serialNumber: { $eq: cleanSerial }, agentId: cleanUserId });
     if (!phone) {
       throw createError('You do not own this call or serial number.', 403);
     }
@@ -490,12 +499,17 @@ exports.saveDraft = async (userId, surveyId, serialNumber, answers, currentIdx) 
   if (!surveyId || !serialNumber) {
     throw createError('surveyId and serialNumber are required', 400);
   }
+  if (!mongoose.Types.ObjectId.isValid(userId)) throw createError('Invalid user ID', 400);
+  if (!mongoose.Types.ObjectId.isValid(surveyId)) throw createError('Invalid survey ID', 400);
+  const cleanSerial = String(serialNumber).trim();
+  const cleanUserId = new mongoose.Types.ObjectId(userId);
+  const cleanSurveyId = new mongoose.Types.ObjectId(surveyId);
 
   const draft = await Draft.findOneAndUpdate(
-    { agentId: userId, serialNumber },
+    { agentId: cleanUserId, serialNumber: { $eq: cleanSerial } },
     {
       $set: {
-        surveyId,
+        surveyId: cleanSurveyId,
         answers: answers || {},
         currentIdx: currentIdx || 0,
         updatedAt: new Date()
@@ -511,8 +525,11 @@ exports.getDraft = async (userId, serialNumber) => {
   if (!serialNumber) {
     throw createError('serialNumber is required', 400);
   }
+  if (!mongoose.Types.ObjectId.isValid(userId)) throw createError('Invalid user ID', 400);
+  const cleanSerial = String(serialNumber).trim();
+  const cleanUserId = new mongoose.Types.ObjectId(userId);
 
-  const draft = await Draft.findOne({ agentId: userId, serialNumber }).lean();
+  const draft = await Draft.findOne({ agentId: cleanUserId, serialNumber: { $eq: cleanSerial } }).lean();
   if (!draft) {
     return { answers: {}, currentIdx: 0 };
   }
@@ -676,8 +693,9 @@ exports.getFullResponseForEdit = async (serialNumber, userId, userRole) => {
   if (!serialNumber) {
     throw createError('Serial number is required', 400);
   }
+  const cleanSerial = String(serialNumber).trim();
 
-  const response = await Response.findOne({ serialNumber })
+  const response = await Response.findOne({ serialNumber: { $eq: cleanSerial } })
     .populate('surveyId')
     .lean();
 
@@ -693,7 +711,7 @@ exports.getFullResponseForEdit = async (serialNumber, userId, userRole) => {
     throw createError('Edit not unlocked for this response', 403);
   }
 
-  const precall = await PrecallCompletion.findOne({ serialNumber }).lean();
+  const precall = await PrecallCompletion.findOne({ serialNumber: { $eq: cleanSerial } }).lean();
 
   return {
     response: {
@@ -727,8 +745,9 @@ exports.updatePrecall = async (serialNumber, userId, userRole, data, io) => {
   if (!serialNumber) {
     throw createError('Serial number is required', 400);
   }
+  const cleanSerial = String(serialNumber).trim();
 
-  const response = await Response.findOne({ serialNumber });
+  const response = await Response.findOne({ serialNumber: { $eq: cleanSerial } });
   if (response) {
     if (String(response.agentId) !== String(userId) && userRole !== 'admin') {
       throw createError('Unauthorized to update this precall', 403);
@@ -738,7 +757,7 @@ exports.updatePrecall = async (serialNumber, userId, userRole, data, io) => {
     }
   }
 
-  const precall = await PrecallCompletion.findOne({ serialNumber });
+  const precall = await PrecallCompletion.findOne({ serialNumber: { $eq: cleanSerial } });
   if (!precall) {
     throw createError('Precall data not found', 404);
   }
@@ -769,8 +788,9 @@ exports.updateResponse = async (serialNumber, userId, userRole, data, io) => {
   if (!serialNumber) {
     throw createError('Serial number is required', 400);
   }
+  const cleanSerial = String(serialNumber).trim();
 
-  const response = await Response.findOne({ serialNumber });
+  const response = await Response.findOne({ serialNumber: { $eq: cleanSerial } });
   if (!response) {
     throw createError('Response not found', 404);
   }

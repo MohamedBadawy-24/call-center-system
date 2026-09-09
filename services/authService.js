@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
@@ -55,7 +56,7 @@ exports.register = async (data, requestingUserId = null) => {
     finalRole = 'admin';
   }
 
-  const existing = await User.findOne({ email });
+  const existing = await User.findOne({ email: { $eq: String(email).toLowerCase() } });
   if (existing) throw createError('User already exists', 400);
 
   const salt = await bcrypt.genSalt(10);
@@ -71,7 +72,7 @@ exports.register = async (data, requestingUserId = null) => {
 };
 
 exports.login = async (email, password) => {
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email: { $eq: String(email).toLowerCase() } });
   if (!user) throw createError('Invalid credentials', 400);
 
   if (user.suspended) {
@@ -143,7 +144,7 @@ exports.getMe = async (userId) => {
 };
 
 exports.forgotPassword = async (email) => {
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email: { $eq: String(email).toLowerCase() } });
   if (!user) throw createError('User not found', 404);
 
   const code = String(Math.floor(100000 + Math.random() * 900000));
@@ -169,7 +170,7 @@ exports.resetPassword = async (email, code, newPassword) => {
   const passError = validatePassword(newPassword);
   if (passError) throw createError(passError, 400);
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email: { $eq: String(email).toLowerCase() } });
   if (!user || !user.resetCode || !user.resetCodeExpires) {
     throw createError('Invalid request', 400);
   }
@@ -195,7 +196,8 @@ exports.resetPassword = async (email, code, newPassword) => {
 exports.updateProfile = async (userId, data) => {
   delete data.researcherCode; // Safety guard
   const { name, email, oldPassword, password } = data;
-  const user = await User.findById(userId);
+  if (!mongoose.Types.ObjectId.isValid(userId)) throw createError('Invalid user ID', 400);
+  const user = await User.findById(new mongoose.Types.ObjectId(userId));
   if (!user) throw createError('User not found', 404);
 
   if (user.role === 'agent') {
@@ -219,7 +221,7 @@ exports.updateProfile = async (userId, data) => {
 
   if (name) user.name = name;
   if (email) {
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: { $eq: String(email).toLowerCase() } });
     if (existingUser && existingUser.id !== userId) {
       throw createError('Email already in use', 400);
     }
@@ -240,13 +242,16 @@ exports.updateProfile = async (userId, data) => {
 
 exports.requestProfileChange = async (userId, type, requestedValue) => {
   if (!['name', 'email'].includes(type)) throw createError('Invalid request type', 400);
+  if (!mongoose.Types.ObjectId.isValid(userId)) throw createError('Invalid user ID', 400);
+  const cleanUserId = new mongoose.Types.ObjectId(userId);
+  const cleanType = String(type);
 
-  const pending = await ProfileRequest.findOne({ userId, type, status: 'pending' });
+  const pending = await ProfileRequest.findOne({ userId: cleanUserId, type: { $eq: cleanType }, status: 'pending' });
   if (pending) throw createError(`You already have a pending ${type} change request.`, 400);
 
   const lastApproved = await ProfileRequest.findOne({
-    userId,
-    type,
+    userId: cleanUserId,
+    type: { $eq: cleanType },
     status: 'approved',
   }).sort({ resolvedAt: -1 });
 
@@ -259,21 +264,23 @@ exports.requestProfileChange = async (userId, type, requestedValue) => {
     }
   }
 
-  await ProfileRequest.create({ userId, type, requestedValue });
+  await ProfileRequest.create({ userId: cleanUserId, type: cleanType, requestedValue });
 };
 
 exports.getMyProfileRequests = async (userId) => {
-  return await ProfileRequest.find({ userId }).sort({ createdAt: -1 });
+  if (!mongoose.Types.ObjectId.isValid(userId)) throw createError('Invalid user ID', 400);
+  return await ProfileRequest.find({ userId: new mongoose.Types.ObjectId(userId) }).sort({ createdAt: -1 });
 };
 
 exports.requestEmailChangeCode = async (userId, newEmail) => {
   if (!newEmail) throw createError('New email is required', 400);
+  if (!mongoose.Types.ObjectId.isValid(userId)) throw createError('Invalid user ID', 400);
 
-  const existingUser = await User.findOne({ email: newEmail });
+  const existingUser = await User.findOne({ email: { $eq: String(newEmail).toLowerCase() } });
   if (existingUser) throw createError('Email already in use', 400);
 
   const code = String(Math.floor(100000 + Math.random() * 900000));
-  const user = await User.findById(userId);
+  const user = await User.findById(new mongoose.Types.ObjectId(userId));
   const salt = await bcrypt.genSalt(10);
   user.emailVerificationCode = await bcrypt.hash(code, salt);
   user.emailVerificationExpires = Date.now() + 5 * 60 * 1000;
@@ -293,7 +300,9 @@ exports.requestEmailChangeCode = async (userId, newEmail) => {
 };
 
 exports.verifyEmailChangeCode = async (userId, code, newEmail) => {
-  const user = await User.findById(userId);
+  if (!mongoose.Types.ObjectId.isValid(userId)) throw createError('Invalid user ID', 400);
+  const cleanUserId = new mongoose.Types.ObjectId(userId);
+  const user = await User.findById(cleanUserId);
 
   if (!user.emailVerificationCode || !user.emailVerificationExpires) {
     throw createError('No active verification request found.', 400);
@@ -308,10 +317,10 @@ exports.verifyEmailChangeCode = async (userId, code, newEmail) => {
   user.emailVerificationExpires = undefined;
   await user.save();
 
-  const pending = await ProfileRequest.findOne({ userId, type: 'email', status: 'pending' });
+  const pending = await ProfileRequest.findOne({ userId: cleanUserId, type: 'email', status: 'pending' });
   if (pending) throw createError('You already have a pending email change request.', 400);
 
-  await ProfileRequest.create({ userId, type: 'email', requestedValue: newEmail });
+  await ProfileRequest.create({ userId: cleanUserId, type: 'email', requestedValue: String(newEmail) });
 };
 
 exports.updateStatus = async (userId, status, breakReason, io) => {
@@ -322,7 +331,8 @@ exports.updateStatus = async (userId, status, breakReason, io) => {
     throw createError('Invalid break reason', 400);
   }
 
-  const user = await User.findById(userId);
+  if (!mongoose.Types.ObjectId.isValid(userId)) throw createError('Invalid user ID', 400);
+  const user = await User.findById(new mongoose.Types.ObjectId(userId));
   if (!user || !['agent', 'quality'].includes(user.role)) {
     throw createError('Unauthorized status role', 403);
   }

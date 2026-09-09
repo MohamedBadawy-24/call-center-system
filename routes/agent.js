@@ -58,7 +58,7 @@ router.get('/outbound-precall', auth, async (req, res) => {
       targetGovernorate: survey.targetGovernorate || 'All',
       numberAssignmentMode: survey.numberAssignmentMode || 'queue_only',
     });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -79,7 +79,7 @@ router.get('/survey-eligibility', auth, async (req, res) => {
       payload: state.payload || {},
       existingAnswers: state.existingAnswers || {},
     });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: 'Server error' });
   }
 });

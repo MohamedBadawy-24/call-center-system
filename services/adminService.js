@@ -158,7 +158,7 @@ exports.uploadCampaignAttachment = async (surveyId, file, category, io) => {
   if (!survey) {
     // If file was written to disk, clean it up
     if (file.path && fs.existsSync(file.path)) {
-      try { fs.unlinkSync(file.path); } catch (_) {}
+      try { fs.unlinkSync(file.path); } catch { /* ignore cleanup error */ }
     }
     throw createError('Campaign not found', 404);
   }

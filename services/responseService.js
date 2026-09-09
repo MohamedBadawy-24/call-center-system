@@ -25,7 +25,7 @@ const encodeValue = (val) => {
 };
 
 function splitOtherValues(answerValue, otherValueCode = 'Other') {
-  if (answerValue == null) {
+  if (answerValue === null || answerValue === undefined) {
     return { baseValue: '', otherValues: [] };
   }
   const codePrefix = `${otherValueCode}:`;
@@ -56,7 +56,7 @@ function splitOtherValues(answerValue, otherValueCode = 'Other') {
       } else {
         baseParts.push(String(v));
       }
-    } else if (v != null) {
+    } else if (v !== null && v !== undefined) {
       baseParts.push(String(v));
     }
   });
@@ -75,10 +75,10 @@ function buildChoiceValueMap(survey) {
     if (!Array.isArray(optionsList)) return itemMap;
 
     for (const item of optionsList) {
-      if (item == null) continue;
+      if (item === null || item === undefined) continue;
       if (typeof item === 'object') {
         const text = (item.text ?? item.label ?? item.value ?? '').toString().trim();
-        const val = (item.value != null && String(item.value).trim() !== '')
+        const val = (item.value !== null && item.value !== undefined && String(item.value).trim() !== '')
           ? String(item.value).trim()
           : text;
 
@@ -155,7 +155,7 @@ function buildChoiceValueMap(survey) {
 }
 
 function resolveSingleAnswer(item, itemMap) {
-  if (item == null) return item;
+  if (item === null || item === undefined) return item;
   if (typeof item === 'number' || typeof item === 'boolean') return item;
   const str = String(item);
 
@@ -178,7 +178,7 @@ function resolveSingleAnswer(item, itemMap) {
 }
 
 function resolveAnswerValue(questionKey, rawAnswer, choiceValueMap) {
-  if (rawAnswer == null) return rawAnswer;
+  if (rawAnswer === null || rawAnswer === undefined) return rawAnswer;
   const itemMap = choiceValueMap ? choiceValueMap[questionKey] : null;
 
   if (Array.isArray(rawAnswer)) {
@@ -214,7 +214,7 @@ exports.submitResponse = async (userId, userRole, data, io) => {
   }
 
   const precallSerialFromBody =
-    data.precallSerialNumber != null && String(data.precallSerialNumber).trim() !== ''
+    data.precallSerialNumber !== null && data.precallSerialNumber !== undefined && String(data.precallSerialNumber).trim() !== ''
       ? String(data.precallSerialNumber).trim()
       : undefined;
 
@@ -271,7 +271,7 @@ exports.submitResponse = async (userId, userRole, data, io) => {
       for (const sec of (surveyDoc.sections || [])) collectTypes(sec.questions);
 
       for (const ans of rawAnswers) {
-        if (qTypeMap[ans.questionId] === 'number' && ans.value !== '' && ans.value != null) {
+        if (qTypeMap[ans.questionId] === 'number' && ans.value !== '' && ans.value !== null && ans.value !== undefined) {
           const num = Number(ans.value);
           if (Number.isNaN(num)) {
             ans.value = '';

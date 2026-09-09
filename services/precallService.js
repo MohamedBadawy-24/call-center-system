@@ -103,7 +103,7 @@ async function computePrecallCompletedForSession(user) {
  */
 async function getSurveyEligibilityState(user, surveyId, serialParam = null, session = null) {
   const serialParamTrimmed =
-    serialParam != null && String(serialParam).trim() !== '' ? String(serialParam).trim() : null;
+    serialParam !== null && serialParam !== undefined && String(serialParam).trim() !== '' ? String(serialParam).trim() : null;
 
   // Admin and Quality can always walk through the survey.
   const isStaff = user && (user.role === 'admin' || user.role === 'quality');
@@ -173,9 +173,9 @@ async function getSurveyEligibilityState(user, surveyId, serialParam = null, ses
   }
 
   const serial =
-    lastPrecall.payload?.serial_number != null && String(lastPrecall.payload.serial_number).trim() !== ''
+    lastPrecall.payload?.serial_number !== null && lastPrecall.payload?.serial_number !== undefined && String(lastPrecall.payload.serial_number).trim() !== ''
       ? String(lastPrecall.payload.serial_number).trim()
-      : lastPrecall.serialNumber != null && String(lastPrecall.serialNumber).trim() !== ''
+      : lastPrecall.serialNumber !== null && lastPrecall.serialNumber !== undefined && String(lastPrecall.serialNumber).trim() !== ''
         ? String(lastPrecall.serialNumber).trim()
         : '';
   const payload = lastPrecall.payload || {};

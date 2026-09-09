@@ -35,7 +35,7 @@ const authenticate = async (req, res) => {
       statusStartedAt: user.statusStartedAt
     };
     return true;
-  } catch (err) {
+  } catch {
     res.status(401).json({ error: "Token is not valid" });
     return false;
   }

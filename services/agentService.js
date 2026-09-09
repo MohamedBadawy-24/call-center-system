@@ -76,7 +76,7 @@ exports.completePrecall = async (userId, userRole, data, io) => {
       payload.researcher_code = user.researcherCode || '';
     }
 
-    const ageYears = parseRespondentAgeYears(payload, precallFields);
+    parseRespondentAgeYears(payload, precallFields);
 
     for (const f of precallFields) {
       if (f.type === 'number' || (f.systemTag || '').trim().toLowerCase() === 'age') {
@@ -84,11 +84,11 @@ exports.completePrecall = async (userId, userRole, data, io) => {
         if (valRaw !== undefined && valRaw !== null && String(valRaw).trim() !== '') {
           const valNum = Number(String(valRaw).trim());
           if (!Number.isNaN(valNum)) {
-            const minV = f.minValue != null ? f.minValue : f.min;
-            if (minV != null && valNum < minV) {
+            const minV = (f.minValue !== null && f.minValue !== undefined) ? f.minValue : f.min;
+            if (minV !== null && minV !== undefined && valNum < minV) {
               throw createError(`${f.label || f.id} must be at least ${minV}`, 400);
             }
-            if (f.maxValue != null && valNum > f.maxValue) {
+            if (f.maxValue !== null && f.maxValue !== undefined && valNum > f.maxValue) {
               throw createError(`${f.label || f.id} must be at most ${f.maxValue}`, 400);
             }
           }
@@ -201,7 +201,7 @@ exports.completePrecall = async (userId, userRole, data, io) => {
       await doc.save({ session });
     }
 
-    if (ir === 'postponed' && payload.serial_number != null && String(payload.serial_number).trim() !== '') {
+    if (ir === 'postponed' && payload.serial_number !== null && payload.serial_number !== undefined && String(payload.serial_number).trim() !== '') {
       await PostponedSerial.create([{
         agentId: user._id,
         surveyId: sid,

@@ -9,9 +9,7 @@ const connectDB = require("./config/db");
 const Survey = require("./models/Survey");
 const Response = require("./models/Response");
 const User = require("./models/User");
-const StatusLog = require("./models/StatusLog");
 const PrecallCompletion = require("./models/PrecallCompletion");
-const PostponedSerial = require("./models/PostponedSerial");
 const Review = require("./models/Review");
 const SopUpdate = require("./models/SopUpdate");
 const Counter = require("./models/Counter");
@@ -42,22 +40,12 @@ const agentRoutes = require("./routes/agent");
 const errorHandler = require("./middleware/errorHandler");
 
 const upload = multer({ dest: 'uploads/' });
-const { saveToFile, VariableType } = require('sav-writer');
 const path = require('path');
 
 const app = express();
 
 // Connect MongoDB
 connectDB();
-
-async function getNextSerialNumber(id = 'global') {
-  const counter = await Counter.findOneAndUpdate(
-    { id },
-    { $inc: { seq: 1 } },
-    { returnDocument: 'after', upsert: true }
-  );
-  return String(counter.seq).padStart(7, '0');
-}
 
 async function allocateSerialBatch(id = 'global', count = 1, session = null) {
   if (count <= 0) return [];
@@ -80,7 +68,7 @@ async function allocateSerialBatch(id = 'global', count = 1, session = null) {
 async function dropLegacyPrecallIndex() {
   try {
     await PrecallCompletion.collection.dropIndex("userId_1_statusStartedAt_1");
-  } catch (_) {
+  } catch {
     /* index missing or already removed */
   }
 }
@@ -262,7 +250,7 @@ app.post("/survey", adminAuth, async (req, res) => {
     if (survey.sections) {
       for (const section of survey.sections) {
         for (const q of section.questions) {
-          if (q.type === 'multiple_choice' && q.maxSelections != null) {
+          if (q.type === 'multiple_choice' && q.maxSelections !== null && q.maxSelections !== undefined) {
             const limit = (q.choices ? q.choices.length : 0) + (q.allowOther ? 1 : 0);
             if (q.maxSelections > limit) {
               return res.status(400).json({
@@ -312,7 +300,7 @@ app.put("/survey/:id", adminAuth, async (req, res) => {
     if (survey.sections) {
       for (const section of survey.sections) {
         for (const q of section.questions) {
-          if (q.type === 'multiple_choice' && q.maxSelections != null) {
+          if (q.type === 'multiple_choice' && q.maxSelections !== null && q.maxSelections !== undefined) {
             const limit = (q.choices ? q.choices.length : 0) + (q.allowOther ? 1 : 0);
             if (q.maxSelections > limit) {
               return res.status(400).json({
@@ -774,7 +762,7 @@ app.post('/admin/survey/:id/numbers', [upload.single('xlsx'), adminAuth, validat
     });
   } catch (err) {
     if (req.file && fs.existsSync(req.file.path)) {
-      try { fs.unlinkSync(req.file.path); } catch(e) {}
+      try { fs.unlinkSync(req.file.path); } catch { /* ignore unlink error */ }
     }
     console.error("XLSX Import Critical Error:", err);
     res.status(500).json({ error: 'Import failed: ' + err.message });
@@ -1296,7 +1284,7 @@ app.get("/quality/export-agent-stats", staffAuth, async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     for (const [agentName, rows] of Object.entries(resultsByAgent)) {
       rows.sort((a, b) => a.date.localeCompare(b.date));
-      const safeName = agentName.replace(/[\*\?\/\\\[\]]/g, '').substring(0, 31) || 'Agent';
+      const safeName = agentName.replace(/[*?/\\[\]]/g, '').substring(0, 31) || 'Agent';
       const sheet = workbook.addWorksheet(safeName);
       
       sheet.columns = [

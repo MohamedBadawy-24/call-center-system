@@ -1,0 +1,24 @@
+name: "CodeQL Custom Configuration"
+
+# Exclude non-production, test, mock, and debug paths from scanning
+paths-ignore:
+  - "tests/**"
+  - "e2e/**"
+  - "scripts/debug/**"
+  - "admin-ui/dist/**"
+  - "admin-ui/src/tests/**"
+  - "**/*.test.js"
+  - "**/*.spec.js"
+  - "**/*.test.jsx"
+  - "**/*.spec.ts"
+  - "coverage/**"
+
+# Exclude noisy cosmetic quality rules to focus on real security vulnerabilities
+query-filters:
+  - exclude:
+      id:
+        - js/unused-local-variable
+        - js/unused-parameter
+        - js/empty-block
+        - js/useless-expression
+        - js/non-strict-equality

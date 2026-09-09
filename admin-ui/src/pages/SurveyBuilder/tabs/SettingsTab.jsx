@@ -212,7 +212,8 @@ export default function SettingsTab() {
     if (isAdmin) {
       api.get('/admin/users')
         .then(res => {
-          setAgents(res.data.filter(u => u.role === 'agent'));
+          const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.users) ? res.data.users : []);
+          setAgents(list.filter(u => u.role === 'agent'));
         })
         .catch(console.error);
     }

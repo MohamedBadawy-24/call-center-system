@@ -341,7 +341,7 @@ export default function PreCallChecklist() {
   const { user, setUser } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  const [surveyId, setSurveyId] = useState(null);
+  const [surveyId, setSurveyId] = useState(() => new URLSearchParams(window.location.search).get('surveyId') || null);
   const [numberAssignmentMode, setNumberAssignmentMode] = useState('queue_only');
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [manualNumber, setManualNumber] = useState('');
@@ -540,11 +540,13 @@ export default function PreCallChecklist() {
         }
 
         // 2. Hydrate from explicit edit answers ref or persisted local draft
+        const effectiveSid = precallData?.surveyId || sidUrl;
+        const effectiveDraftKey = user?.id ? `precallDraft:${user.id}:${effectiveSid || 'default'}` : null;
         if (editAnswersRef.current) {
           merged = { ...merged, ...editAnswersRef.current };
-        } else if (draftKey) {
+        } else if (effectiveDraftKey) {
           try {
-            const raw = localStorage.getItem(draftKey) || sessionStorage.getItem(draftKey);
+            const raw = localStorage.getItem(effectiveDraftKey) || sessionStorage.getItem(effectiveDraftKey);
             if (raw) {
               const parsed = JSON.parse(raw);
               if (parsed && typeof parsed === 'object') {
@@ -614,7 +616,7 @@ export default function PreCallChecklist() {
       controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.name, draftKey]);
+  }, [user?.name, user?.id]);
 
   useEffect(() => {
     if (currentNumber && currentNumber.number) {
@@ -940,9 +942,13 @@ export default function PreCallChecklist() {
         if (nextNum && nextNum.number) {
           const updates = { phone: nextNum.number, serial_number: nextNum.serialNumber || '' };
           setAnswers(prev => ({ ...prev, ...updates }));
-          const cachedBefore = await offlineDb.getCachedNumbers();
-          console.log(`[Offline Inventory] Fetched number online. Current cached numbers count before prefetch check: ${cachedBefore.length}`);
-          prefetchNumbers(govToFetch);
+          try {
+            const cachedBefore = await offlineDb.getCachedNumbers();
+            console.log(`[Offline Inventory] Fetched number online. Current cached numbers count before prefetch check: ${cachedBefore.length}`);
+            prefetchNumbers(govToFetch);
+          } catch (offlineErr) {
+            console.warn('Failed to prefetch numbers or check cached inventory:', offlineErr);
+          }
         } else {
           setAnswers(prev => ({ ...prev, phone: '', serial_number: '' }));
           if (numberAssignmentMode === 'queue_then_manual' || numberAssignmentMode === 'manual_allowed') {

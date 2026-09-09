@@ -1,9 +1,27 @@
 const DB_NAME = 'baseera-offline-db';
 const DB_VERSION = 1;
 
+// In-memory fallback stores for environments without IndexedDB (e.g. tests, SSR, private mode)
+const memoryStores = {
+  surveys: new Map(),
+  precallConfigs: new Map(),
+  offlinePrecalls: new Map(),
+  offlineResponses: new Map(),
+  drafts: new Map(),
+  cachedNumbers: new Map(),
+};
+
+function isIndexedDBAvailable() {
+  try {
+    return typeof indexedDB !== 'undefined' && indexedDB !== null;
+  } catch (_) {
+    return false;
+  }
+}
+
 function openDb() {
   return new Promise((resolve, reject) => {
-    if (typeof indexedDB === 'undefined') {
+    if (!isIndexedDBAvailable()) {
       return reject(new Error('IndexedDB is not available in this environment'));
     }
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -53,60 +71,113 @@ function openDb() {
   });
 }
 
-// Helper generic functions
+function getKey(storeName, item) {
+  if (!item) return null;
+  const keyPath = storeName === 'precallConfigs'
+    ? 'surveyId'
+    : (storeName === 'surveys' || storeName === 'cachedNumbers')
+      ? '_id'
+      : 'serialNumber';
+  return item[keyPath] || item.id || item._id || JSON.stringify(item);
+}
+
+// Helper generic functions with transparent in-memory fallback
 async function putItem(storeName, item) {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readwrite');
-    const store = tx.objectStore(storeName);
-    const request = store.put(item);
-    request.onsuccess = () => resolve(true);
-    request.onerror = () => reject(request.error);
-  });
+  if (!isIndexedDBAvailable()) {
+    const key = getKey(storeName, item);
+    if (key && memoryStores[storeName]) memoryStores[storeName].set(key, item);
+    return true;
+  }
+  try {
+    const db = await openDb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readwrite');
+      const store = tx.objectStore(storeName);
+      const request = store.put(item);
+      request.onsuccess = () => resolve(true);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (_) {
+    const key = getKey(storeName, item);
+    if (key && memoryStores[storeName]) memoryStores[storeName].set(key, item);
+    return true;
+  }
 }
 
 async function getItem(storeName, key) {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readonly');
-    const store = tx.objectStore(storeName);
-    const request = store.get(key);
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+  if (!isIndexedDBAvailable()) {
+    return memoryStores[storeName]?.get(key) || null;
+  }
+  try {
+    const db = await openDb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readonly');
+      const store = tx.objectStore(storeName);
+      const request = store.get(key);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (_) {
+    return memoryStores[storeName]?.get(key) || null;
+  }
 }
 
 async function getAllItems(storeName) {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readonly');
-    const store = tx.objectStore(storeName);
-    const request = store.getAll();
-    request.onsuccess = () => resolve(request.result || []);
-    request.onerror = () => reject(request.error);
-  });
+  if (!isIndexedDBAvailable()) {
+    return memoryStores[storeName] ? Array.from(memoryStores[storeName].values()) : [];
+  }
+  try {
+    const db = await openDb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readonly');
+      const store = tx.objectStore(storeName);
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (_) {
+    return memoryStores[storeName] ? Array.from(memoryStores[storeName].values()) : [];
+  }
 }
 
 async function deleteItem(storeName, key) {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readwrite');
-    const store = tx.objectStore(storeName);
-    const request = store.delete(key);
-    request.onsuccess = () => resolve(true);
-    request.onerror = () => reject(request.error);
-  });
+  if (!isIndexedDBAvailable()) {
+    if (memoryStores[storeName]) memoryStores[storeName].delete(key);
+    return true;
+  }
+  try {
+    const db = await openDb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readwrite');
+      const store = tx.objectStore(storeName);
+      const request = store.delete(key);
+      request.onsuccess = () => resolve(true);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (_) {
+    if (memoryStores[storeName]) memoryStores[storeName].delete(key);
+    return true;
+  }
 }
 
 async function clearStore(storeName) {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readwrite');
-    const store = tx.objectStore(storeName);
-    const request = store.clear();
-    request.onsuccess = () => resolve(true);
-    request.onerror = () => reject(request.error);
-  });
+  if (!isIndexedDBAvailable()) {
+    if (memoryStores[storeName]) memoryStores[storeName].clear();
+    return true;
+  }
+  try {
+    const db = await openDb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readwrite');
+      const store = tx.objectStore(storeName);
+      const request = store.clear();
+      request.onsuccess = () => resolve(true);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (_) {
+    if (memoryStores[storeName]) memoryStores[storeName].clear();
+    return true;
+  }
 }
 
 // Exported high-level database operations

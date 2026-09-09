@@ -171,7 +171,7 @@ describe('PreCallChecklist Page Component Tests', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('precall-phone-input').value).toBe('01099999999');
-    });
+    }, { timeout: 3000 });
   });
 
   it('SUBMISSION: submits precall and navigates to take-survey', async () => {

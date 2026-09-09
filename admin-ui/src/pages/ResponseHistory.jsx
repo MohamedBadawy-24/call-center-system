@@ -391,7 +391,7 @@ export default function ResponseHistory() {
           {t('responseHistory')}
         </h1>
         
-        <div className="response-history-actions flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-4 w-full md:w-auto" style={{ display: 'flex', gap: '1rem', flex: 1, maxWidth: '800px', flexWrap: 'wrap' }}>
+        <div className="response-history-actions flex flex-wrap items-center justify-end gap-2 md:gap-3 w-full md:w-auto" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }}>
           {/* Modern Campaign Dropdown Menu */}
           <div className="campaign-dropdown-wrapper" ref={dropdownRef}>
             <div

@@ -147,13 +147,22 @@ exports.completePrecall = async (userId, userRole, data, io) => {
       status: 'pending',
     }).sort({ assignedAt: -1 }).session(session);
 
+    if (!currentNumberDoc && payload.serial_number) {
+      currentNumberDoc = await PhoneNumber.findOne({
+        serialNumber: String(payload.serial_number).trim(),
+        agentId: user._id,
+      }).session(session);
+    }
+
     if (phoneInPayload && (!currentNumberDoc || currentNumberDoc.number !== phoneInPayload)) {
       let newSerial = payload.serial_number;
       if (newSerial) {
         const existingWithSerial = await PhoneNumber.findOne({ serialNumber: { $eq: String(newSerial) } }).session(session);
         if (existingWithSerial && (!currentNumberDoc || String(existingWithSerial._id) !== String(currentNumberDoc._id))) {
           const isSameAgentAndPhone = String(existingWithSerial.agentId) === String(user._id) && existingWithSerial.number === phoneInPayload;
-          if (!isSameAgentAndPhone) {
+          if (isSameAgentAndPhone) {
+            currentNumberDoc = existingWithSerial;
+          } else {
             newSerial = await getNextSerialNumber('survey_numbers', session);
           }
         }
@@ -230,9 +239,12 @@ exports.completePrecall = async (userId, userRole, data, io) => {
     }
 
     if (sid) {
+      const updateQuery = currentNumberDoc
+        ? { _id: currentNumberDoc._id }
+        : { agentId: user._id, surveyId: sid, status: 'pending' };
       await PhoneNumber.findOneAndUpdate(
-        { agentId: user._id, surveyId: sid, status: 'pending' },
-        { $set: { status: phoneStatus, calledAt: new Date(), outcomeReason } },
+        updateQuery,
+        { $set: { status: phoneStatus, calledAt: new Date(), outcomeReason, precallCompletionId: doc._id } },
         { sort: { assignedAt: -1 }, session }
       );
     }

@@ -331,11 +331,12 @@ app.put("/survey/:id", adminAuth, async (req, res) => {
     const oldLinkIdStr = oldLinkId ? String(oldLinkId) : null;
     const newLinkIdStr = survey.linkedCampaignId ? String(survey.linkedCampaignId) : null;
     if (oldLinkIdStr !== newLinkIdStr) {
+      const safeSurveyId = String(survey._id);
       if (oldLinkIdStr && mongoose.Types.ObjectId.isValid(oldLinkIdStr)) {
-        await Survey.updateOne({ _id: { $eq: new mongoose.Types.ObjectId(oldLinkIdStr) } }, { linkedCampaignId: null });
+        await Survey.updateOne({ _id: { $eq: String(oldLinkIdStr) } }, { linkedCampaignId: null });
       }
       if (newLinkIdStr && mongoose.Types.ObjectId.isValid(newLinkIdStr)) {
-        await Survey.updateOne({ _id: { $eq: new mongoose.Types.ObjectId(newLinkIdStr) } }, { linkedCampaignId: survey._id });
+        await Survey.updateOne({ _id: { $eq: String(newLinkIdStr) } }, { linkedCampaignId: safeSurveyId });
       }
     }
 

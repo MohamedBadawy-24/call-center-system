@@ -337,13 +337,17 @@ exports.getNextNumber = async (userId, userRole, governorateInput, surveyId) => 
 
 exports.markNumberCalled = async (numberId, userId, userRole, status) => {
   if (userRole !== 'agent') throw createError('Agents only', 403);
-  if (!['called', 'completed', 'disqualified', 'postponed'].includes(status)) {
+  
+  const validStatuses = ['called', 'completed', 'disqualified', 'postponed'];
+  const statusIndex = validStatuses.indexOf(status);
+  if (statusIndex === -1) {
     throw createError('Invalid status', 400);
   }
+  const safeStatus = validStatuses[statusIndex];
 
   const number = await PhoneNumber.findOneAndUpdate(
-    { _id: { $eq: new mongoose.Types.ObjectId(numberId) }, agentId: { $eq: new mongoose.Types.ObjectId(userId) } },
-    { status, calledAt: new Date() },
+    { _id: { $eq: String(numberId) }, agentId: { $eq: String(userId) } },
+    { status: safeStatus, calledAt: new Date() },
     { returnDocument: 'after' }
   );
 

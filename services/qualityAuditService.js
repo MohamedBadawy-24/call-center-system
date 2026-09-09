@@ -52,7 +52,17 @@ exports.getAgentPrecall = async (agentId) => {
 };
 
 exports.submitAudit = async (userId, data, io) => {
-  const { agentId, evaluationOutcome, notes, qualityName, auditorAnswers, shadowAnswers } = data;
+  const {
+    agentId,
+    evaluationOutcome,
+    notes,
+    qualityName,
+    auditorAnswers,
+    shadowAnswers,
+    // Frontend now explicitly sends these so we don't have to reverse-engineer them
+    serialNumber: payloadSerialNumber,
+    surveyId: payloadSurveyId,
+  } = data;
 
   if (!agentId || !mongoose.Types.ObjectId.isValid(agentId)) {
     throw createError('Valid agent ID is required', 400);
@@ -64,31 +74,42 @@ exports.submitAudit = async (userId, data, io) => {
   const agent = await User.findById(agentId);
   if (!agent) throw createError('Agent not found', 404);
 
-  const precall = await PrecallCompletion.findOne({
-    userId: agentId,
-    statusStartedAt: agent.statusStartedAt
-  }).sort({ completedAt: -1 });
-
-  if (!precall) {
-    throw createError('No active session precall found for this agent', 400);
+  // --- Resilient PrecallCompletion lookup ---
+  // Priority 1: Match by serialNumber (most reliable — unaffected by status changes)
+  // Priority 2: Most recent for this agent (covers break/status-change edge cases)
+  // Priority 3: null — gracefully allowed for no_phone_required campaigns
+  let precall = null;
+  if (payloadSerialNumber) {
+    precall = await PrecallCompletion.findOne({ serialNumber: payloadSerialNumber, userId: agentId }).lean();
   }
+  if (!precall) {
+    // Fall back to most recent session regardless of current statusStartedAt
+    precall = await PrecallCompletion.findOne({ userId: agentId }).sort({ completedAt: -1 }).lean();
+  }
+
+  // Resolve surveyId and serialNumber: prefer payload values, fall back to precall
+  const resolvedSurveyId = payloadSurveyId || precall?.surveyId || null;
+  const resolvedSerialNumber = payloadSerialNumber || precall?.serialNumber || null;
 
   const review = await runTransaction(async (session) => {
     const reviewDoc = new Review({
       type: 'audit',
       qualityId: userId,
       agentId,
-      surveyId: precall.surveyId,
-      serialNumber: precall.serialNumber,
-      precallSnapshot: {
-        qualityName: qualityName || '',
-        agentAnswers: precall.payload,
-        auditorAnswers: auditorAnswers || null
-      },
+      surveyId: resolvedSurveyId,
+      serialNumber: resolvedSerialNumber,
+      // precallSnapshot is null-safe: no precall = no snapshot, audit still saves
+      precallSnapshot: precall
+        ? {
+            qualityName: qualityName || '',
+            agentAnswers: precall.payload,
+            auditorAnswers: auditorAnswers || null,
+          }
+        : { qualityName: qualityName || '', agentAnswers: null, auditorAnswers: auditorAnswers || null },
       shadowAnswers: shadowAnswers || [],
       evaluationOutcome,
       feedbackText: notes || '',
-      createdAt: new Date()
+      createdAt: new Date(),
     });
 
     await reviewDoc.save({ session });

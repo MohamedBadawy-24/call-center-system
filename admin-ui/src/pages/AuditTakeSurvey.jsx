@@ -367,9 +367,12 @@ export default function AuditTakeSurvey() {
         return { questionId: k, value: val };
       });
 
-      // Submit Audit
+      // Submit Audit — explicitly send serialNumber + surveyId so the backend
+      // doesn't have to reverse-engineer them from statusStartedAt coupling.
       await api.post('/quality/audit', {
         agentId,
+        serialNumber,                  // from useParams()
+        surveyId: survey?._id || null, // from loaded survey state
         evaluationOutcome,
         notes,
         qualityName,

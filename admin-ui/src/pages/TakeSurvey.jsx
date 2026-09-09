@@ -1752,8 +1752,8 @@ export default function TakeSurvey({ mockSurvey }) {
       }
 
       // 3. Navigate back to Pre-Call Checklist route with serial
-      const isEditParam = new URLSearchParams(window.location.search).get('mode') === 'edit';
-      const modeParam = (isEditMode || isEditParam) ? 'edit' : 'resume';
+      const isEditMode = new URLSearchParams(window.location.search).get('mode') === 'edit';
+      const modeParam = isEditMode ? 'edit' : 'resume';
       navigate(`/agent/precall?surveyId=${id}&serial=${activeSerial}&mode=${modeParam}`);
     } else {
       navigate(id ? `/agent/precall?surveyId=${id}` : '/agent/precall');

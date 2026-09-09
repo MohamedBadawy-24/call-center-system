@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useContext, useMemo } from 'react';
+import React, { useEffect, useState, useContext, useMemo, useRef } from 'react';
 import { api } from '../api/client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { History, Search, ChevronDown, ChevronUp, User, ClipboardList, Clock } from 'lucide-react';
+import { History, Search, ChevronDown, ChevronUp, User, ClipboardList, Clock, Layers, FolderKanban } from 'lucide-react';
 import { useLanguage } from '../hooks/useLanguage';
 import LoadingSpinner from '../components/LoadingSpinner';
 import FlagPopover from '../components/FlagPopover';
@@ -19,7 +19,10 @@ export default function ResponseHistory() {
   const [responses, setResponses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedSurveyId, setSelectedSurveyId] = useState('');
+  const [dropdownSearch, setDropdownSearch] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
   
   // Export states
   const [showExportModal, setShowExportModal] = useState(false);
@@ -43,6 +46,25 @@ export default function ResponseHistory() {
   const [deleteModalResponse, setDeleteModalResponse] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [unlockLoadingId, setUnlockLoadingId] = useState(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   const handleUnlockEdit = async (responseId, e) => {
     e.stopPropagation();
@@ -305,15 +327,59 @@ export default function ResponseHistory() {
     return valStr;
   };
 
-  const filteredResponses = responses.filter(r => {
-    const s = searchTerm.toLowerCase();
-    return (
-      r.surveyId?.title?.toLowerCase().includes(s) ||
-      r.agentId?.name?.toLowerCase().includes(s) ||
-      r.interviewOutcome?.toLowerCase().includes(s) ||
-      r.serialNumber?.toLowerCase().includes(s)
-    );
-  });
+  const campaignOptions = useMemo(() => {
+    const map = new Map();
+
+    surveys.forEach(s => {
+      if (s && s._id) {
+        map.set(String(s._id), {
+          _id: String(s._id),
+          title: s.title || 'Untitled Campaign',
+          count: 0
+        });
+      }
+    });
+
+    responses.forEach(r => {
+      const sid = r.surveyId?._id || (typeof r.surveyId === 'string' ? r.surveyId : null);
+      if (sid) {
+        const idStr = String(sid);
+        if (!map.has(idStr)) {
+          map.set(idStr, {
+            _id: idStr,
+            title: r.surveyId?.title || r.campaignName || 'Campaign',
+            count: 0
+          });
+        }
+        map.get(idStr).count += 1;
+      }
+    });
+
+    return Array.from(map.values());
+  }, [surveys, responses]);
+
+  const selectedCampaign = useMemo(() => {
+    if (!selectedSurveyId) return null;
+    return campaignOptions.find(c => c._id === String(selectedSurveyId)) || null;
+  }, [campaignOptions, selectedSurveyId]);
+
+  const filteredCampaignOptions = useMemo(() => {
+    if (!dropdownSearch.trim()) return campaignOptions;
+    const q = dropdownSearch.toLowerCase().trim();
+    return campaignOptions.filter(c => c.title.toLowerCase().includes(q));
+  }, [campaignOptions, dropdownSearch]);
+
+  const filteredResponses = useMemo(() => {
+    return responses.filter(r => {
+      if (selectedSurveyId) {
+        const respSurveyId = r.surveyId?._id || r.surveyId;
+        if (String(respSurveyId) !== String(selectedSurveyId)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [responses, selectedSurveyId]);
 
   if (loading) return <LoadingSpinner fullPage />;
 
@@ -325,17 +391,165 @@ export default function ResponseHistory() {
           {t('responseHistory')}
         </h1>
         
-        <div className="response-history-actions flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-4 w-full md:w-auto" style={{ display: 'flex', gap: '1rem', flex: 1, maxWidth: '600px', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
-            <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-            <input 
-              type="text" 
-              className="input-field w-full" 
-              placeholder={t('searchPlaceholder')} 
-              style={{ paddingLeft: '40px' }}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+        <div className="response-history-actions flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-4 w-full md:w-auto" style={{ display: 'flex', gap: '1rem', flex: 1, maxWidth: '800px', flexWrap: 'wrap' }}>
+          {/* Modern Campaign Dropdown Menu */}
+          <div className="campaign-dropdown-wrapper" ref={dropdownRef}>
+            <div
+              id="campaign-dropdown-trigger"
+              data-testid="campaign-dropdown-trigger"
+              className={`campaign-dropdown-btn ${isDropdownOpen ? 'active' : ''}`}
+              onClick={() => setIsDropdownOpen(prev => !prev)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  setIsDropdownOpen(prev => !prev);
+                }
+              }}
+              aria-haspopup="listbox"
+              aria-expanded={isDropdownOpen}
+            >
+              <div className="campaign-dropdown-btn-content">
+                <span className="campaign-dropdown-icon">
+                  <Layers size={17} />
+                </span>
+                <span className="campaign-dropdown-label" title={selectedCampaign ? selectedCampaign.title : (t('allCampaigns') || 'All Campaigns')}>
+                  {selectedCampaign ? selectedCampaign.title : (t('allCampaigns') || 'All Campaigns')}
+                </span>
+                <span className="campaign-dropdown-badge">
+                  {selectedCampaign ? selectedCampaign.count : responses.length}
+                </span>
+              </div>
+
+              <div className="campaign-dropdown-actions">
+                {selectedSurveyId && (
+                  <button
+                    type="button"
+                    className="campaign-dropdown-clear"
+                    data-testid="campaign-dropdown-clear"
+                    title={t('allCampaigns') || 'All Campaigns'}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedSurveyId('');
+                    }}
+                  >
+                    <CloseIcon size={14} />
+                  </button>
+                )}
+                <ChevronDown
+                  size={16}
+                  className={`campaign-dropdown-chevron ${isDropdownOpen ? 'open' : ''}`}
+                />
+              </div>
+            </div>
+
+            <AnimatePresence>
+              {isDropdownOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                  transition={{ duration: 0.15 }}
+                  className="campaign-dropdown-menu"
+                  role="listbox"
+                >
+                  {/* Internal Search Input */}
+                  <div className="campaign-dropdown-search-box">
+                    <Search size={15} className="campaign-dropdown-search-icon" />
+                    <input
+                      type="text"
+                      className="campaign-dropdown-search-input"
+                      placeholder={t('searchCampaigns') || 'Search campaigns...'}
+                      value={dropdownSearch}
+                      onChange={(e) => setDropdownSearch(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      autoFocus
+                    />
+                    {dropdownSearch && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className="campaign-dropdown-clear"
+                        onClick={() => setDropdownSearch('')}
+                      >
+                        <CloseIcon size={13} />
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Options List */}
+                  <div className="campaign-dropdown-list">
+                    {/* All Campaigns Option */}
+                    {(!dropdownSearch || (t('allCampaigns') || 'All Campaigns').toLowerCase().includes(dropdownSearch.toLowerCase())) && (
+                      <button
+                        type="button"
+                        className={`campaign-dropdown-item campaign-dropdown-option ${!selectedSurveyId ? 'selected' : ''}`}
+                        onClick={() => {
+                          setSelectedSurveyId('');
+                          setIsDropdownOpen(false);
+                          setDropdownSearch('');
+                        }}
+                        role="option"
+                        aria-selected={!selectedSurveyId}
+                      >
+                        <div className="campaign-dropdown-item-left">
+                          <Layers size={15} style={{ opacity: 0.8 }} />
+                          <span className="campaign-dropdown-item-title">
+                            {t('allCampaigns') || 'All Campaigns'}
+                          </span>
+                        </div>
+                        <div className="campaign-dropdown-item-right">
+                          <span className="campaign-dropdown-count-pill">
+                            {responses.length}
+                          </span>
+                          {!selectedSurveyId && <Check size={14} color="var(--primary)" />}
+                        </div>
+                      </button>
+                    )}
+
+                    {campaignOptions.length > 0 && <div className="campaign-dropdown-divider" />}
+
+                    {/* Campaign Items */}
+                    {filteredCampaignOptions.length > 0 ? (
+                      filteredCampaignOptions.map((campaign) => {
+                        const isSelected = selectedSurveyId === campaign._id;
+                        return (
+                          <button
+                            key={campaign._id}
+                            type="button"
+                            className={`campaign-dropdown-item campaign-dropdown-option ${isSelected ? 'selected' : ''}`}
+                            onClick={() => {
+                              setSelectedSurveyId(campaign._id);
+                              setIsDropdownOpen(false);
+                              setDropdownSearch('');
+                            }}
+                            role="option"
+                            aria-selected={isSelected}
+                          >
+                            <div className="campaign-dropdown-item-left">
+                              <FolderKanban size={15} style={{ opacity: 0.8 }} />
+                              <span className="campaign-dropdown-item-title" title={campaign.title}>
+                                {campaign.title}
+                              </span>
+                            </div>
+                            <div className="campaign-dropdown-item-right">
+                              <span className="campaign-dropdown-count-pill">
+                                {campaign.count}
+                              </span>
+                              {isSelected && <Check size={14} color="var(--primary)" />}
+                            </div>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="campaign-dropdown-empty">
+                        {t('noCampaignsFound') || 'No campaigns found'}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
           <button 
             className="btn-secondary w-full md:w-auto" 

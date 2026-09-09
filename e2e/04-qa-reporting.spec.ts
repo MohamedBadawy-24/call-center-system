@@ -29,9 +29,10 @@ test.describe('E2E Production Simulation: QA & Reporting', () => {
     await page.goto('/admin/responses');
     await page.waitForURL('**/admin/responses', { timeout: 15000 });
 
-    // 4. Search for our dynamic campaign survey title to find completed responses
-    await page.getByPlaceholder(/Search campaigns or agents/i).fill(surveyTitle);
-    await page.waitForTimeout(2000); // Allow search to filter rows
+    // 4. Filter by our dynamic campaign survey title using the modern campaign dropdown
+    await page.locator('#campaign-dropdown-trigger').click();
+    await page.locator('.campaign-dropdown-option').filter({ hasText: surveyTitle }).first().click();
+    await page.waitForTimeout(1000); // Allow UI to filter rows
 
     // Find the row containing our survey title and verify it's there
     const responseRow = page.locator('tr.hover-row').filter({ hasText: surveyTitle }).first();

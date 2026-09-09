@@ -19,6 +19,7 @@ export default function AuditPreCallChecklist() {
   const { agentId } = useParams();
   const [searchParams] = useSearchParams();
   const surveyIdParam = searchParams.get('surveyId');
+  const serialNumberParam = searchParams.get('serialNumber');
 
   const { t } = useContext(UIContext);
   const { user } = useContext(AuthContext);
@@ -45,7 +46,10 @@ export default function AuditPreCallChecklist() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const res = await api.get(`/quality/agent-precall/${agentId}`);
+        const queryParams = new URLSearchParams();
+        if (serialNumberParam) queryParams.set('serialNumber', serialNumberParam);
+        const qs = queryParams.toString();
+        const res = await api.get(`/quality/agent-precall/${agentId}${qs ? `?${qs}` : ''}`);
         const data = res.data;
 
         if (!data || !data.precall) {

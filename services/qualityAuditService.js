@@ -11,7 +11,7 @@ const createError = (message, status = 500) => {
   return err;
 };
 
-exports.getAgentPrecall = async (agentId) => {
+exports.getAgentPrecall = async (agentId, serialNumber = null) => {
   if (!mongoose.Types.ObjectId.isValid(agentId)) {
     throw createError('Invalid agent ID format', 400);
   }
@@ -19,10 +19,25 @@ exports.getAgentPrecall = async (agentId) => {
   const agent = await User.findById(agentId);
   if (!agent) throw createError('Agent not found', 404);
 
-  const precall = await PrecallCompletion.findOne({
-    userId: agentId,
-    statusStartedAt: agent.statusStartedAt
-  }).sort({ completedAt: -1 }).lean();
+  // Resilient Precall lookup:
+  // Priority 1: Match by serialNumber (most reliable — unaffected by status changes)
+  // Priority 2: Match by statusStartedAt if still active
+  // Priority 3: Fall back to most recent PrecallCompletion for this agent
+  let precall = null;
+  if (serialNumber) {
+    precall = await PrecallCompletion.findOne({ userId: agentId, serialNumber }).lean();
+  }
+  if (!precall && agent.statusStartedAt) {
+    precall = await PrecallCompletion.findOne({
+      userId: agentId,
+      statusStartedAt: agent.statusStartedAt
+    }).sort({ completedAt: -1 }).lean();
+  }
+  if (!precall) {
+    precall = await PrecallCompletion.findOne({
+      userId: agentId
+    }).sort({ completedAt: -1 }).lean();
+  }
 
   if (!precall) {
     return {

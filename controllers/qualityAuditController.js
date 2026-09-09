@@ -3,7 +3,8 @@ const qualityAuditService = require('../services/qualityAuditService');
 exports.getAgentPrecall = async (req, res, next) => {
   try {
     const { agentId } = req.params;
-    const result = await qualityAuditService.getAgentPrecall(agentId);
+    const { serialNumber } = req.query;
+    const result = await qualityAuditService.getAgentPrecall(agentId, serialNumber);
     res.json(result);
   } catch (err) {
     if (err.status) {
